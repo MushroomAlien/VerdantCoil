@@ -1,6 +1,9 @@
+Sprite2D
+ParallaxBackground
+ParallaxLayer
+Parallax2D
 TileMapLayer
 TileMap
 Camera2D
-Sprite2D
 CollisionShape2D
 Area2D

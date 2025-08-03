@@ -3,17 +3,20 @@
 
 extends Area2D
 
+#const BASE_LAYER_INDEX: int = 0
+
 # --- Movement Settings ---
 @export var move_speed: float = 5.0  # Tiles per second
-@export var spawn_pos: Vector2 = Vector2(384.0, 736.0)  # World-space spawn point
+var tilemap: TileMap
+@export_category("Layer Settings")
+@export_range(0, 7, 1)
+var base_layer_index: int = 0
 
 # --- Internal State ---
 var _is_moving: bool = false
 var _move_direction := Vector2.ZERO
 
 func _ready() -> void:
-	# Snap to grid using centralized grid logic
-	position = Grid.snap_position(spawn_pos)
 	print("Crawler ready at ", position)
 	var camera := get_node("Camera2D")
 	if camera:
@@ -40,13 +43,11 @@ func _unhandled_input(event: InputEvent) -> void:
 func _start_move() -> void:
 	_is_moving = true
 	
-	# Get current tile
+	# Convert current world position to grid tile coordinates
 	var current_tile := Grid.to_tile_coords(position)
 	var next_tile := current_tile + Vector2i(_move_direction)
 	
-	var tilemap := get_parent().get_node("TileMapBase")
-	
-	# Prevent movement outside painted area
+		# Prevent movement outside painted area
 	var map_bounds: Rect2i = tilemap.get_used_rect()
 	if not map_bounds.has_point(next_tile):
 		print("Blocked: outside map bounds")
@@ -54,9 +55,23 @@ func _start_move() -> void:
 		return
 	
 	# Get tile source ID at next_tile (layer 0)
-	var tile_id: int = tilemap.get_cell_source_id(0, next_tile)
+	var tile_id: int = tilemap.get_cell_source_id(base_layer_index, next_tile)
 	if tile_id == -1:
-		print("Blocked: no tile at target")
+		print("Blocked: no tile at target: ", next_tile)
+		_is_moving = false
+		return
+	
+	# Fetch TileData to check for custom metadata
+	var tile_data := tilemap.get_cell_tile_data(base_layer_index, next_tile)
+	if tile_data == null:
+		print("Blocked: missing tile data at ", next_tile)
+		_is_moving = false
+		return
+	
+	# Check walkable metadata (defaults to false if missing)
+	var is_walkable: bool = tile_data.get_custom_data("walkable")
+	if is_walkable != true:
+		print("Blocked: tile at ", next_tile, " is not walkable")
 		_is_moving = false
 		return
 	
