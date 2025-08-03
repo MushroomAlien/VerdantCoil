@@ -1,0 +1,17 @@
+ea4bc82a6ad023ab7ee23ee620429895
+::res://::1754187594
+::res://Assets/::1754187594
+icon.svg::CompressedTexture2D/CompressedTexture2D::8103006741623513525::1754178151::1754180466::1::::<><><>0<>0<>8f04aa9b94f812e9f414a6b2db595d24<>res://.godot/imported/icon.svg-8193eb3d66a1b5143b8bb4c28c1dc139.ctex::
+roguelikeDungeon_transparent_32x32.png::CompressedTexture2D/CompressedTexture2D::6088481515322302170::1754183096::1754183331::1::::<><><>0<>0<>cd49df6d5d4826141aa98ef083045137<>res://.godot/imported/roguelikeDungeon_transparent_32x32.png-ac24d7d94faedeba03d119f93a4a69ba.ctex::
+roguelikeSheet_transparent_32x32.png::CompressedTexture2D/CompressedTexture2D::6817578045457570484::1754182380::1754182399::1::::<><><>0<>0<>2f9a2c7c60b95a7d9986ffc1c8e8a586<>res://.godot/imported/roguelikeSheet_transparent_32x32.png-bcb399bf5333217ab5ef66d644d12a27.ctex::
+tilemap_32x32.png::CompressedTexture2D/CompressedTexture2D::3892978946666997150::1754183275::1754184472::1::::<><><>0<>0<>cdff2c88a5ad04a0e46f0d69608237a5<>res://.godot/imported/tilemap_32x32.png-d916f4c5e85513507ece7624e2625781.ctex::
+::res://Assets/Resources/::1754187594
+roguelikeSheet_32x32.tres::TileSet::1761290363704974723::1754187567::0::1::::<><><>0<>0<><>::
+::res://Scenes/::1754187299
+::res://Scenes/Actors/::1754187150
+crawler.gd::GDScript::6797002111998109821::1754187150::0::1::::<>Area2D<><>0<>0<><>::
+crawler.tscn::PackedScene::7241436130744052113::1754187150::0::1::::<><><>0<>0<><>::uid://c33rvqjr1h1kj::::res://Scenes/Actors/crawler.gd<>uid://bvp12aoitu7nu::::res://Assets/tilemap_32x32.png
+::res://Scenes/World/::1754187333
+ExploreMode.tscn::PackedScene::574977108644499010::1754187333::0::1::::<><><>0<>0<><>::
+::res://System/::1754186987
+grid.gd::GDScript::915123945570149802::1754186987::0::1::::<>Node<><>0<>0<><>::
