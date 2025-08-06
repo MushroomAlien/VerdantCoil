@@ -31,3 +31,5 @@ static func to_tile_coords(world_pos: Vector2) -> Vector2i:
 static func snap_position(world_pos: Vector2, align_to_center := true) -> Vector2:
 	var tile_coords := to_tile_coords(world_pos)
 	return to_world(tile_coords, align_to_center)
+
+## end grid.gd

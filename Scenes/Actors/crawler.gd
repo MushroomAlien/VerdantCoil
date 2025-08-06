@@ -23,9 +23,18 @@ func _ready() -> void:
 		camera.make_current()
 
 func _unhandled_input(event: InputEvent) -> void:
+	# Toggle upgrades for testing
+	var upgrade_controller = get_node("UpgradeController")
+	if event.is_action_pressed("toggle_upgrade_1"):
+		upgrade_controller.toggle_upgrade(upgrade_controller.Upgrade.HARDENED_SKIN)
+	elif event.is_action_pressed("toggle_upgrade_2"):
+		upgrade_controller.toggle_upgrade(upgrade_controller.Upgrade.ACID_SAC)
+	elif event.is_action_pressed("toggle_upgrade_3"):
+		upgrade_controller.toggle_upgrade(upgrade_controller.Upgrade.GHOST_TRAIL)
+	
 	if _is_moving:
 		return
-
+	
 	# Directional input via InputMap
 	if event.is_action_pressed("move_up"):
 		_move_direction = Vector2.UP

@@ -1,3 +1,9 @@
+TextureButton
+HBoxContainer
+Control
+CanvasLayer
+Label
+Node
 Sprite2D
 ParallaxBackground
 ParallaxLayer
