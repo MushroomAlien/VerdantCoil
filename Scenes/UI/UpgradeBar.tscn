@@ -1,5 +1,6 @@
-[gd_scene load_steps=5 format=3 uid="uid://c15uxbq7w6irk"]
+[gd_scene load_steps=6 format=3 uid="uid://c15uxbq7w6irk"]
 
+[ext_resource type="Script" uid="uid://di4q1pkimuoed" path="res://Scenes/UI/upgrade_bar.gd" id="1_cfu8i"]
 [ext_resource type="Texture2D" uid="uid://c4eqrqt63s4vg" path="res://Assets/roguelikeSheet_transparent_32x32.png" id="1_woh8q"]
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_cfu8i"]
@@ -21,6 +22,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+script = ExtResource("1_cfu8i")
 
 [node name="IconRow" type="HBoxContainer" parent="."]
 layout_mode = 0

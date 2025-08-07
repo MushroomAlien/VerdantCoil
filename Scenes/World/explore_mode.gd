@@ -25,11 +25,11 @@ func _process(delta: float) -> void:
 	var crawler = $Crawler
 	var uc = crawler.get_node("UpgradeController")
 	
-	var debug_text := ""
-	debug_text += "Hardened Skin: %s\n" % uc.has_upgrade(uc.Upgrade.HARDENED_SKIN)
-	debug_text += "Acid Sac: %s\n" % uc.has_upgrade(uc.Upgrade.ACID_SAC)
-	debug_text += "Ghost Trail: %s\n" % uc.has_upgrade(uc.Upgrade.GHOST_TRAIL)
-	$CanvasLayer/UpgradeDebugLabel.text = debug_text
+	#var debug_text := ""
+	#debug_text += "Hardened Skin: %s\n" % uc.has_upgrade(uc.Upgrade.HARDENED_SKIN)
+	#debug_text += "Acid Sac: %s\n" % uc.has_upgrade(uc.Upgrade.ACID_SAC)
+	#debug_text += "Ghost Trail: %s\n" % uc.has_upgrade(uc.Upgrade.GHOST_TRAIL)
+	#$CanvasLayer/UpgradeDebugLabel.text = debug_text
 
 ## Returns the tile coordinates of the tile marked with is_spawn = true in the "Overlay" layer.
 ## If none is found, falls back to (12, 23) with a warning.
