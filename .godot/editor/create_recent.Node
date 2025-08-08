@@ -1,15 +1,14 @@
+Sprite2D
+Node2D
 TextureButton
 HBoxContainer
 Control
 CanvasLayer
 Label
 Node
-Sprite2D
 ParallaxBackground
 ParallaxLayer
 Parallax2D
 TileMapLayer
 TileMap
 Camera2D
-CollisionShape2D
-Area2D

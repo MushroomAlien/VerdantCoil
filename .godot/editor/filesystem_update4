@@ -2,6 +2,6 @@ res://Scenes/World/ExploreMode.tscn
 res://Assets/Resources/flesh_tile.tres
 res://Scenes/Actors/crawler.tscn
 res://Scenes/UI/UpgradeBar.tscn
-res://System/upgrade_controller.gd
-res://Scenes/World/explore_mode.gd
-res://Scenes/UI/upgrade_bar.gd
+res://Scenes/Tiles/BaseTile.tscn
+res://Scenes/Tiles/base_tile.gd
+res://Scenes/Tiles/FleshTile.tscn

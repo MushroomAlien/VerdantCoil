@@ -1,5 +1,5 @@
 ea4bc82a6ad023ab7ee23ee620429895
-::res://::1754557674
+::res://::1754649690
 ::res://Assets/::1754486000
 icon.svg::CompressedTexture2D/CompressedTexture2D::8103006741623513525::1754178151::1754180466::1::::<><><>0<>0<>8f04aa9b94f812e9f414a6b2db595d24<>res://.godot/imported/icon.svg-8193eb3d66a1b5143b8bb4c28c1dc139.ctex::
 PatternedAI-free-image-1754232652584.png::CompressedTexture2D/CompressedTexture2D::7293991090957870786::1754308563::1754309291::1::::<><><>0<>0<>980ba3f054f0af7ee185261384ae6a14<>res://.godot/imported/PatternedAI-free-image-1754232652584.png-40f5927220e09e6b79577dba7f47a357.ctex::
@@ -13,18 +13,19 @@ PatternedAI-free-image-1754235186822.png::CompressedTexture2D/CompressedTexture2
 roguelikeDungeon_transparent_32x32.png::CompressedTexture2D/CompressedTexture2D::6088481515322302170::1754183096::1754486000::1::::<><><>0<>0<>cd49df6d5d4826141aa98ef083045137<>res://.godot/imported/roguelikeDungeon_transparent_32x32.png-ac24d7d94faedeba03d119f93a4a69ba.ctex::
 roguelikeSheet_transparent_32x32.png::CompressedTexture2D/CompressedTexture2D::6817578045457570484::1754182380::1754485998::1::::<><><>0<>0<>2f9a2c7c60b95a7d9986ffc1c8e8a586<>res://.godot/imported/roguelikeSheet_transparent_32x32.png-bcb399bf5333217ab5ef66d644d12a27.ctex::
 tilemap_32x32.png::CompressedTexture2D/CompressedTexture2D::3892978946666997150::1754183275::1754485995::1::::<><><>0<>0<>cdff2c88a5ad04a0e46f0d69608237a5<>res://.godot/imported/tilemap_32x32.png-d916f4c5e85513507ece7624e2625781.ctex::
-::res://Assets/Resources/::1754485897
-flesh_tile.tres::TileSet::1761290363704974723::1754485897::0::1::::<><><>0<>0<><>::uid://c4eqrqt63s4vg::::res://Assets/roguelikeSheet_transparent_32x32.png
+::res://Assets/Resources/::1754557679
+flesh_tile.tres::TileSet::1761290363704974723::1754557679::0::1::::<><><>0<>0<><>::uid://c4eqrqt63s4vg::::res://Assets/roguelikeSheet_transparent_32x32.png
 ::res://Scenes/::1754486133
-::res://Scenes/Actors/::1754486010
+::res://Scenes/Actors/::1754571372
 crawler.gd::GDScript/GDScript::6797002111998109821::1754398783::0::1::::<>Area2D<><>0<>0<><>::
-crawler.tscn::PackedScene::7241436130744052113::1754486010::0::1::::<><><>0<>0<><>::uid://c33rvqjr1h1kj::::res://Scenes/Actors/crawler.gd<>uid://bvp12aoitu7nu::::res://Assets/tilemap_32x32.png<>uid://dg6t4huhkspv4::::res://System/upgrade_controller.gd
-::res://Scenes/UI/::1754487664
-UpgradeBar.tscn::PackedScene::6660938126436761284::1754487664::0::1::::<><><>0<>0<><>::uid://c4eqrqt63s4vg::::res://Assets/roguelikeSheet_transparent_32x32.png
-::res://Scenes/World/::1754486009
-ExploreMode.tscn::PackedScene::574977108644499010::1754486009::0::1::::<><><>0<>0<><>::uid://brhe1gqri6osw::::res://Scenes/World/explore_mode.gd<>uid://0dggvm2m4qyl::::res://Assets/Resources/flesh_tile.tres<>uid://b3fh4r72u2qo::::res://Assets/PatternedAI-free-image-1754232821017 720.png
-explore_mode.gd::GDScript::3594371309071962826::1754485935::0::1::::<>Node2D<><>0<>0<><>::
-::res://System/::1754398877
+crawler.tscn::PackedScene::7241436130744052113::1754571372::0::1::::<><><>0<>0<><>::uid://c33rvqjr1h1kj::::res://Scenes/Actors/crawler.gd<>uid://bvp12aoitu7nu::::res://Assets/tilemap_32x32.png<>uid://dg6t4huhkspv4::::res://System/upgrade_controller.gd
+::res://Scenes/UI/::1754571373
+UpgradeBar.tscn::PackedScene::6660938126436761284::1754571373::0::1::::<><><>0<>0<><>::uid://di4q1pkimuoed::::res://Scenes/UI/upgrade_bar.gd<>uid://c4eqrqt63s4vg::::res://Assets/roguelikeSheet_transparent_32x32.png
+upgrade_bar.gd::GDScript::7781658461255704611::1754564229::0::1::::<>Control<><>0<>0<><>::
+::res://Scenes/World/::1754571372
+ExploreMode.tscn::PackedScene::574977108644499010::1754571372::0::1::::<><><>0<>0<><>::uid://brhe1gqri6osw::::res://Scenes/World/explore_mode.gd<>uid://0dggvm2m4qyl::::res://Assets/Resources/flesh_tile.tres<>uid://b3fh4r72u2qo::::res://Assets/PatternedAI-free-image-1754232821017 720.png<>uid://c15uxbq7w6irk::::res://Scenes/UI/UpgradeBar.tscn
+explore_mode.gd::GDScript::3594371309071962826::1754558003::0::1::::<>Node2D<><>0<>0<><>::
+::res://System/::1754558004
 grid.gd::GDScript/GDScript::915123945570149802::1754398432::0::1::::<>Node<><>0<>0<><>::
 grid.txt::TextFile/TextFile::-1::1754202486::0::1::::<><><>0<>0<><>::
-upgrade_controller.gd::GDScript/GDScript::7645596633060831539::1754398877::0::1::::<>Node<><>0<>0<><>::
+upgrade_controller.gd::GDScript::7645596633060831539::1754558004::0::1::::<>Node<><>0<>0<><>::
