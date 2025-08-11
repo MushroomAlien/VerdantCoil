@@ -1,0 +1,15 @@
+[gd_scene load_steps=4 format=3 uid="uid://gajo3imqaqd5"]
+
+[ext_resource type="Script" uid="uid://t50uei63deu6" path="res://Scenes/_Archive/base_tile.gd" id="1_p8hog"]
+[ext_resource type="Texture2D" uid="uid://c4eqrqt63s4vg" path="res://Assets/roguelikeSheet_transparent_32x32.png" id="2_38iyh"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_218k1"]
+atlas = ExtResource("2_38iyh")
+region = Rect2(272, 748, 32, 32)
+
+[node name="FleshTile" type="Node2D"]
+script = ExtResource("1_p8hog")
+tile_type = "Flesh"
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+texture = SubResource("AtlasTexture_218k1")
