@@ -34,13 +34,13 @@ func _process(delta: float) -> void:
 ## Returns the tile coordinates of the tile marked with is_spawn = true in the "Overlay" layer.
 ## If none is found, falls back to (12, 23) with a warning.
 ## Returns the tile coordinates of the spawn tile marked with `is_spawn = true`.
-## This uses TileMap layer index 1 (Overlay). Falls back to (12, 23) if none is found.
+## This uses TileMap layer index 2 (Overlay). Falls back to (12, 23) if none is found.
 func get_spawn_position() -> Vector2i:
 	# Reference to the TileMap node that contains layers
 	var tilemap: TileMap = $CoilMap
 
-	# Use explicit integer for layer index (Overlay should be at index 1)
-	var layer_index: int = 1
+	# Use explicit integer for layer index (Overlay should be at index 2)
+	var layer_index: int = 2
 
 	# Print how many layers we have for debugging
 	print("🧱 CoilMap layer count = ", tilemap.get_layers_count())
