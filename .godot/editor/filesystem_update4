@@ -2,3 +2,4 @@ res://Scenes/World/ExploreMode.tscn
 res://Assets/Resources/flesh_tile.tres
 res://Scenes/Actors/crawler.tscn
 res://Scenes/World/explore_mode.gd
+res://Scenes/Actors/crawler.gd

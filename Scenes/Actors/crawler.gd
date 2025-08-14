@@ -16,11 +16,22 @@ var base_layer_index: int = 0
 var _is_moving: bool = false
 var _move_direction := Vector2.ZERO
 
+const LAYER_BASE := 0
+const LAYER_WALLS := 1
+const LAYER_HAZARDS := 2
+const LAYER_MARKERS := 3
+
 func _ready() -> void:
 	print("Crawler ready at ", position)
 	var camera := get_node("Camera2D")
 	if camera:
 		camera.make_current()
+
+func _get_tile_data(layer: int, coords: Vector2i) -> TileData:
+	# Returns TileData or null if nothing is painted on that layer at coords
+	if tilemap.get_cell_source_id(layer, coords) == -1:
+		return null
+	return tilemap.get_cell_tile_data(layer, coords)
 
 func _unhandled_input(event: InputEvent) -> void:
 	# Toggle upgrades for testing
@@ -52,44 +63,142 @@ func _unhandled_input(event: InputEvent) -> void:
 func _start_move() -> void:
 	_is_moving = true
 	
-	# Convert current world position to grid tile coordinates
+	
+	# 1) Where are we trying to go?
 	var current_tile := Grid.to_tile_coords(position)
 	var next_tile := current_tile + Vector2i(_move_direction)
-	
-		# Prevent movement outside painted area
-	var map_bounds: Rect2i = tilemap.get_used_rect()
-	if not map_bounds.has_point(next_tile):
+
+	# 2) Bounds check (use Base as the canonical footprint)
+	var base_used: Rect2i = tilemap.get_used_rect()
+	if not base_used.has_point(next_tile):
 		print("Blocked: outside map bounds")
 		_is_moving = false
 		return
-	
-	# Get tile source ID at next_tile (layer 0)
-	var tile_id: int = tilemap.get_cell_source_id(base_layer_index, next_tile)
-	if tile_id == -1:
-		print("Blocked: no tile at target: ", next_tile)
+
+	# 3) Must have Flesh (walkable) on Base
+	var base_td := _get_tile_data(LAYER_BASE, next_tile)
+	if base_td == null:
+		print("Blocked: no base tile at ", next_tile)
 		_is_moving = false
 		return
-	
-	# Fetch TileData to check for custom metadata
-	var tile_data := tilemap.get_cell_tile_data(base_layer_index, next_tile)
-	if tile_data == null:
-		print("Blocked: missing tile data at ", next_tile)
+
+	var base_walkable: bool = base_td.get_custom_data("walkable")
+	if base_walkable != true:
+		print("Blocked: base not walkable at ", next_tile)
 		_is_moving = false
 		return
-	
-	# Check walkable metadata (defaults to false if missing)
-	var is_walkable: bool = tile_data.get_custom_data("walkable")
-	if is_walkable != true:
-		print("Blocked: tile at ", next_tile, " is not walkable")
-		_is_moving = false
-		return
-	
-	# Move to next tile using a Tween
+
+	# 4) Walls over Flesh can block (digestible is gated by Acid Sac)
+	var wall_td := _get_tile_data(LAYER_WALLS, next_tile)
+	if wall_td != null:
+		var wall_walkable: bool = wall_td.get_custom_data("walkable") # usually false
+		var wall_digestible: bool = wall_td.get_custom_data("digestible")
+		#var upgrades = get_node("UpgradeController")
+		#var acid_on := upgrades.has_upgrade(upgrades.Upgrade.ACID_SAC)
+		#var can_pass_wall := wall_walkable or (wall_digestible and acid_on)
+		var upgrades := get_node_or_null("UpgradeController")
+		var acid_on: bool = false
+		if upgrades != null:
+			acid_on = upgrades.has_upgrade(upgrades.Upgrade.ACID_SAC)
+		var can_pass_wall: bool = wall_walkable or (wall_digestible and acid_on)
+		
+		if not can_pass_wall:
+			print("Blocked: wall at ", next_tile, " (need Acid Sac if digestible)")
+			_is_moving = false
+			return
+
+	# 5) All checks passed → move
 	var target_pos = Grid.to_world(next_tile)
 	var tween = create_tween()
 	tween.tween_property(self, "position", target_pos, 1.0 / move_speed)
-	tween.connect("finished", _on_move_finished)
+	# Apply effects after we arrive
+	tween.connect("finished", func ():
+		_on_arrived_at(next_tile)
+	)
+	
+	## Convert current world position to grid tile coordinates
+	#var current_tile := Grid.to_tile_coords(position)
+	#var next_tile := current_tile + Vector2i(_move_direction)
+	#
+		## Prevent movement outside painted area
+	#var map_bounds: Rect2i = tilemap.get_used_rect()
+	#if not map_bounds.has_point(next_tile):
+		#print("Blocked: outside map bounds")
+		#_is_moving = false
+		#return
+	#
+	## Get tile source ID at next_tile (layer 0)
+	#var tile_id: int = tilemap.get_cell_source_id(base_layer_index, next_tile)
+	#if tile_id == -1:
+		#print("Blocked: no tile at target: ", next_tile)
+		#_is_moving = false
+		#return
+	#
+	## Fetch TileData to check for custom metadata
+	#var tile_data := tilemap.get_cell_tile_data(base_layer_index, next_tile)
+	#if tile_data == null:
+		#print("Blocked: missing tile data at ", next_tile)
+		#_is_moving = false
+		#return
+	#
+	## Check walkable metadata (defaults to false if missing)
+	#var is_walkable: bool = tile_data.get_custom_data("walkable")
+	#if is_walkable != true:
+		#print("Blocked: tile at ", next_tile, " is not walkable")
+		#_is_moving = false
+		#return
+	#
+	## Move to next tile using a Tween
+	#var target_pos = Grid.to_world(next_tile)
+	#var tween = create_tween()
+	#tween.tween_property(self, "position", target_pos, 1.0 / move_speed)
+	#tween.connect("finished", _on_move_finished)
 
 func _on_move_finished() -> void:
 	_is_moving = false
+
+func _on_arrived_at(tile: Vector2i) -> void:
+	# Hazards layer effects
+	var hazard_td := _get_tile_data(LAYER_HAZARDS, tile)
+	if hazard_td != null:
+		var hazard := String(hazard_td.get_custom_data("hazard") or "none")
+		if hazard == "acid":
+			var dmg := int(hazard_td.get_custom_data("damage_per_step") or 0)
+			var upgrades = get_node("UpgradeController")
+			# Simple mitigation: Hardened Skin reduces 1 (never below 0)
+			if upgrades.has_upgrade(upgrades.Upgrade.HARDENED_SKIN):
+				dmg = max(0, dmg - 1)
+			if dmg > 0:
+				print("Acid damage: ", dmg)
+				# TODO: hook into health system when added
+
+		elif hazard == "sticky":
+			var slow_ticks := int(hazard_td.get_custom_data("slow_ticks") or 0)
+			if slow_ticks > 0:
+				# Easiest MVP: eat N inputs after this move
+				_consume_future_inputs(slow_ticks)
+
+	# Goal check (Markers)
+	var marker_td := _get_tile_data(LAYER_MARKERS, tile)
+	if marker_td != null and bool(marker_td.get_custom_data("is_goal") or false):
+		print("🏆 Reached Heartroot — WIN!")
+
+	_is_moving = false
+
+
+# Simple input-skip slow (add this helper)
+var _skip_inputs := 0
+
+func _consume_future_inputs(n: int) -> void:
+	_skip_inputs += n
+	
+	# At the very top of _unhandled_input(event):
+	# if we’re in slow, skip this input
+	# (keep your upgrade toggles as they are; this only short-circuits movement)
+	# ...
+	# BEFORE reading directions:
+	if _skip_inputs > 0:
+		_skip_inputs -= 1
+		return
+
 ## end crawler.gd
