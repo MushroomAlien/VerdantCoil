@@ -33,3 +33,4 @@ desktop.ini       # Windows
 # Backup or autosave files
 *.bak
 *.old
+.godot/
