@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" uid="uid://brhe1gqri6osw" path="res://Scenes/World/explore_mode.gd" id="1_sdi1h"]
 [ext_resource type="TileSet" uid="uid://0dggvm2m4qyl" path="res://Assets/Resources/flesh_tile.tres" id="1_u2iet"]
-[ext_resource type="Texture2D" uid="uid://b1jq0po7e5i86" path="res://Assets/PatternedAI-free-image-1754232821017 720.png" id="2_s0ewa"]
+[ext_resource type="Texture2D" uid="uid://b3fh4r72u2qo" path="res://Assets/PatternedAI-free-image-1754232821017 720.png" id="2_s0ewa"]
 [ext_resource type="PackedScene" uid="uid://c15uxbq7w6irk" path="res://Scenes/UI/UpgradeBar.tscn" id="4_6tugw"]
 
 [node name="ExploreMode" type="Node2D"]
