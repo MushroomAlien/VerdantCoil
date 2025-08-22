@@ -1,98 +1,12 @@
-[gd_scene load_steps=14 format=3 uid="uid://30d2424oam6i"]
+[gd_scene load_steps=4 format=3 uid="uid://30d2424oam6i"]
 
 [ext_resource type="TileSet" uid="uid://0dggvm2m4qyl" path="res://Assets/Resources/flesh_tile.tres" id="1_8psy0"]
 [ext_resource type="Script" uid="uid://dktegqxr56fql" path="res://Scenes/BuilderMode/builder_mode.gd" id="1_y85i2"]
-[ext_resource type="Script" uid="uid://dd0fq3qbaw3l1" path="res://System/brush_entry.gd" id="2_11ljt"]
-[ext_resource type="Script" uid="uid://kdhl6aofvq0k" path="res://System/brush_registry.gd" id="3_ubaq5"]
-
-[sub_resource type="Resource" id="Resource_1ixel"]
-script = ExtResource("2_11ljt")
-display_name = "Flesh (walkable)"
-rule_profile = "BASE"
-target_layer = 0
-source_id = -1
-atlas_coords = Vector2i(0, 0)
-hazard_kind = ""
-metadata/_custom_type_script = "uid://dd0fq3qbaw3l1"
-
-[sub_resource type="Resource" id="Resource_kn641"]
-script = ExtResource("2_11ljt")
-display_name = ""
-rule_profile = "BASE"
-target_layer = 0
-source_id = -1
-atlas_coords = Vector2i(0, 0)
-hazard_kind = ""
-metadata/_custom_type_script = "uid://dd0fq3qbaw3l1"
-
-[sub_resource type="Resource" id="Resource_tx8cy"]
-script = ExtResource("2_11ljt")
-display_name = ""
-rule_profile = "BASE"
-target_layer = 0
-source_id = -1
-atlas_coords = Vector2i(0, 0)
-hazard_kind = ""
-metadata/_custom_type_script = "uid://dd0fq3qbaw3l1"
-
-[sub_resource type="Resource" id="Resource_uo2pm"]
-script = ExtResource("2_11ljt")
-display_name = ""
-rule_profile = "BASE"
-target_layer = 0
-source_id = -1
-atlas_coords = Vector2i(0, 0)
-hazard_kind = ""
-metadata/_custom_type_script = "uid://dd0fq3qbaw3l1"
-
-[sub_resource type="Resource" id="Resource_ohe38"]
-script = ExtResource("2_11ljt")
-display_name = ""
-rule_profile = "BASE"
-target_layer = 0
-source_id = -1
-atlas_coords = Vector2i(0, 0)
-hazard_kind = ""
-metadata/_custom_type_script = "uid://dd0fq3qbaw3l1"
-
-[sub_resource type="Resource" id="Resource_lrcck"]
-script = ExtResource("2_11ljt")
-display_name = ""
-rule_profile = "BASE"
-target_layer = 0
-source_id = -1
-atlas_coords = Vector2i(0, 0)
-hazard_kind = ""
-metadata/_custom_type_script = "uid://dd0fq3qbaw3l1"
-
-[sub_resource type="Resource" id="Resource_tq85n"]
-script = ExtResource("2_11ljt")
-display_name = ""
-rule_profile = "BASE"
-target_layer = 0
-source_id = -1
-atlas_coords = Vector2i(0, 0)
-hazard_kind = ""
-metadata/_custom_type_script = "uid://dd0fq3qbaw3l1"
-
-[sub_resource type="Resource" id="Resource_bqx0r"]
-script = ExtResource("2_11ljt")
-display_name = ""
-rule_profile = "BASE"
-target_layer = 0
-source_id = -1
-atlas_coords = Vector2i(0, 0)
-hazard_kind = ""
-metadata/_custom_type_script = "uid://dd0fq3qbaw3l1"
-
-[sub_resource type="Resource" id="Resource_r3ftp"]
-script = ExtResource("3_ubaq5")
-brushes = Array[ExtResource("2_11ljt")]([SubResource("Resource_1ixel"), SubResource("Resource_kn641"), SubResource("Resource_tx8cy"), SubResource("Resource_uo2pm"), SubResource("Resource_ohe38"), SubResource("Resource_lrcck"), SubResource("Resource_tq85n"), SubResource("Resource_bqx0r")])
-metadata/_custom_type_script = "uid://kdhl6aofvq0k"
+[ext_resource type="Resource" uid="uid://bscmx8itty5qg" path="res://System/brush_registry.tres" id="2_obs3p"]
 
 [node name="BuilderMode" type="Node2D"]
 script = ExtResource("1_y85i2")
-brush_registry = SubResource("Resource_r3ftp")
+brush_registry = ExtResource("2_obs3p")
 
 [node name="Coilmap" type="TileMap" parent="."]
 tile_set = ExtResource("1_8psy0")
