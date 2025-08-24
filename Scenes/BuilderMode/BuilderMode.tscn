@@ -11,10 +11,22 @@ brush_registry = ExtResource("2_obs3p")
 [node name="Coilmap" type="TileMap" parent="."]
 tile_set = ExtResource("1_8psy0")
 format = 2
-layer_0/name = "Base"
-layer_1/name = "Walls"
-layer_2/name = "Hazards"
-layer_3/name = "Markers"
+
+[node name="Base" type="TileMapLayer" parent="Coilmap"]
+use_parent_material = true
+tile_set = ExtResource("1_8psy0")
+
+[node name="Walls" type="TileMapLayer" parent="Coilmap"]
+use_parent_material = true
+tile_set = ExtResource("1_8psy0")
+
+[node name="Hazards" type="TileMapLayer" parent="Coilmap"]
+use_parent_material = true
+tile_set = ExtResource("1_8psy0")
+
+[node name="Markers" type="TileMapLayer" parent="Coilmap"]
+use_parent_material = true
+tile_set = ExtResource("1_8psy0")
 
 [node name="UI" type="CanvasLayer" parent="."]
 
