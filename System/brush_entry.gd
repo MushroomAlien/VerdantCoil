@@ -13,7 +13,8 @@ class_name BrushEntry
 var rule_profile: String = "BASE"
 
 # Which TileMap layer this brush paints to. (ERASER ignores this.)
-@export_range(0, 7, 1)
+# Uses labels in the Inspector but still stores an int (0..3).
+@export_enum("BASE", "WALLS", "HAZARDS", "MARKERS")
 var target_layer: int = 0
 
 # TileSet placement info (ERASER ignores these).

@@ -3,19 +3,25 @@
 
 extends Node2D
 
-# --- Scene references ---
-@onready var coil_map: TileMap    = $CoilMap
-@onready var palette_row: Node    = $UI/PaletteBar/PaletteRow
-@onready var status_label: Label  = $UI/StatusLabel
-
-# --- Layer indices (match Explore/Crawler) ---
-const LAYER_BASE     := 0
-const LAYER_WALLS    := 1
-const LAYER_HAZARDS  := 2
-const LAYER_MARKERS  := 3
-
 # --- External registry (set this in the Inspector) ---
 @export var brush_registry: BrushRegistry
+
+# --- Coil map layer nodes ---
+@export var base_layer: TileMapLayer
+@export var walls_layer: TileMapLayer
+@export var hazard_layer: TileMapLayer
+@export var marker_layer: TileMapLayer
+
+# --- Scene references ---
+@onready var coil_map: TileMap = $CoilMap
+@onready var palette_row: HBoxContainer = $UI/PaletteBar/PaletteRow
+@onready var status_label: Label = $UI/StatusLabel
+
+## --- Layer indices (match Explore/Crawler) ---
+#const LAYER_BASE     := 0
+#const LAYER_WALLS    := 1
+#const LAYER_HAZARDS  := 2
+#const LAYER_MARKERS  := 3
 
 # --- Current brush selection ---
 var _current_index: int = 0
@@ -25,11 +31,13 @@ var _current_index: int = 0
 var _status_timer: float = 0.0
 
 func _ready() -> void:
-	# Basic sanity checks for beginners
-	if brush_registry == null:
-		push_error("❌ BrushRegistry not assigned on BuilderMode.")
-	if coil_map == null:
-		push_error("❌ CoilMap TileMap not found.")
+	# Basic sanity checks
+	if brush_registry == null: push_error("❌ BrushRegistry not assigned on BuilderMode.")
+	if coil_map == null: push_error("❌ CoilMap TileMap not found.")
+	if base_layer == null: push_error("❌ base_layer not assigned on BuilderMode.")
+	if walls_layer == null: push_error("❌ walls_layer not assigned on BuilderMode.")
+	if hazard_layer == null: push_error("❌ hazard_layer not assigned on BuilderMode.")
+	if marker_layer == null: push_error("❌ marker_layer not assigned on BuilderMode.")
 
 	# Wire each palette button (by order) to a brush (by order).
 	# Left to right buttons map to registry.brushes[0..N]
@@ -41,7 +49,7 @@ func _ready() -> void:
 				_select_brush(idx)
 			)
 			i += 1
-
+	
 	# Default select the first brush, if any
 	if brush_registry != null and brush_registry.brushes.size() > 0:
 		_select_brush(0)
@@ -53,12 +61,20 @@ func _process(delta: float) -> void:
 		if _status_timer <= 0.0:
 			status_label.text = ""
 
+func _layer_for(index: int) -> TileMapLayer:
+	match index:
+		0: return base_layer
+		1: return walls_layer
+		2: return hazard_layer
+		3: return marker_layer
+		_: return null
+
 func _unhandled_input(event: InputEvent) -> void:
 	# We use _unhandled_input so UI button clicks don't also paint
 	if event is InputEventMouseButton and event.pressed:
 		var mouse_world: Vector2 = get_viewport().get_mouse_position()
-		var mouse_local: Vector2 = coil_map.to_local(mouse_world)
-		var coords: Vector2i = coil_map.local_to_map(mouse_local)
+		var mouse_local: Vector2 = base_layer.to_local(mouse_world)
+		var coords: Vector2i = base_layer.local_to_map(mouse_local)
 		
 		if event.button_index == MOUSE_BUTTON_LEFT:
 			_paint_at(coords)
@@ -66,7 +82,6 @@ func _unhandled_input(event: InputEvent) -> void:
 			_erase_at(coords)
 
 # --- Selection / Status -------------------------------------------------------
-
 func _select_brush(index: int) -> void:
 	if brush_registry == null or index < 0 or index >= brush_registry.brushes.size():
 		_show_status("⚠️ No brush at index " + str(index))
@@ -87,30 +102,34 @@ func _paint_at(coords: Vector2i) -> void:
 	if b == null:
 		_show_status("⚠️ No brush selected.")
 		return
-
+		
 	# ERASER: just erase and return
 	if b.rule_profile == "ERASER":
 		_erase_at(coords)
 		return
-
+	
 	# Validate according to rule profile (see functions below)
 	if not _validate_placement(b, coords):
 		return
-
+	
 	# Place the tile (BASE/WALL/POOL/MARKER)
 	if b.source_id < 0:
 		_show_status("⚠️ Source ID not set for brush: " + b.display_name)
 		return
-
-	coil_map.set_cell(b.target_layer, coords, b.source_id, b.atlas_coords)
+	
+	var layer := _layer_for(b.target_layer)
+	if layer == null:
+		_show_status("⚠️ Unknown target layer: " + str(b.target_layer))
+		return
+	layer.set_cell(coords, b.source_id, b.atlas_coords)
 
 func _erase_at(coords: Vector2i) -> void:
 	# Simple MVP: remove from all known layers at this cell
-	for layer in [LAYER_MARKERS, LAYER_HAZARDS, LAYER_WALLS, LAYER_BASE]:
-		coil_map.erase_cell(layer, coords)
+	for layer_node in [marker_layer, hazard_layer, walls_layer]:
+		if layer_node:
+			layer_node.erase_cell(coords)
 
 # --- Validation helpers -------------------------------------------------------
-
 func _current_brush() -> BrushEntry:
 	if brush_registry == null:
 		return null
@@ -119,26 +138,24 @@ func _current_brush() -> BrushEntry:
 	return brush_registry.brushes[_current_index]
 
 func _has_base(coords: Vector2i) -> bool:
-	return coil_map.get_cell_source_id(LAYER_BASE, coords) != -1
+	return base_layer.get_cell_source_id(coords) != -1
 
 func _has_wall(coords: Vector2i) -> bool:
-	return coil_map.get_cell_source_id(LAYER_WALLS, coords) != -1
+	return walls_layer.get_cell_source_id(coords) != -1
 
 func _hazard_kind_at(coords: Vector2i) -> String:
-	var td: TileData = coil_map.get_cell_tile_data(LAYER_HAZARDS, coords)
+	var td: TileData = hazard_layer.get_cell_tile_data(coords)
 	if td == null:
 		return ""
-	var v = td.get_custom_data("hazard")  # Variant
-	if v is String:
-		return String(v)
-	return ""
+	var v = td.get_custom_data("hazard")
+	return String(v) if (v is String) else ""
 
 func _validate_placement(b: BrushEntry, coords: Vector2i) -> bool:
 	match b.rule_profile:
 		"BASE":
 			# Flesh is always allowed. (If you want to forbid overpainting, add checks here.)
 			return true
-
+		
 		"WALL":
 			# Rule A: Walls must sit on Flesh
 			if not _has_base(coords):
@@ -147,7 +164,7 @@ func _validate_placement(b: BrushEntry, coords: Vector2i) -> bool:
 			if _hazard_kind_at(coords) != "":
 				return _reject("Walls cannot overlap pools.")
 			return true
-
+		
 		"POOL":
 			# Rule A: Pools must sit on Flesh
 			if not _has_base(coords):
@@ -166,7 +183,7 @@ func _validate_placement(b: BrushEntry, coords: Vector2i) -> bool:
 					if neighbor != "" and neighbor != b.hazard_kind:
 						return _reject("Different pools can’t touch (N/E/S/W).")
 			return true
-
+		
 		"MARKER":
 			# Rule A: Markers require Flesh
 			if not _has_base(coords):
@@ -175,11 +192,11 @@ func _validate_placement(b: BrushEntry, coords: Vector2i) -> bool:
 			if _has_wall(coords) or _hazard_kind_at(coords) != "":
 				return _reject("Markers can’t sit under walls or pools.")
 			return true
-
+		
 		"ERASER":
 			# Handled earlier; never reaches here.
 			return true
-
+		
 		_:
 			return _reject("Unknown rule profile: " + b.rule_profile)
 

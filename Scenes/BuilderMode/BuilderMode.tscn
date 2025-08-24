@@ -4,27 +4,31 @@
 [ext_resource type="Script" uid="uid://dktegqxr56fql" path="res://Scenes/BuilderMode/builder_mode.gd" id="1_y85i2"]
 [ext_resource type="Resource" uid="uid://bscmx8itty5qg" path="res://System/brush_registry.tres" id="2_obs3p"]
 
-[node name="BuilderMode" type="Node2D"]
+[node name="BuilderMode" type="Node2D" node_paths=PackedStringArray("base_layer", "walls_layer", "hazard_layer", "marker_layer")]
 script = ExtResource("1_y85i2")
 brush_registry = ExtResource("2_obs3p")
+base_layer = NodePath("CoilMap/Base")
+walls_layer = NodePath("CoilMap/Walls")
+hazard_layer = NodePath("CoilMap/Hazards")
+marker_layer = NodePath("CoilMap/Markers")
 
-[node name="Coilmap" type="TileMap" parent="."]
+[node name="CoilMap" type="TileMap" parent="."]
 tile_set = ExtResource("1_8psy0")
 format = 2
 
-[node name="Base" type="TileMapLayer" parent="Coilmap"]
+[node name="Base" type="TileMapLayer" parent="CoilMap"]
 use_parent_material = true
 tile_set = ExtResource("1_8psy0")
 
-[node name="Walls" type="TileMapLayer" parent="Coilmap"]
+[node name="Walls" type="TileMapLayer" parent="CoilMap"]
 use_parent_material = true
 tile_set = ExtResource("1_8psy0")
 
-[node name="Hazards" type="TileMapLayer" parent="Coilmap"]
+[node name="Hazards" type="TileMapLayer" parent="CoilMap"]
 use_parent_material = true
 tile_set = ExtResource("1_8psy0")
 
-[node name="Markers" type="TileMapLayer" parent="Coilmap"]
+[node name="Markers" type="TileMapLayer" parent="CoilMap"]
 use_parent_material = true
 tile_set = ExtResource("1_8psy0")
 
@@ -64,3 +68,13 @@ layout_mode = 2
 
 [node name="EraserBtn" type="Button" parent="UI/PaletteBar/PaletteRow"]
 layout_mode = 2
+
+[node name="StatusLabel" type="Label" parent="UI"]
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -31.0
+offset_right = 31.0
+offset_bottom = 23.0
+grow_horizontal = 2
+text = "[READY]"
