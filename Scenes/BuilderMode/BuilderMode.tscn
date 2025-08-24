@@ -45,29 +45,37 @@ layout_mode = 0
 offset_right = 40.0
 offset_bottom = 40.0
 
-[node name="FleshBTtn" type="Button" parent="UI/PaletteBar/PaletteRow"]
+[node name="FleshBTtn" type="TextureButton" parent="UI/PaletteBar/PaletteRow"]
 layout_mode = 2
+toggle_mode = true
 
-[node name="WallSolidBtn" type="Button" parent="UI/PaletteBar/PaletteRow"]
+[node name="WallSolidBtn" type="TextureButton" parent="UI/PaletteBar/PaletteRow"]
 layout_mode = 2
+toggle_mode = true
 
-[node name="WallDigestBtn" type="Button" parent="UI/PaletteBar/PaletteRow"]
+[node name="WallDigestBtn" type="TextureButton" parent="UI/PaletteBar/PaletteRow"]
 layout_mode = 2
+toggle_mode = true
 
-[node name="AcidBtn" type="Button" parent="UI/PaletteBar/PaletteRow"]
+[node name="AcidBtn" type="TextureButton" parent="UI/PaletteBar/PaletteRow"]
 layout_mode = 2
+toggle_mode = true
 
-[node name="StickyBtn" type="Button" parent="UI/PaletteBar/PaletteRow"]
+[node name="StickyBtn" type="TextureButton" parent="UI/PaletteBar/PaletteRow"]
 layout_mode = 2
+toggle_mode = true
 
-[node name="SpawnBtn" type="Button" parent="UI/PaletteBar/PaletteRow"]
+[node name="SpawnBtn" type="TextureButton" parent="UI/PaletteBar/PaletteRow"]
 layout_mode = 2
+toggle_mode = true
 
-[node name="HeartrootBtn" type="Button" parent="UI/PaletteBar/PaletteRow"]
+[node name="HeartrootBtn" type="TextureButton" parent="UI/PaletteBar/PaletteRow"]
 layout_mode = 2
+toggle_mode = true
 
-[node name="EraserBtn" type="Button" parent="UI/PaletteBar/PaletteRow"]
+[node name="EraserBtn" type="TextureButton" parent="UI/PaletteBar/PaletteRow"]
 layout_mode = 2
+toggle_mode = true
 
 [node name="StatusLabel" type="Label" parent="UI"]
 anchors_preset = 5

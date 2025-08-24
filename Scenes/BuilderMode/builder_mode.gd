@@ -41,13 +41,30 @@ func _ready() -> void:
 
 	# Wire each palette button (by order) to a brush (by order).
 	# Left to right buttons map to registry.brushes[0..N]
-	var i: int = 0
+
+	var _palette_group := ButtonGroup.new()  # keep one group
+	var i := 0
 	for child in palette_row.get_children():
-		if child is BaseButton:
-			var idx: int = i
-			child.pressed.connect(func():
-				_select_brush(idx)
-			)
+		if child is TextureButton:
+			child.toggle_mode = true
+			child.button_group = _palette_group
+			child.focus_mode = Control.FOCUS_NONE
+			# Use size flags instead of the nonexistent `expand` property
+			child.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			child.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			child.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_CENTERED
+			
+			var idx := i
+			child.pressed.connect(func(): _select_brush(idx))
+			# Set icon
+			if brush_registry != null and idx < brush_registry.brushes.size():
+				var be := brush_registry.brushes[idx]
+				if be.icon:
+					child.texture_normal = be.icon
+				child.tooltip_text = be.display_name
+			# Inactive look by default
+			child.self_modulate = Color(0.7, 0.7, 0.7, 1.0)
+			child.scale = Vector2.ONE
 			i += 1
 	
 	# Default select the first brush, if any
@@ -87,6 +104,24 @@ func _select_brush(index: int) -> void:
 		_show_status("⚠️ No brush at index " + str(index))
 		return
 	_current_index = index
+	
+	var j := 0
+	for child in palette_row.get_children():
+		if child is TextureButton:
+			var selected := (j == _current_index)
+			child.button_pressed = selected
+			# Visual feedback only (no new signals or groups)
+			if selected:
+				child.self_modulate = Color(1, 1, 1, 1)
+				child.scale = Vector2(1.1, 1.1)
+			else:
+				child.self_modulate = Color(0.7, 0.7, 0.7, 1)
+				child.scale = Vector2.ONE
+			# Keep tooltip in sync (optional)
+			if brush_registry and j < brush_registry.brushes.size():
+				child.tooltip_text = brush_registry.brushes[j].display_name
+		j += 1
+	
 	var b: BrushEntry = brush_registry.brushes[index]
 	_show_status("Brush: " + (b.display_name if b.display_name != "" else "Unnamed"))
 
@@ -96,7 +131,6 @@ func _show_status(msg: String) -> void:
 	print(msg)
 
 # --- Painting / Erasing -------------------------------------------------------
-
 func _paint_at(coords: Vector2i) -> void:
 	var b: BrushEntry = _current_brush()
 	if b == null:
@@ -121,7 +155,14 @@ func _paint_at(coords: Vector2i) -> void:
 	if layer == null:
 		_show_status("⚠️ Unknown target layer: " + str(b.target_layer))
 		return
+	
+	# Place the tile
 	layer.set_cell(coords, b.source_id, b.atlas_coords)
+	
+	# If we just placed a marker, enforce singletons (Spawn and Heartroot)
+	if layer == marker_layer:
+		_enforce_single_spawn_at(coords)
+		_enforce_single_heartroot_at(coords)
 
 func _erase_at(coords: Vector2i) -> void:
 	# Simple MVP: remove from all known layers at this cell
@@ -169,19 +210,12 @@ func _validate_placement(b: BrushEntry, coords: Vector2i) -> bool:
 			# Rule A: Pools must sit on Flesh
 			if not _has_base(coords):
 				return _reject("Pools require Flesh beneath.")
-			# Rule B: Pools cannot overlap walls
+			# Rule B: Pools cannot overlap walls (same cell)
 			if _has_wall(coords):
 				return _reject("Pools cannot overlap walls.")
-			# Rule C: Pools cannot touch walls orthogonally
-			for dir in [Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, Vector2i.RIGHT]:
-				if _has_wall(coords + dir):
-					return _reject("Pools can’t touch walls (N/E/S/W).")
-			# Rule D: Pools cannot touch a different pool kind orthogonally
-			if b.hazard_kind != "":
-				for dir in [Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, Vector2i.RIGHT]:
-					var neighbor := _hazard_kind_at(coords + dir)
-					if neighbor != "" and neighbor != b.hazard_kind:
-						return _reject("Different pools can’t touch (N/E/S/W).")
+			# Adjacency now allowed:
+			# - Pools may be next to walls.
+			# - Different pool kinds may touch.
 			return true
 		
 		"MARKER":
@@ -199,6 +233,45 @@ func _validate_placement(b: BrushEntry, coords: Vector2i) -> bool:
 		
 		_:
 			return _reject("Unknown rule profile: " + b.rule_profile)
+
+# Ensures only one spawn marker exists on the Markers layer.
+# If the tile we just placed at `coords` has custom_data is_spawn = true,
+# erase all other cells in the Markers layer that also have is_spawn = true.
+func _enforce_single_spawn_at(coords: Vector2i) -> void:
+	# Read back the tile we just placed
+	var td := marker_layer.get_cell_tile_data(coords)
+	if td == null:
+		return
+	
+	var is_spawn := bool(td.get_custom_data("is_spawn") or false)
+	if not is_spawn:
+		return  # We placed a non-spawn marker (e.g., Heartroot) — do nothing
+		
+	# Erase any other spawn markers elsewhere on the map
+	for c in marker_layer.get_used_cells():
+		if c == coords:
+			continue
+		var other_td := marker_layer.get_cell_tile_data(c)
+		if other_td != null and bool(other_td.get_custom_data("is_spawn") or false):
+			marker_layer.erase_cell(c)
+
+# Ensures only one Heartroot exists on the Markers layer.
+# If the tile at `coords` has custom_data is_goal = true,
+# erase any other cells in the Markers layer that also have is_goal = true.
+func _enforce_single_heartroot_at(coords: Vector2i) -> void:
+	var td := marker_layer.get_cell_tile_data(coords)
+	if td == null:
+		return
+	var is_goal := bool(td.get_custom_data("is_goal") or false)
+	if not is_goal:
+		return
+	
+	for c in marker_layer.get_used_cells():
+		if c == coords:
+			continue
+		var other_td := marker_layer.get_cell_tile_data(c)
+		if other_td != null and bool(other_td.get_custom_data("is_goal") or false):
+			marker_layer.erase_cell(c)
 
 func _reject(msg: String) -> bool:
 	_show_status("🚫 " + msg)
