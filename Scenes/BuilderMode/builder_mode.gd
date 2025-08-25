@@ -16,12 +16,11 @@ extends Node2D
 @onready var coil_map: TileMap = $CoilMap
 @onready var palette_row: HBoxContainer = $UI/PaletteBar/PaletteRow
 @onready var status_label: Label = $UI/StatusLabel
+@onready var start_with_flesh_cb: CheckBox = $UI/PaletteBar/PaletteRow/StartWithFlesh
+@onready var clear_base_confirm: ConfirmationDialog = $UI/ClearBaseConfirm
 
-## --- Layer indices (match Explore/Crawler) ---
-#const LAYER_BASE     := 0
-#const LAYER_WALLS    := 1
-#const LAYER_HAZARDS  := 2
-#const LAYER_MARKERS  := 3
+# Size of the prefill area for Flesh (adjust to your map size)
+@export var start_flesh_rect: Rect2i = Rect2i(Vector2i(0, 0), Vector2i(24, 24))
 
 # --- Current brush selection ---
 var _current_index: int = 0
@@ -70,6 +69,14 @@ func _ready() -> void:
 	# Default select the first brush, if any
 	if brush_registry != null and brush_registry.brushes.size() > 0:
 		_select_brush(0)
+	
+	# -- Start-with-Flesh: connect and apply once on load if ON
+	if start_with_flesh_cb:
+		start_with_flesh_cb.toggled.connect(_on_start_with_flesh_toggled)
+		_apply_start_with_flesh(start_with_flesh_cb.button_pressed)
+		# Confirmation dialog for smart clear
+		if clear_base_confirm:
+			clear_base_confirm.confirmed.connect(_on_clear_base_confirmed)
 
 func _process(delta: float) -> void:
 	# Clear transient status text after a delay
@@ -272,6 +279,125 @@ func _enforce_single_heartroot_at(coords: Vector2i) -> void:
 		var other_td := marker_layer.get_cell_tile_data(c)
 		if other_td != null and bool(other_td.get_custom_data("is_goal") or false):
 			marker_layer.erase_cell(c)
+
+# --- Start-with-Flesh ---------------------------------------------------------
+
+# Called when the checkbox is toggled. We only *add* flesh; never auto-erase.
+func _on_start_with_flesh_toggled(pressed: bool) -> void:
+	if pressed:
+		_apply_start_with_flesh(true)
+	else:
+		_prompt_clear_base()
+
+# One-shot prefill of the base layer. Skips cells that already have something.
+func _apply_start_with_flesh(enabled: bool) -> void:
+	if not enabled:
+		return
+	if base_layer == null:
+		push_error("Start-with-Flesh: base_layer not assigned.")
+		return
+	var flesh_brush := _find_default_flesh_brush()
+	if flesh_brush == null:
+		_show_status("⚠️ No BASE brush found in BrushRegistry.")
+		return
+
+	# Optional early-out: if base already has any tiles, don't blanket fill.
+	if base_layer.get_used_cells().size() > 0:
+		return
+
+	var x0 := start_flesh_rect.position.x
+	var y0 := start_flesh_rect.position.y
+	var x1 := x0 + start_flesh_rect.size.x
+	var y1 := y0 + start_flesh_rect.size.y
+
+	for x in range(x0, x1):
+		for y in range(y0, y1):
+			var c := Vector2i(x, y)
+			if base_layer.get_cell_source_id(c) == -1:
+				base_layer.set_cell(c, flesh_brush.source_id, flesh_brush.atlas_coords)
+	_show_status("Filled base with Flesh: %dx%d" % [start_flesh_rect.size.x, start_flesh_rect.size.y])
+
+# Remove all cells from the Base/Flesh layer.
+# Note: This only clears the base layer; walls/pools/markers remain as-is.
+# --- Smart Clear (with confirmation) ------------------------------------------
+
+# Show the confirmation dialog with live counts for the rect
+func _prompt_clear_base() -> void:
+	if clear_base_confirm == null:
+		# Fallback: clear immediately if no dialog node
+		_smart_clear_base_rect(start_flesh_rect)
+		return
+
+	var rect := start_flesh_rect
+	var w := rect.size.x
+	var h := rect.size.y
+
+	var walls := _count_used_in_rect(walls_layer, rect)
+	var pools := _count_used_in_rect(hazard_layer, rect)
+	var marks := _count_used_in_rect(marker_layer, rect)
+	var flesh := _count_used_in_rect(base_layer, rect)
+
+	clear_base_confirm.title = "Clear Base (and dependent tiles)?"
+	clear_base_confirm.dialog_text = "This will erase Flesh in a %dx%d area (%d cells) and remove:\n• %d wall tiles\n• %d pool tiles\n• %d markers\nProceed?" % [w, h, w*h, walls, pools, marks]
+	clear_base_confirm.popup_centered()
+
+# Called when the user clicks "OK" in the dialog
+func _on_clear_base_confirmed() -> void:
+	_smart_clear_base_rect(start_flesh_rect)
+	_show_status("Cleared base and dependent tiles in %dx%d area." % [start_flesh_rect.size.x, start_flesh_rect.size.y])
+	# Keep the checkbox unticked (it already is). No refill.
+
+# Counts used cells for a given layer within rect
+func _count_used_in_rect(layer: TileMapLayer, rect: Rect2i) -> int:
+	if layer == null:
+		return 0
+	var count := 0
+	var x0 := rect.position.x
+	var y0 := rect.position.y
+	var x1 := x0 + rect.size.x
+	var y1 := y0 + rect.size.y
+	for x in range(x0, x1):
+		for y in range(y0, y1):
+			if layer.get_cell_source_id(Vector2i(x, y)) != -1:
+				count += 1
+	return count
+
+# Remove Flesh in the rect, and also remove any walls/pools/markers in that rect.
+# "Smart" = only within the seeded rectangle; everything outside remains untouched.
+func _smart_clear_base_rect(rect: Rect2i) -> void:
+	if base_layer == null:
+		return
+	var x0 := rect.position.x
+	var y0 := rect.position.y
+	var x1 := x0 + rect.size.x
+	var y1 := y0 + rect.size.y
+	
+	# First, remove dependent layers in the rect
+	for x in range(x0, x1):
+		for y in range(y0, y1):
+			var c := Vector2i(x, y)
+			if walls_layer and walls_layer.get_cell_source_id(c) != -1:
+				walls_layer.erase_cell(c)
+			if hazard_layer and hazard_layer.get_cell_source_id(c) != -1:
+				hazard_layer.erase_cell(c)
+			if marker_layer and marker_layer.get_cell_source_id(c) != -1:
+				marker_layer.erase_cell(c)
+	
+	# Then remove base flesh in the rect
+	for x in range(x0, x1):
+		for y in range(y0, y1):
+			var c := Vector2i(x, y)
+			if base_layer.get_cell_source_id(c) != -1:
+				base_layer.erase_cell(c)
+
+# Helper: find a brush whose rule_profile is "BASE"
+func _find_default_flesh_brush() -> BrushEntry:
+	if brush_registry == null:
+		return null
+	for be in brush_registry.brushes:
+		if be is BrushEntry and be.rule_profile == "BASE" and be.source_id >= 0:
+			return be
+	return null
 
 func _reject(msg: String) -> bool:
 	_show_status("🚫 " + msg)
