@@ -18,6 +18,7 @@ extends Node2D
 @onready var status_label: Label = $UI/StatusLabel
 @onready var start_with_flesh_cb: CheckBox = $UI/PaletteBar/PaletteRow/StartWithFlesh
 @onready var clear_base_confirm: ConfirmationDialog = $UI/ClearBaseConfirm
+@onready var dev_badge: Label = $UI/DevBadge
 
 # Size of the prefill area for Flesh (adjust to your map size)
 @export var start_flesh_rect: Rect2i = Rect2i(Vector2i(0, 0), Vector2i(24, 24))
@@ -74,9 +75,14 @@ func _ready() -> void:
 	if start_with_flesh_cb:
 		start_with_flesh_cb.toggled.connect(_on_start_with_flesh_toggled)
 		_apply_start_with_flesh(start_with_flesh_cb.button_pressed)
-		# Confirmation dialog for smart clear
-		if clear_base_confirm:
-			clear_base_confirm.confirmed.connect(_on_clear_base_confirmed)
+	# Confirmation dialog for smart clear
+	if clear_base_confirm:
+		clear_base_confirm.confirmed.connect(_on_clear_base_confirmed)
+	# -- DEV MODE: react to global flag and initialize UI state
+	if has_node("/root/GameFlags"):
+		var gf = get_node("/root/GameFlags")
+		gf.dev_mode_changed.connect(_on_dev_mode_changed)
+		_on_dev_mode_changed(gf.dev_mode_enabled)
 
 func _process(delta: float) -> void:
 	# Clear transient status text after a delay
@@ -398,6 +404,15 @@ func _find_default_flesh_brush() -> BrushEntry:
 		if be is BrushEntry and be.rule_profile == "BASE" and be.source_id >= 0:
 			return be
 	return null
+
+# DEV MODE gate: show/hide dev-only UI and ping status
+func _on_dev_mode_changed(enabled: bool) -> void:
+	if start_with_flesh_cb:
+		start_with_flesh_cb.visible = enabled
+	if dev_badge:
+		dev_badge.visible = enabled
+	# Friendly ping so you always know the state
+	_show_status("Dev Mode: " + ("ON" if enabled else "OFF"))
 
 func _reject(msg: String) -> bool:
 	_show_status("🚫 " + msg)

@@ -100,3 +100,16 @@ text = "[READY]"
 size = Vector2i(772, 160)
 min_size = Vector2i(420, 160)
 dialog_text = "This will erase Flesh in the seeded area and remove Walls/Pools/Markers on those cells. Continue?"
+
+[node name="DevBadge" type="Label" parent="UI"]
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -40.0
+offset_top = -23.0
+grow_horizontal = 0
+grow_vertical = 0
+theme_override_colors/font_color = Color(1, 0.394517, 0.0120473, 1)
+text = "DEV"
