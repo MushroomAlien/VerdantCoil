@@ -15,10 +15,10 @@ extends Node2D
 # --- Scene references ---
 @onready var coil_map: TileMap = $CoilMap
 @onready var palette_row: HBoxContainer = $UI/PaletteBar/PaletteRow
-@onready var status_label: Label = $UI/StatusLabel
+@onready var status_label: Label = $UI/PaletteBar/StatusLabel
 @onready var start_with_flesh_cb: CheckBox = $UI/PaletteBar/PaletteRow/StartWithFlesh
-@onready var clear_base_confirm: ConfirmationDialog = $UI/ClearBaseConfirm
-@onready var dev_badge: Label = $UI/DevBadge
+@onready var clear_base_confirm: ConfirmationDialog = $UI/PaletteBar/ClearBaseConfirm
+@onready var dev_badge: Label = $UI/PaletteBar/DevBadge
 
 # Size of the prefill area for Flesh (adjust to your map size)
 @export var start_flesh_rect: Rect2i = Rect2i(Vector2i(0, 0), Vector2i(24, 24))
@@ -45,6 +45,7 @@ func _ready() -> void:
 	var _palette_group := ButtonGroup.new()  # keep one group
 	var i := 0
 	for child in palette_row.get_children():
+		print("child :", child)
 		if child is TextureButton:
 			child.toggle_mode = true
 			child.button_group = _palette_group

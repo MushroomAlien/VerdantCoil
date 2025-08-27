@@ -34,82 +34,78 @@ tile_set = ExtResource("1_8psy0")
 
 [node name="UI" type="CanvasLayer" parent="."]
 
-[node name="PaletteBar" type="Control" parent="UI"]
-layout_mode = 3
-anchors_preset = 10
-anchor_right = 1.0
-grow_horizontal = 2
+[node name="TopBar" type="VBoxContainer" parent="UI"]
+offset_right = 238.0
+offset_bottom = 85.0
+size_flags_vertical = 2
 
-[node name="PaletteRow" type="HBoxContainer" parent="UI/PaletteBar"]
-layout_mode = 0
-offset_right = 40.0
-offset_bottom = 40.0
+[node name="PaletteRow" type="HBoxContainer" parent="UI/TopBar"]
+layout_mode = 2
+size_flags_vertical = 3
 
-[node name="FleshBTtn" type="TextureButton" parent="UI/PaletteBar/PaletteRow"]
+[node name="FleshBTtn" type="TextureButton" parent="UI/TopBar/PaletteRow"]
 layout_mode = 2
 toggle_mode = true
 
-[node name="WallSolidBtn" type="TextureButton" parent="UI/PaletteBar/PaletteRow"]
+[node name="WallSolidBtn" type="TextureButton" parent="UI/TopBar/PaletteRow"]
 layout_mode = 2
 toggle_mode = true
 
-[node name="WallDigestBtn" type="TextureButton" parent="UI/PaletteBar/PaletteRow"]
+[node name="WallDigestBtn" type="TextureButton" parent="UI/TopBar/PaletteRow"]
 layout_mode = 2
 toggle_mode = true
 
-[node name="AcidBtn" type="TextureButton" parent="UI/PaletteBar/PaletteRow"]
+[node name="AcidBtn" type="TextureButton" parent="UI/TopBar/PaletteRow"]
 layout_mode = 2
 toggle_mode = true
 
-[node name="StickyBtn" type="TextureButton" parent="UI/PaletteBar/PaletteRow"]
+[node name="StickyBtn" type="TextureButton" parent="UI/TopBar/PaletteRow"]
 layout_mode = 2
 toggle_mode = true
 
-[node name="SpawnBtn" type="TextureButton" parent="UI/PaletteBar/PaletteRow"]
+[node name="SpawnBtn" type="TextureButton" parent="UI/TopBar/PaletteRow"]
 layout_mode = 2
 toggle_mode = true
 
-[node name="HeartrootBtn" type="TextureButton" parent="UI/PaletteBar/PaletteRow"]
+[node name="HeartrootBtn" type="TextureButton" parent="UI/TopBar/PaletteRow"]
 layout_mode = 2
 toggle_mode = true
 
-[node name="EraserBtn" type="TextureButton" parent="UI/PaletteBar/PaletteRow"]
+[node name="EraserBtn" type="TextureButton" parent="UI/TopBar/PaletteRow"]
 layout_mode = 2
 toggle_mode = true
 
-[node name="Spacer" type="Control" parent="UI/PaletteBar/PaletteRow"]
+[node name="Spacer" type="Control" parent="UI/TopBar/PaletteRow"]
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="StartWithFlesh" type="CheckBox" parent="UI/PaletteBar/PaletteRow"]
+[node name="StartWithFlesh" type="CheckBox" parent="UI/TopBar/PaletteRow"]
 layout_mode = 2
 focus_mode = 0
 text = "Start with 24 x 24 base"
 
-[node name="StatusLabel" type="Label" parent="UI"]
-anchors_preset = 5
-anchor_left = 0.5
-anchor_right = 0.5
-offset_left = -31.0
-offset_right = 31.0
-offset_bottom = 23.0
-grow_horizontal = 2
+[node name="StatusLabel" type="Label" parent="UI/TopBar"]
+layout_mode = 2
+size_flags_vertical = 6
 text = "[READY]"
 
-[node name="ClearBaseConfirm" type="ConfirmationDialog" parent="UI"]
+[node name="ClearBaseConfirm" type="ConfirmationDialog" parent="UI/TopBar"]
 size = Vector2i(772, 160)
 min_size = Vector2i(420, 160)
 dialog_text = "This will erase Flesh in the seeded area and remove Walls/Pools/Markers on those cells. Continue?"
 
-[node name="DevBadge" type="Label" parent="UI"]
-anchors_preset = 3
-anchor_left = 1.0
-anchor_top = 1.0
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_left = -40.0
-offset_top = -23.0
+[node name="DevOverlay" type="Control" parent="UI/TopBar"]
+layout_mode = 2
+
+[node name="DevBadge" type="Label" parent="UI/TopBar/DevOverlay"]
+layout_mode = 2
+offset_top = 62.0
+offset_right = 238.0
+offset_bottom = 85.0
 grow_horizontal = 0
 grow_vertical = 0
+size_flags_vertical = 3
 theme_override_colors/font_color = Color(1, 0.394517, 0.0120473, 1)
 text = "DEV"
+horizontal_alignment = 1
+vertical_alignment = 1
