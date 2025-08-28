@@ -14,21 +14,17 @@ extends Node2D
 
 # --- Scene references ---
 @onready var coil_map: TileMap = $CoilMap
-@onready var palette_row: HBoxContainer = $UI/PaletteBar/PaletteRow
-@onready var status_label: Label = $UI/PaletteBar/StatusLabel
-@onready var start_with_flesh_cb: CheckBox = $UI/PaletteBar/PaletteRow/StartWithFlesh
-@onready var clear_base_confirm: ConfirmationDialog = $UI/PaletteBar/ClearBaseConfirm
-@onready var dev_badge: Label = $UI/PaletteBar/DevBadge
+@onready var palette_row: HBoxContainer = $UI/TopBar/PaletteRow
+@onready var status_label: Label = $UI/TopBar/StatusLabel
+@onready var start_with_flesh_cb: CheckBox = $UI/TopBar/PaletteRow/StartWithFlesh
+@onready var clear_base_confirm: ConfirmationDialog = $UI/TopBar/ClearBaseConfirm
+@onready var dev_badge: Label = $UI/DevOverlay/DevBadge
 
 # Size of the prefill area for Flesh (adjust to your map size)
 @export var start_flesh_rect: Rect2i = Rect2i(Vector2i(0, 0), Vector2i(24, 24))
 
 # --- Current brush selection ---
 var _current_index: int = 0
-
-# --- UX: how long to keep a status message on screen ---
-@export var status_timeout: float = 1.5
-var _status_timer: float = 0.0
 
 func _ready() -> void:
 	# Basic sanity checks
@@ -38,10 +34,10 @@ func _ready() -> void:
 	if walls_layer == null: push_error("❌ walls_layer not assigned on BuilderMode.")
 	if hazard_layer == null: push_error("❌ hazard_layer not assigned on BuilderMode.")
 	if marker_layer == null: push_error("❌ marker_layer not assigned on BuilderMode.")
-
+	
 	# Wire each palette button (by order) to a brush (by order).
 	# Left to right buttons map to registry.brushes[0..N]
-
+	
 	var _palette_group := ButtonGroup.new()  # keep one group
 	var i := 0
 	for child in palette_row.get_children():
@@ -84,13 +80,10 @@ func _ready() -> void:
 		var gf = get_node("/root/GameFlags")
 		gf.dev_mode_changed.connect(_on_dev_mode_changed)
 		_on_dev_mode_changed(gf.dev_mode_enabled)
-
-func _process(delta: float) -> void:
-	# Clear transient status text after a delay
-	if _status_timer > 0.0:
-		_status_timer -= delta
-		if _status_timer <= 0.0:
-			status_label.text = ""
+		
+	#print("Topbar anchors mode: ", $UI/TopBar.layout_mode)
+	#print("DevOverlay anchors preset Full? size=", $UI/DevOverlay.size)
+	#print("DevBadge pos.y (should be negative): ", $UI/DevOverlay/DevBadge.position.y)
 
 func _layer_for(index: int) -> TileMapLayer:
 	match index:
@@ -141,7 +134,6 @@ func _select_brush(index: int) -> void:
 
 func _show_status(msg: String) -> void:
 	status_label.text = msg
-	_status_timer = status_timeout
 	print(msg)
 
 # --- Painting / Erasing -------------------------------------------------------
@@ -307,16 +299,12 @@ func _apply_start_with_flesh(enabled: bool) -> void:
 	if flesh_brush == null:
 		_show_status("⚠️ No BASE brush found in BrushRegistry.")
 		return
-
-	# Optional early-out: if base already has any tiles, don't blanket fill.
-	if base_layer.get_used_cells().size() > 0:
-		return
-
+	
 	var x0 := start_flesh_rect.position.x
 	var y0 := start_flesh_rect.position.y
 	var x1 := x0 + start_flesh_rect.size.x
 	var y1 := y0 + start_flesh_rect.size.y
-
+	
 	for x in range(x0, x1):
 		for y in range(y0, y1):
 			var c := Vector2i(x, y)
@@ -327,8 +315,6 @@ func _apply_start_with_flesh(enabled: bool) -> void:
 # Remove all cells from the Base/Flesh layer.
 # Note: This only clears the base layer; walls/pools/markers remain as-is.
 # --- Smart Clear (with confirmation) ------------------------------------------
-
-# Show the confirmation dialog with live counts for the rect
 func _prompt_clear_base() -> void:
 	if clear_base_confirm == null:
 		# Fallback: clear immediately if no dialog node

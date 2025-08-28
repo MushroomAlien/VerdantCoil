@@ -36,12 +36,14 @@ tile_set = ExtResource("1_8psy0")
 
 [node name="TopBar" type="VBoxContainer" parent="UI"]
 offset_right = 238.0
-offset_bottom = 85.0
-size_flags_vertical = 2
+offset_bottom = 58.0
+size_flags_vertical = 4
+mouse_filter = 2
+theme_override_constants/separation = 4
 
 [node name="PaletteRow" type="HBoxContainer" parent="UI/TopBar"]
 layout_mode = 2
-size_flags_vertical = 3
+mouse_filter = 2
 
 [node name="FleshBTtn" type="TextureButton" parent="UI/TopBar/PaletteRow"]
 layout_mode = 2
@@ -94,15 +96,23 @@ size = Vector2i(772, 160)
 min_size = Vector2i(420, 160)
 dialog_text = "This will erase Flesh in the seeded area and remove Walls/Pools/Markers on those cells. Continue?"
 
-[node name="DevOverlay" type="Control" parent="UI/TopBar"]
-layout_mode = 2
+[node name="DevOverlay" type="Control" parent="UI"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
 
-[node name="DevBadge" type="Label" parent="UI/TopBar/DevOverlay"]
-layout_mode = 2
-offset_top = 62.0
-offset_right = 238.0
-offset_bottom = 85.0
-grow_horizontal = 0
+[node name="DevBadge" type="Label" parent="UI/DevOverlay"]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -23.0
+grow_horizontal = 2
 grow_vertical = 0
 size_flags_vertical = 3
 theme_override_colors/font_color = Color(1, 0.394517, 0.0120473, 1)
