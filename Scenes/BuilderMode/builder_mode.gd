@@ -19,12 +19,16 @@ extends Node2D
 @onready var start_with_flesh_cb: CheckBox = $UI/TopBar/PaletteRow/StartWithFlesh
 @onready var clear_base_confirm: ConfirmationDialog = $UI/TopBar/ClearBaseConfirm
 @onready var dev_badge: Label = $UI/DevOverlay/DevBadge
+@export var preview_layer: TileMapLayer
+var _last_preview_cell: Vector2i = Vector2i(999999, 999999)
 
 # Size of the prefill area for Flesh (adjust to your map size)
 @export var start_flesh_rect: Rect2i = Rect2i(Vector2i(0, 0), Vector2i(24, 24))
 
 # --- Current brush selection ---
 var _current_index: int = 0
+var _is_painting_left := false
+var _is_erasing_right := false
 
 func _ready() -> void:
 	# Basic sanity checks
@@ -37,7 +41,6 @@ func _ready() -> void:
 	
 	# Wire each palette button (by order) to a brush (by order).
 	# Left to right buttons map to registry.brushes[0..N]
-	
 	var _palette_group := ButtonGroup.new()  # keep one group
 	var i := 0
 	for child in palette_row.get_children():
@@ -93,17 +96,36 @@ func _layer_for(index: int) -> TileMapLayer:
 		3: return marker_layer
 		_: return null
 
+func _cell_under_mouse() -> Vector2i:
+	# Convert current global mouse position to a TileMap cell once.
+	var mouse_world: Vector2 = get_global_mouse_position()
+	var mouse_local: Vector2 = base_layer.to_local(mouse_world)
+	return base_layer.local_to_map(mouse_local)
+
 func _unhandled_input(event: InputEvent) -> void:
-	# We use _unhandled_input so UI button clicks don't also paint
-	if event is InputEventMouseButton and event.pressed:
-		var mouse_world: Vector2 = get_viewport().get_mouse_position()
-		var mouse_local: Vector2 = base_layer.to_local(mouse_world)
-		var coords: Vector2i = base_layer.local_to_map(mouse_local)
-		
-		if event.button_index == MOUSE_BUTTON_LEFT:
-			_paint_at(coords)
-		elif event.button_index == MOUSE_BUTTON_RIGHT:
-			_erase_at(coords)
+	# Mouse BUTTONS ------------------------------------------------------------
+	if event is InputEventMouseButton:
+		# Toggle state flags on press/release (no coords needed for releases).
+		match event.button_index:
+			MOUSE_BUTTON_LEFT:
+				_is_painting_left = event.pressed
+				if event.pressed:
+					_paint_at(_cell_under_mouse())  # compute coords only when used
+			MOUSE_BUTTON_RIGHT:
+				_is_erasing_right = event.pressed
+				if event.pressed:
+					_erase_at(_cell_under_mouse())  # compute coords only when used
+		return  # done
+	
+	# Mouse MOTION -------------------------------------------------------------
+	if event is InputEventMouseMotion:
+		# Only do the (relatively) expensive cell lookup if we’re actually drawing.
+		if _is_painting_left or _is_erasing_right:
+			var coords := _cell_under_mouse()
+			if _is_painting_left:
+				_paint_at(coords)
+			elif _is_erasing_right:
+				_erase_at(coords)
 
 # --- Selection / Status -------------------------------------------------------
 func _select_brush(index: int) -> void:
