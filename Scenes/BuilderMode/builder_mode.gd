@@ -1,34 +1,35 @@
 ## builder_mode.gd
-# Data-driven Builder: picks a brush from a registry, validates, then paints.
+## Data-driven Builder: picks a brush from a registry, validates, then paints.
 
 extends Node2D
 
-# --- External registry (set this in the Inspector) ---
+## --- External registry (set this in the Inspector) ---
 @export var brush_registry: BrushRegistry
 
-# --- Coil map layer nodes ---
+## --- Coil map layer nodes ---
+@export var preview_layer: TileMapLayer
 @export var base_layer: TileMapLayer
 @export var walls_layer: TileMapLayer
 @export var hazard_layer: TileMapLayer
 @export var marker_layer: TileMapLayer
 
-# --- Scene references ---
+## --- Scene references ---
 @onready var coil_map: TileMap = $CoilMap
 @onready var palette_row: HBoxContainer = $UI/TopBar/PaletteRow
+@onready var biomass_label: Label = $UI/TopBar/PaletteRow/BiomassLabel
 @onready var status_label: Label = $UI/TopBar/StatusLabel
-@onready var start_with_flesh_cb: CheckBox = $UI/TopBar/PaletteRow/StartWithFlesh
+@onready var start_with_flesh_cb: CheckBox = $UI/TopBar/StartWithFlesh
 @onready var clear_base_confirm: ConfirmationDialog = $UI/TopBar/ClearBaseConfirm
 @onready var dev_badge: Label = $UI/DevOverlay/DevBadge
-@export var preview_layer: TileMapLayer
-var _last_preview_cell: Vector2i = Vector2i(999999, 999999)
 
-# Size of the prefill area for Flesh (adjust to your map size)
+## Size of the prefill area for Flesh (adjust to your map size)
 @export var start_flesh_rect: Rect2i = Rect2i(Vector2i(0, 0), Vector2i(24, 24))
 
-# --- Current brush selection ---
+## --- Current brush selection ---
 var _current_index: int = 0
 var _is_painting_left := false
 var _is_erasing_right := false
+var _last_preview_cell: Vector2i = Vector2i(999999, 999999)
 
 func _ready() -> void:
 	# Basic sanity checks
@@ -49,9 +50,8 @@ func _ready() -> void:
 			child.toggle_mode = true
 			child.button_group = _palette_group
 			child.focus_mode = Control.FOCUS_NONE
-			# Use size flags instead of the nonexistent `expand` property
-			child.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			child.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			child.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+			child.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
 			child.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_CENTERED
 			
 			var idx := i
@@ -83,10 +83,9 @@ func _ready() -> void:
 		var gf = get_node("/root/GameFlags")
 		gf.dev_mode_changed.connect(_on_dev_mode_changed)
 		_on_dev_mode_changed(gf.dev_mode_enabled)
-		
-	#print("Topbar anchors mode: ", $UI/TopBar.layout_mode)
-	#print("DevOverlay anchors preset Full? size=", $UI/DevOverlay.size)
-	#print("DevBadge pos.y (should be negative): ", $UI/DevOverlay/DevBadge.position.y)
+
+func _process(_delta: float) -> void:
+	_update_preview()
 
 func _layer_for(index: int) -> TileMapLayer:
 	match index:
@@ -127,7 +126,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			elif _is_erasing_right:
 				_erase_at(coords)
 
-# --- Selection / Status -------------------------------------------------------
+## --- Selection / Status -------------------------------------------------------
 func _select_brush(index: int) -> void:
 	if brush_registry == null or index < 0 or index >= brush_registry.brushes.size():
 		_show_status("⚠️ No brush at index " + str(index))
@@ -158,7 +157,7 @@ func _show_status(msg: String) -> void:
 	status_label.text = msg
 	print(msg)
 
-# --- Painting / Erasing -------------------------------------------------------
+## --- Painting / Erasing -------------------------------------------------------
 func _paint_at(coords: Vector2i) -> void:
 	var b: BrushEntry = _current_brush()
 	if b == null:
@@ -198,7 +197,7 @@ func _erase_at(coords: Vector2i) -> void:
 		if layer_node:
 			layer_node.erase_cell(coords)
 
-# --- Validation helpers -------------------------------------------------------
+## --- Validation helpers -------------------------------------------------------
 func _current_brush() -> BrushEntry:
 	if brush_registry == null:
 		return null
@@ -219,7 +218,7 @@ func _hazard_kind_at(coords: Vector2i) -> String:
 	var v = td.get_custom_data("hazard")
 	return String(v) if (v is String) else ""
 
-func _validate_placement(b: BrushEntry, coords: Vector2i) -> bool:
+func _validate_placement(b: BrushEntry, coords: Vector2i, report := true) -> bool:
 	match b.rule_profile:
 		"BASE":
 			# Flesh is always allowed. (If you want to forbid overpainting, add checks here.)
@@ -228,43 +227,40 @@ func _validate_placement(b: BrushEntry, coords: Vector2i) -> bool:
 		"WALL":
 			# Rule A: Walls must sit on Flesh
 			if not _has_base(coords):
-				return _reject("Walls require Flesh beneath.")
+				return _reject_or_false("Walls require Flesh beneath.", report)
 			# Rule B: Walls cannot overlap an existing hazard
 			if _hazard_kind_at(coords) != "":
-				return _reject("Walls cannot overlap pools.")
+				return _reject_or_false("Walls cannot overlap pools.", report)
 			return true
 		
 		"POOL":
 			# Rule A: Pools must sit on Flesh
 			if not _has_base(coords):
-				return _reject("Pools require Flesh beneath.")
+				return _reject_or_false("Pools require Flesh beneath.", report)
 			# Rule B: Pools cannot overlap walls (same cell)
 			if _has_wall(coords):
-				return _reject("Pools cannot overlap walls.")
-			# Adjacency now allowed:
-			# - Pools may be next to walls.
-			# - Different pool kinds may touch.
+				return _reject_or_false("Pools cannot overlap walls.", report)
 			return true
 		
 		"MARKER":
 			# Rule A: Markers require Flesh
 			if not _has_base(coords):
-				return _reject("Markers require Flesh beneath.")
+				return _reject_or_false("Markers require Flesh beneath.", report)
 			# Rule B: Must not be blocked or hazardous
 			if _has_wall(coords) or _hazard_kind_at(coords) != "":
-				return _reject("Markers can’t sit under walls or pools.")
+				return _reject_or_false("Markers can’t sit under walls or pools.", report)
 			return true
 		
 		"ERASER":
 			# Handled earlier; never reaches here.
 			return true
-		
 		_:
-			return _reject("Unknown rule profile: " + b.rule_profile)
+			#return _reject("Unknown rule profile: " + b.rule_profile)
+			return _reject_or_false("Unknown rule profile: " + b.rule_profile, report)
 
-# Ensures only one spawn marker exists on the Markers layer.
-# If the tile we just placed at `coords` has custom_data is_spawn = true,
-# erase all other cells in the Markers layer that also have is_spawn = true.
+## Ensures only one spawn marker exists on the Markers layer.
+## If the tile we just placed at `coords` has custom_data is_spawn = true,
+## erase all other cells in the Markers layer that also have is_spawn = true.
 func _enforce_single_spawn_at(coords: Vector2i) -> void:
 	# Read back the tile we just placed
 	var td := marker_layer.get_cell_tile_data(coords)
@@ -283,9 +279,9 @@ func _enforce_single_spawn_at(coords: Vector2i) -> void:
 		if other_td != null and bool(other_td.get_custom_data("is_spawn") or false):
 			marker_layer.erase_cell(c)
 
-# Ensures only one Heartroot exists on the Markers layer.
-# If the tile at `coords` has custom_data is_goal = true,
-# erase any other cells in the Markers layer that also have is_goal = true.
+## Ensures only one Heartroot exists on the Markers layer.
+## If the tile at `coords` has custom_data is_goal = true,
+## erase any other cells in the Markers layer that also have is_goal = true.
 func _enforce_single_heartroot_at(coords: Vector2i) -> void:
 	var td := marker_layer.get_cell_tile_data(coords)
 	if td == null:
@@ -301,16 +297,15 @@ func _enforce_single_heartroot_at(coords: Vector2i) -> void:
 		if other_td != null and bool(other_td.get_custom_data("is_goal") or false):
 			marker_layer.erase_cell(c)
 
-# --- Start-with-Flesh ---------------------------------------------------------
-
-# Called when the checkbox is toggled. We only *add* flesh; never auto-erase.
+## --- Start-with-Flesh ---------------------------------------------------------
+## Called when the checkbox is toggled. We only *add* flesh; never auto-erase.
 func _on_start_with_flesh_toggled(pressed: bool) -> void:
 	if pressed:
 		_apply_start_with_flesh(true)
 	else:
 		_prompt_clear_base()
 
-# One-shot prefill of the base layer. Skips cells that already have something.
+## One-shot prefill of the base layer. Skips cells that already have something.
 func _apply_start_with_flesh(enabled: bool) -> void:
 	if not enabled:
 		return
@@ -334,35 +329,32 @@ func _apply_start_with_flesh(enabled: bool) -> void:
 				base_layer.set_cell(c, flesh_brush.source_id, flesh_brush.atlas_coords)
 	_show_status("Filled base with Flesh: %dx%d" % [start_flesh_rect.size.x, start_flesh_rect.size.y])
 
-# Remove all cells from the Base/Flesh layer.
-# Note: This only clears the base layer; walls/pools/markers remain as-is.
-# --- Smart Clear (with confirmation) ------------------------------------------
+## Remove all cells from the Base/Flesh layer.
+## Note: This only clears the base layer; walls/pools/markers remain as-is.
+## --- Smart Clear (with confirmation) ------------------------------------------
 func _prompt_clear_base() -> void:
 	if clear_base_confirm == null:
 		# Fallback: clear immediately if no dialog node
 		_smart_clear_base_rect(start_flesh_rect)
 		return
-
 	var rect := start_flesh_rect
 	var w := rect.size.x
 	var h := rect.size.y
-
 	var walls := _count_used_in_rect(walls_layer, rect)
 	var pools := _count_used_in_rect(hazard_layer, rect)
 	var marks := _count_used_in_rect(marker_layer, rect)
-	var flesh := _count_used_in_rect(base_layer, rect)
-
+	#var flesh := _count_used_in_rect(base_layer, rect)
 	clear_base_confirm.title = "Clear Base (and dependent tiles)?"
 	clear_base_confirm.dialog_text = "This will erase Flesh in a %dx%d area (%d cells) and remove:\n• %d wall tiles\n• %d pool tiles\n• %d markers\nProceed?" % [w, h, w*h, walls, pools, marks]
 	clear_base_confirm.popup_centered()
 
-# Called when the user clicks "OK" in the dialog
+## Called when the user clicks "OK" in the dialog
 func _on_clear_base_confirmed() -> void:
 	_smart_clear_base_rect(start_flesh_rect)
 	_show_status("Cleared base and dependent tiles in %dx%d area." % [start_flesh_rect.size.x, start_flesh_rect.size.y])
 	# Keep the checkbox unticked (it already is). No refill.
 
-# Counts used cells for a given layer within rect
+## Counts used cells for a given layer within rect
 func _count_used_in_rect(layer: TileMapLayer, rect: Rect2i) -> int:
 	if layer == null:
 		return 0
@@ -377,8 +369,8 @@ func _count_used_in_rect(layer: TileMapLayer, rect: Rect2i) -> int:
 				count += 1
 	return count
 
-# Remove Flesh in the rect, and also remove any walls/pools/markers in that rect.
-# "Smart" = only within the seeded rectangle; everything outside remains untouched.
+## Remove Flesh in the rect, and also remove any walls/pools/markers in that rect.
+## "Smart" = only within the seeded rectangle; everything outside remains untouched.
 func _smart_clear_base_rect(rect: Rect2i) -> void:
 	if base_layer == null:
 		return
@@ -405,7 +397,7 @@ func _smart_clear_base_rect(rect: Rect2i) -> void:
 			if base_layer.get_cell_source_id(c) != -1:
 				base_layer.erase_cell(c)
 
-# Helper: find a brush whose rule_profile is "BASE"
+## Helper: find a brush whose rule_profile is "BASE"
 func _find_default_flesh_brush() -> BrushEntry:
 	if brush_registry == null:
 		return null
@@ -414,7 +406,38 @@ func _find_default_flesh_brush() -> BrushEntry:
 			return be
 	return null
 
-# DEV MODE gate: show/hide dev-only UI and ping status
+# Return false silently, or route through _reject if reporting is enabled.
+func _reject_or_false(msg: String, report: bool) -> bool:
+	if report:
+		_show_status("🚫 " + msg)
+		#return _reject(msg)  # prints + shakes/beeps (if you wired SFX)
+	return false
+
+## Update the preview cell under the mouse
+func _update_preview() -> void:
+	# Clear the previous preview cell
+	if preview_layer and _last_preview_cell.x < 900000:
+		preview_layer.erase_cell(_last_preview_cell)
+	
+	# Compute current mouse cell
+	var coords := _cell_under_mouse()
+	_last_preview_cell = coords
+	
+	var b := _current_brush()
+	if b == null or b.rule_profile == "ERASER":
+		return
+	
+	# Always place the ghost tile
+	if preview_layer and b.source_id >= 0:
+		preview_layer.set_cell(coords, b.source_id, b.atlas_coords)
+		# Now tint based on validity
+		var ok := _validate_placement(b, coords, false)
+		var col := Color(1, 1, 1, 0.5)
+		if not ok:
+			col = Color(1, 0.2, 0.2, 0.5)
+		preview_layer.modulate = col
+
+## DEV MODE gate: show/hide dev-only UI and ping status
 func _on_dev_mode_changed(enabled: bool) -> void:
 	if start_with_flesh_cb:
 		start_with_flesh_cb.visible = enabled
@@ -423,8 +446,8 @@ func _on_dev_mode_changed(enabled: bool) -> void:
 	# Friendly ping so you always know the state
 	_show_status("Dev Mode: " + ("ON" if enabled else "OFF"))
 
-func _reject(msg: String) -> bool:
-	_show_status("🚫 " + msg)
-	return false
+#func _reject(msg: String) -> bool:
+	#_show_status("🚫 " + msg)
+	#return false
 
 ## end builder_mode.gd

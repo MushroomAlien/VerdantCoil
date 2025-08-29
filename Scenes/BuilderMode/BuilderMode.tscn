@@ -4,9 +4,10 @@
 [ext_resource type="Script" uid="uid://dktegqxr56fql" path="res://Scenes/BuilderMode/builder_mode.gd" id="1_y85i2"]
 [ext_resource type="Resource" uid="uid://bscmx8itty5qg" path="res://System/brush_registry.tres" id="2_obs3p"]
 
-[node name="BuilderMode" type="Node2D" node_paths=PackedStringArray("base_layer", "walls_layer", "hazard_layer", "marker_layer")]
+[node name="BuilderMode" type="Node2D" node_paths=PackedStringArray("preview_layer", "base_layer", "walls_layer", "hazard_layer", "marker_layer")]
 script = ExtResource("1_y85i2")
 brush_registry = ExtResource("2_obs3p")
+preview_layer = NodePath("CoilMap/PreviewLayer")
 base_layer = NodePath("CoilMap/Base")
 walls_layer = NodePath("CoilMap/Walls")
 hazard_layer = NodePath("CoilMap/Hazards")
@@ -15,6 +16,11 @@ marker_layer = NodePath("CoilMap/Markers")
 [node name="CoilMap" type="TileMap" parent="."]
 tile_set = ExtResource("1_8psy0")
 format = 2
+
+[node name="PreviewLayer" type="TileMapLayer" parent="CoilMap"]
+modulate = Color(1, 1, 1, 0.501961)
+z_index = 100
+tile_set = ExtResource("1_8psy0")
 
 [node name="Base" type="TileMapLayer" parent="CoilMap"]
 use_parent_material = true
@@ -43,6 +49,7 @@ theme_override_constants/separation = 4
 
 [node name="PaletteRow" type="HBoxContainer" parent="UI/TopBar"]
 layout_mode = 2
+size_flags_vertical = 3
 mouse_filter = 2
 
 [node name="FleshBTtn" type="TextureButton" parent="UI/TopBar/PaletteRow"]
@@ -78,11 +85,18 @@ layout_mode = 2
 toggle_mode = true
 
 [node name="Spacer" type="Control" parent="UI/TopBar/PaletteRow"]
+custom_minimum_size = Vector2(16, 0)
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="StartWithFlesh" type="CheckBox" parent="UI/TopBar/PaletteRow"]
+[node name="BiomassLabel" type="Label" parent="UI/TopBar/PaletteRow"]
 layout_mode = 2
+size_flags_horizontal = 8
+text = "Biomass: 0 / 100"
+
+[node name="StartWithFlesh" type="CheckBox" parent="UI/TopBar"]
+layout_mode = 2
+size_flags_horizontal = 3
 focus_mode = 0
 text = "Start with 24 x 24 base"
 
