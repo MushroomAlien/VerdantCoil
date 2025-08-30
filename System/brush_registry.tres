@@ -1,0 +1,130 @@
+[gd_resource type="Resource" script_class="BrushRegistry" load_steps=20 format=3 uid="uid://bscmx8itty5qg"]
+
+[ext_resource type="Script" uid="uid://dd0fq3qbaw3l1" path="res://System/brush_entry.gd" id="1_f2srp"]
+[ext_resource type="Script" uid="uid://kdhl6aofvq0k" path="res://System/brush_registry.gd" id="2_cntgp"]
+[ext_resource type="Texture2D" uid="uid://c4eqrqt63s4vg" path="res://Assets/roguelikeSheet_transparent_32x32.png" id="2_f6ucc"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_xxkp0"]
+atlas = ExtResource("2_f6ucc")
+region = Rect2(272, 544, 32, 32)
+
+[sub_resource type="Resource" id="Resource_f6ucc"]
+script = ExtResource("1_f2srp")
+display_name = "Flesh"
+rule_profile = "BASE"
+target_layer = 0
+source_id = 0
+atlas_coords = Vector2i(8, 16)
+hazard_kind = ""
+icon = SubResource("AtlasTexture_xxkp0")
+metadata/_custom_type_script = "uid://dd0fq3qbaw3l1"
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_d1x57"]
+atlas = ExtResource("2_f6ucc")
+region = Rect2(272, 340, 32, 32)
+
+[sub_resource type="Resource" id="Resource_f2srp"]
+script = ExtResource("1_f2srp")
+display_name = "Solid_wall"
+rule_profile = "WALL"
+target_layer = 1
+source_id = 0
+atlas_coords = Vector2i(8, 10)
+hazard_kind = ""
+icon = SubResource("AtlasTexture_d1x57")
+metadata/_custom_type_script = "uid://dd0fq3qbaw3l1"
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_cntgp"]
+atlas = ExtResource("2_f6ucc")
+region = Rect2(272, 748, 32, 32)
+
+[sub_resource type="Resource" id="Resource_cntgp"]
+script = ExtResource("1_f2srp")
+display_name = "Digest_Wall"
+rule_profile = "WALL"
+target_layer = 1
+source_id = 0
+atlas_coords = Vector2i(8, 22)
+hazard_kind = ""
+icon = SubResource("AtlasTexture_cntgp")
+metadata/_custom_type_script = "uid://dd0fq3qbaw3l1"
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_f6ucc"]
+atlas = ExtResource("2_f6ucc")
+region = Rect2(102, 544, 32, 32)
+
+[sub_resource type="Resource" id="Resource_xxkp0"]
+script = ExtResource("1_f2srp")
+display_name = "Acid_Pool"
+rule_profile = "POOL"
+target_layer = 2
+source_id = 0
+atlas_coords = Vector2i(3, 16)
+hazard_kind = "acid"
+icon = SubResource("AtlasTexture_f6ucc")
+metadata/_custom_type_script = "uid://dd0fq3qbaw3l1"
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_0rwxt"]
+atlas = ExtResource("2_f6ucc")
+region = Rect2(102, 748, 32, 32)
+
+[sub_resource type="Resource" id="Resource_d1x57"]
+script = ExtResource("1_f2srp")
+display_name = "Sticky_Pool"
+rule_profile = "POOL"
+target_layer = 2
+source_id = 0
+atlas_coords = Vector2i(3, 22)
+hazard_kind = ""
+icon = SubResource("AtlasTexture_0rwxt")
+metadata/_custom_type_script = "uid://dd0fq3qbaw3l1"
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_8k8oc"]
+atlas = ExtResource("2_f6ucc")
+region = Rect2(442, 272, 32, 32)
+
+[sub_resource type="Resource" id="Resource_0rwxt"]
+script = ExtResource("1_f2srp")
+display_name = "Spawn"
+rule_profile = "MARKER"
+target_layer = 3
+source_id = 0
+atlas_coords = Vector2i(13, 8)
+hazard_kind = ""
+icon = SubResource("AtlasTexture_8k8oc")
+metadata/_custom_type_script = "uid://dd0fq3qbaw3l1"
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_y4cdg"]
+atlas = ExtResource("2_f6ucc")
+region = Rect2(476, 272, 32, 32)
+
+[sub_resource type="Resource" id="Resource_8k8oc"]
+script = ExtResource("1_f2srp")
+display_name = "Heartroot"
+rule_profile = "MARKER"
+target_layer = 3
+source_id = 0
+atlas_coords = Vector2i(14, 8)
+hazard_kind = ""
+icon = SubResource("AtlasTexture_y4cdg")
+metadata/_custom_type_script = "uid://dd0fq3qbaw3l1"
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_l5pqj"]
+atlas = ExtResource("2_f6ucc")
+region = Rect2(442, 68, 32, 32)
+
+[sub_resource type="Resource" id="Resource_y4cdg"]
+script = ExtResource("1_f2srp")
+display_name = "Eraser"
+rule_profile = "ERASER"
+target_layer = 0
+source_id = -1
+atlas_coords = Vector2i(0, 0)
+hazard_kind = ""
+icon = SubResource("AtlasTexture_l5pqj")
+metadata/_custom_type_script = "uid://dd0fq3qbaw3l1"
+
+[resource]
+script = ExtResource("2_cntgp")
+brushes = Array[ExtResource("1_f2srp")]([SubResource("Resource_f6ucc"), SubResource("Resource_f2srp"), SubResource("Resource_cntgp"), SubResource("Resource_xxkp0"), SubResource("Resource_d1x57"), SubResource("Resource_0rwxt"), SubResource("Resource_8k8oc"), SubResource("Resource_y4cdg")])
+metadata/_custom_type_script = "uid://kdhl6aofvq0k"

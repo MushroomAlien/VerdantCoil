@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://c765fgre3hmlo"]
+
+[ext_resource type="Script" uid="uid://46qcldamr0m0" path="res://System/autoload/coil_session.gd" id="1_4kefi"]
+
+[node name="CoilSession" type="Node2D"]
+script = ExtResource("1_4kefi")

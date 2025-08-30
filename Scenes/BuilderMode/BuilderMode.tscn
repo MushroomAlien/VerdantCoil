@@ -1,0 +1,204 @@
+[gd_scene load_steps=4 format=3 uid="uid://30d2424oam6i"]
+
+[ext_resource type="TileSet" uid="uid://0dggvm2m4qyl" path="res://Assets/Resources/flesh_tile.tres" id="1_8psy0"]
+[ext_resource type="Script" uid="uid://dktegqxr56fql" path="res://Scenes/BuilderMode/builder_mode.gd" id="1_y85i2"]
+[ext_resource type="Resource" uid="uid://bscmx8itty5qg" path="res://System/brush_registry.tres" id="2_obs3p"]
+
+[node name="BuilderMode" type="Node2D" node_paths=PackedStringArray("preview_layer", "base_layer", "walls_layer", "hazard_layer", "marker_layer")]
+script = ExtResource("1_y85i2")
+brush_registry = ExtResource("2_obs3p")
+preview_layer = NodePath("CoilMap/PreviewLayer")
+base_layer = NodePath("CoilMap/Base")
+walls_layer = NodePath("CoilMap/Walls")
+hazard_layer = NodePath("CoilMap/Hazards")
+marker_layer = NodePath("CoilMap/Markers")
+
+[node name="CoilMap" type="TileMap" parent="."]
+tile_set = ExtResource("1_8psy0")
+format = 2
+
+[node name="PreviewLayer" type="TileMapLayer" parent="CoilMap"]
+modulate = Color(1, 1, 1, 0.501961)
+z_index = 100
+tile_set = ExtResource("1_8psy0")
+
+[node name="Base" type="TileMapLayer" parent="CoilMap"]
+use_parent_material = true
+tile_set = ExtResource("1_8psy0")
+
+[node name="Walls" type="TileMapLayer" parent="CoilMap"]
+use_parent_material = true
+tile_set = ExtResource("1_8psy0")
+
+[node name="Hazards" type="TileMapLayer" parent="CoilMap"]
+use_parent_material = true
+tile_set = ExtResource("1_8psy0")
+
+[node name="Markers" type="TileMapLayer" parent="CoilMap"]
+use_parent_material = true
+tile_set = ExtResource("1_8psy0")
+
+[node name="UI" type="CanvasLayer" parent="."]
+
+[node name="TopBar" type="VBoxContainer" parent="UI"]
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 85.0
+grow_horizontal = 2
+size_flags_vertical = 4
+mouse_filter = 2
+theme_override_constants/separation = 4
+
+[node name="PaletteRow" type="HBoxContainer" parent="UI/TopBar"]
+layout_mode = 2
+size_flags_vertical = 3
+mouse_filter = 2
+
+[node name="Spacer" type="Control" parent="UI/TopBar/PaletteRow"]
+custom_minimum_size = Vector2(4, 0)
+layout_mode = 2
+size_flags_vertical = 4
+
+[node name="FleshBTtn" type="TextureButton" parent="UI/TopBar/PaletteRow"]
+layout_mode = 2
+toggle_mode = true
+
+[node name="WallSolidBtn" type="TextureButton" parent="UI/TopBar/PaletteRow"]
+layout_mode = 2
+toggle_mode = true
+
+[node name="WallDigestBtn" type="TextureButton" parent="UI/TopBar/PaletteRow"]
+layout_mode = 2
+toggle_mode = true
+
+[node name="AcidBtn" type="TextureButton" parent="UI/TopBar/PaletteRow"]
+layout_mode = 2
+toggle_mode = true
+
+[node name="StickyBtn" type="TextureButton" parent="UI/TopBar/PaletteRow"]
+layout_mode = 2
+toggle_mode = true
+
+[node name="SpawnBtn" type="TextureButton" parent="UI/TopBar/PaletteRow"]
+layout_mode = 2
+toggle_mode = true
+
+[node name="HeartrootBtn" type="TextureButton" parent="UI/TopBar/PaletteRow"]
+layout_mode = 2
+toggle_mode = true
+
+[node name="EraserBtn" type="TextureButton" parent="UI/TopBar/PaletteRow"]
+layout_mode = 2
+toggle_mode = true
+
+[node name="Spacer2" type="Control" parent="UI/TopBar/PaletteRow"]
+custom_minimum_size = Vector2(16, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+
+[node name="ValidateBtn" type="Button" parent="UI/TopBar/PaletteRow"]
+custom_minimum_size = Vector2(84, 0)
+layout_mode = 2
+size_flags_vertical = 4
+theme_override_font_sizes/font_size = 16
+text = "Validate"
+
+[node name="SaveBtn" type="Button" parent="UI/TopBar/PaletteRow"]
+custom_minimum_size = Vector2(84, 0)
+layout_mode = 2
+size_flags_vertical = 4
+theme_override_font_sizes/font_size = 16
+text = "Save"
+
+[node name="LoadBtn" type="Button" parent="UI/TopBar/PaletteRow"]
+custom_minimum_size = Vector2(84, 0)
+layout_mode = 2
+size_flags_vertical = 4
+theme_override_font_sizes/font_size = 16
+text = "Load"
+
+[node name="PlaytestBtn" type="Button" parent="UI/TopBar/PaletteRow"]
+custom_minimum_size = Vector2(84, 0)
+layout_mode = 2
+size_flags_vertical = 4
+theme_override_font_sizes/font_size = 16
+text = "Playtest"
+
+[node name="Spacer3" type="Control" parent="UI/TopBar/PaletteRow"]
+custom_minimum_size = Vector2(4, 0)
+layout_mode = 2
+size_flags_vertical = 4
+
+[node name="StartWithFlesh" type="CheckBox" parent="UI/TopBar"]
+layout_mode = 2
+size_flags_horizontal = 3
+focus_mode = 0
+text = "Start with 24 x 24 base"
+
+[node name="InfoRow" type="HBoxContainer" parent="UI/TopBar"]
+layout_mode = 2
+size_flags_vertical = 4
+
+[node name="StatusLabel" type="Label" parent="UI/TopBar/InfoRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 6
+text = "[READY]"
+
+[node name="BiomassLabel" type="Label" parent="UI/TopBar/InfoRow"]
+layout_mode = 2
+size_flags_horizontal = 4
+text = "Biomass: 0 / 100"
+horizontal_alignment = 2
+
+[node name="ClearBaseConfirm" type="ConfirmationDialog" parent="UI/TopBar"]
+size = Vector2i(772, 160)
+min_size = Vector2i(420, 160)
+dialog_text = "This will erase Flesh in the seeded area and remove Walls/Pools/Markers on those cells. Continue?"
+
+[node name="ValidateDialog" type="AcceptDialog" parent="UI/TopBar"]
+initial_position = 2
+size = Vector2i(560, 360)
+min_size = Vector2i(560, 360)
+
+[node name="Body" type="RichTextLabel" parent="UI/TopBar/ValidateDialog"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+bbcode_enabled = true
+fit_content = true
+autowrap_mode = 2
+
+[node name="LoadDialog" type="FileDialog" parent="UI/TopBar"]
+title = "Open a File"
+ok_button_text = "Open"
+file_mode = 0
+access = 1
+filters = PackedStringArray("*.json")
+
+[node name="DevOverlay" type="Control" parent="UI"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="DevBadge" type="Label" parent="UI/DevOverlay"]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -23.0
+grow_horizontal = 2
+grow_vertical = 0
+size_flags_vertical = 3
+theme_override_colors/font_color = Color(1, 0.394517, 0.0120473, 1)
+text = "DEV"
+horizontal_alignment = 1
+vertical_alignment = 1

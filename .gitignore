@@ -1,9 +1,36 @@
-# Godot 4+ specific ignores
-.godot/
+# Godot engine system files
+.godot/            # Editor-specific settings (safe to ignore)
+.import/           # Auto-generated import cache
+.export/           # Export templates and intermediate builds
+
+# Platform-specific build folders
 /android/
-.import/
-.export/
-*.godot
+/web/
+/windows/
+/linux/
+/macos/
+
+# Cache and temp files
 *.tmp
 *.log
 *.cfg
+*.import
+*.godot/tmp/
+
+# Project-specific temporary data
+*.translation     # auto-generated from CSVs
+*.tscn.converted  # scene conversion remnants
+
+# OS/system files
+.DS_Store         # macOS
+Thumbs.db         # Windows
+desktop.ini       # Windows
+
+# Editor/IDE settings (optional)
+.vscode/
+.idea/
+
+# Backup or autosave files
+*.bak
+*.old
+.godot/

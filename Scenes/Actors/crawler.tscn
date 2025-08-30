@@ -1,0 +1,30 @@
+[gd_scene load_steps=5 format=3 uid="uid://dbf2noyqbln42"]
+
+[ext_resource type="Script" uid="uid://c33rvqjr1h1kj" path="res://Scenes/Actors/crawler.gd" id="1_80vex"]
+[ext_resource type="Texture2D" uid="uid://bvp12aoitu7nu" path="res://Assets/tilemap_32x32.png" id="2_0kwjx"]
+[ext_resource type="Script" uid="uid://dg6t4huhkspv4" path="res://System/upgrade_controller.gd" id="3_0kwjx"]
+
+[sub_resource type="CapsuleShape2D" id="CapsuleShape2D_80vex"]
+radius = 12.0
+height = 24.0
+
+[node name="Crawler" type="Area2D"]
+z_index = 3
+position = Vector2(21, 48)
+script = ExtResource("1_80vex")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+modulate = Color(0.178865, 0.565007, 0.454002, 1)
+texture = ExtResource("2_0kwjx")
+region_enabled = true
+region_rect = Rect2(306, 170, 32, 32)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+z_index = 3
+shape = SubResource("CapsuleShape2D_80vex")
+
+[node name="Camera2D" type="Camera2D" parent="."]
+position_smoothing_enabled = true
+
+[node name="UpgradeController" type="Node" parent="."]
+script = ExtResource("3_0kwjx")
