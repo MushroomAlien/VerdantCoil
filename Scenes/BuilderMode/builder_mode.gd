@@ -3,6 +3,11 @@
 
 extends Node2D
 
+const DIRS: Array[Vector2i] = [
+	Vector2i(1, 0), Vector2i(-1, 0),
+	Vector2i(0, 1), Vector2i(0, -1)
+]
+
 ## --- External registry (set this in the Inspector) ---
 @export var brush_registry: BrushRegistry
 
@@ -21,6 +26,11 @@ extends Node2D
 @onready var start_with_flesh_cb: CheckBox = $UI/TopBar/StartWithFlesh
 @onready var clear_base_confirm: ConfirmationDialog = $UI/TopBar/ClearBaseConfirm
 @onready var dev_badge: Label = $UI/DevOverlay/DevBadge
+@onready var validate_btn: Button = $UI/TopBar/PaletteRow/ValidateBtn
+@onready var save_btn: Button = $UI/TopBar/PaletteRow/SaveBtn
+@onready var playtest_btn: Button = $UI/TopBar/PaletteRow/PlaytestBtn
+@onready var validate_dialog: AcceptDialog = $UI/TopBar/ValidateDialog
+@onready var validate_body: RichTextLabel = $UI/TopBar/ValidateDialog/Body
 
 ## Size of the prefill area for Flesh (adjust to your map size)
 @export var start_flesh_rect: Rect2i = Rect2i(Vector2i(0, 0), Vector2i(24, 24))
@@ -30,6 +40,11 @@ var _current_index: int = 0
 var _is_painting_left := false
 var _is_erasing_right := false
 var _last_preview_cell: Vector2i = Vector2i(999999, 999999)
+var _palette_buttons: Array[TextureButton] = []
+
+## --- Biomass variables ---
+@export var biomass_cap: int = 100  # tweak anytime in Inspector
+var _biomass_used: int = 0
 
 func _ready() -> void:
 	# Basic sanity checks
@@ -40,13 +55,48 @@ func _ready() -> void:
 	if hazard_layer == null: push_error("❌ hazard_layer not assigned on BuilderMode.")
 	if marker_layer == null: push_error("❌ marker_layer not assigned on BuilderMode.")
 	
+	if validate_btn:
+		validate_btn.pressed.connect(_on_validate_pressed)
+	if save_btn:
+		save_btn.pressed.connect(_on_save_pressed)
+	if playtest_btn:
+		playtest_btn.pressed.connect(_on_playtest_pressed)
+
 	# Wire each palette button (by order) to a brush (by order).
 	# Left to right buttons map to registry.brushes[0..N]
-	var _palette_group := ButtonGroup.new()  # keep one group
-	var i := 0
+	#var _palette_group := ButtonGroup.new()  # keep one group
+	#var i := 0
+	#for child in palette_row.get_children():
+		#print("child :", child)
+		#if child is TextureButton:
+			#child.toggle_mode = true
+			#child.button_group = _palette_group
+			#child.focus_mode = Control.FOCUS_NONE
+			#child.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+			#child.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
+			#child.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_CENTERED
+			#
+			#var idx := i
+			#child.pressed.connect(func(): _select_brush(idx))
+			## Set icon
+			#if brush_registry != null and idx < brush_registry.brushes.size():
+				#var be := brush_registry.brushes[idx]
+				#if be.icon:
+					#child.texture_normal = be.icon
+				#child.tooltip_text = be.display_name
+			## Inactive look by default
+			#child.self_modulate = Color(0.7, 0.7, 0.7, 1.0)
+			#child.scale = Vector2.ONE
+			#i += 1
+	# Wire each palette button (by order) to a brush (by order).
+	# Left to right buttons map to registry.brushes[0..N]
+	var _palette_group := ButtonGroup.new()
+	_palette_buttons.clear()
 	for child in palette_row.get_children():
-		print("child :", child)
 		if child is TextureButton:
+			_palette_buttons.append(child)
+			var idx := _palette_buttons.size() - 1  # index among buttons only
+			
 			child.toggle_mode = true
 			child.button_group = _palette_group
 			child.focus_mode = Control.FOCUS_NONE
@@ -54,18 +104,18 @@ func _ready() -> void:
 			child.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
 			child.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_CENTERED
 			
-			var idx := i
 			child.pressed.connect(func(): _select_brush(idx))
-			# Set icon
+			
+			# Set icon + tooltip from the registry
 			if brush_registry != null and idx < brush_registry.brushes.size():
 				var be := brush_registry.brushes[idx]
 				if be.icon:
 					child.texture_normal = be.icon
 				child.tooltip_text = be.display_name
-			# Inactive look by default
+			
+			# Default inactive look
 			child.self_modulate = Color(0.7, 0.7, 0.7, 1.0)
 			child.scale = Vector2.ONE
-			i += 1
 	
 	# Default select the first brush, if any
 	if brush_registry != null and brush_registry.brushes.size() > 0:
@@ -83,6 +133,7 @@ func _ready() -> void:
 		var gf = get_node("/root/GameFlags")
 		gf.dev_mode_changed.connect(_on_dev_mode_changed)
 		_on_dev_mode_changed(gf.dev_mode_enabled)
+	_recalc_biomass()
 
 func _process(_delta: float) -> void:
 	_update_preview()
@@ -133,22 +184,19 @@ func _select_brush(index: int) -> void:
 		return
 	_current_index = index
 	
-	var j := 0
-	for child in palette_row.get_children():
-		if child is TextureButton:
-			var selected := (j == _current_index)
-			child.button_pressed = selected
-			# Visual feedback only (no new signals or groups)
-			if selected:
-				child.self_modulate = Color(1, 1, 1, 1)
-				child.scale = Vector2(1.1, 1.1)
-			else:
-				child.self_modulate = Color(0.7, 0.7, 0.7, 1)
-				child.scale = Vector2.ONE
-			# Keep tooltip in sync (optional)
-			if brush_registry and j < brush_registry.brushes.size():
-				child.tooltip_text = brush_registry.brushes[j].display_name
-		j += 1
+	for i in range(_palette_buttons.size()):
+		var btn := _palette_buttons[i]
+		var selected := (i == _current_index)
+		btn.button_pressed = selected
+		if selected:
+			btn.self_modulate = Color(1, 1, 1, 1)
+			btn.scale = Vector2(1.1, 1.1)
+		else:
+			btn.self_modulate = Color(0.7, 0.7, 0.7, 1)
+			btn.scale = Vector2.ONE
+	
+		if brush_registry and i < brush_registry.brushes.size():
+			btn.tooltip_text = brush_registry.brushes[i].display_name
 	
 	var b: BrushEntry = brush_registry.brushes[index]
 	_show_status("Brush: " + (b.display_name if b.display_name != "" else "Unnamed"))
@@ -190,12 +238,18 @@ func _paint_at(coords: Vector2i) -> void:
 	if layer == marker_layer:
 		_enforce_single_spawn_at(coords)
 		_enforce_single_heartroot_at(coords)
+	
+	# Recalc biomass after successful placement
+	_recalc_biomass()
 
 func _erase_at(coords: Vector2i) -> void:
 	# Simple MVP: remove from all known layers at this cell
 	for layer_node in [marker_layer, hazard_layer, walls_layer]:
 		if layer_node:
 			layer_node.erase_cell(coords)
+			
+	# Recalc biomass after successful placement
+	_recalc_biomass()
 
 ## --- Validation helpers -------------------------------------------------------
 func _current_brush() -> BrushEntry:
@@ -437,6 +491,191 @@ func _update_preview() -> void:
 			col = Color(1, 0.2, 0.2, 0.5)
 		preview_layer.modulate = col
 
+## --- Biomass helpers ----------------------------------------------------------
+## Safely read 'cost' from a cell on a given layer. If no tile or no key -> 0.
+func _tile_cost(layer: TileMapLayer, coords: Vector2i) -> int:
+	if layer == null:
+		return 0
+	var td: TileData = layer.get_cell_tile_data(coords)
+	if td == null:
+		return 0
+	var v = td.get_custom_data("cost")
+	return int(v) if (v is int) else 0
+
+## Recalculate total biomass by scanning all layers (fast enough for 24x24).
+func _recalc_biomass() -> void:
+	var total := 0
+	for layer_node in [base_layer, walls_layer, hazard_layer, marker_layer]:
+		if layer_node:
+			for c in layer_node.get_used_cells():
+				total += _tile_cost(layer_node, c)
+	_biomass_used = total
+	_update_biomass_label()
+
+## Update the label and warn softly if over cap.
+func _update_biomass_label() -> void:
+	if biomass_label == null:
+		return
+	
+	biomass_label.text = "Biomass: %d / %d" % [_biomass_used, biomass_cap]
+	var col := Color(1, 1, 1)
+	if _biomass_used > biomass_cap:
+		col = Color(1, 0.25, 0.25)
+	biomass_label.modulate = col
+
+# --- Actions: Validate / Save / Playtest --------------------------------------
+
+func _on_validate_pressed() -> void:
+	# Run a full check list and show a friendly popup
+	var result := _run_validation()
+	_show_validation_dialog(result)
+
+func _on_save_pressed() -> void:
+	# Phase 1.5 will implement real JSON save/export.
+	_show_status("Save: coming in Phase 1.5 (JSON export).")
+	# (Optional: gray this button out until 1.5.)
+
+func _on_playtest_pressed() -> void:
+	# We’ll hook this in soon via a tiny Autoload handoff to ExploreMode.
+	_show_status("Playtest: coming next — quick handoff to ExploreMode.")
+
+# Data container for validation results
+class ValidationResult:
+	var ok: bool = false
+	var messages: Array[String] = []
+	var spawn: Vector2i = Vector2i(-999999, -999999)
+	var heart: Vector2i = Vector2i(-999999, -999999)
+
+# Run the checks defined in our docs (spawn, heartroot, solvable path).
+# Biomass budget check is kept soft here until your BiomassManager is in.
+func _run_validation() -> ValidationResult:
+	var r := ValidationResult.new()
+
+	# 1) Exactly one Spawn and Heartroot (Markers layer)
+	var spawn_cells := _find_marker_cells("is_spawn")
+	var heart_cells := _find_marker_cells("is_goal")
+
+	if spawn_cells.size() != 1:
+		r.messages.append("❌ Place exactly one Spawn (found %d)." % spawn_cells.size())
+	else:
+		r.spawn = spawn_cells[0]
+
+	if heart_cells.size() != 1:
+		r.messages.append("❌ Place exactly one Heartroot (found %d)." % heart_cells.size())
+	else:
+		r.heart = heart_cells[0]
+
+	# 2) Path exists from Spawn → Heartroot (walkable flesh, no walls, no blocking hazards)
+	if r.spawn.x > -900000 and r.heart.x > -900000:
+		if not _is_reachable(r.spawn, r.heart):
+			r.messages.append("❌ Heartroot unreachable from Spawn.")
+	else:
+		# If either is missing, the path check is moot.
+		pass
+
+	# (Optional) 3) Biomass cap — wire to your real budget when ready.
+	# if _current_biomass() > _biomass_cap():
+	#     r.messages.append("❌ Biomass over cap by %d." % (_current_biomass() - _biomass_cap()))
+
+	# Result state
+	r.ok = (r.messages.size() == 0)
+	if r.ok:
+		r.messages.append("✅ Valid coil. Ready to Playtest or Save.")
+	return r
+
+# Find all cells in Markers layer that have a given boolean flag in custom_data.
+func _find_marker_cells(flag_key: String) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	if marker_layer == null:
+		return out
+	for c in marker_layer.get_used_cells():
+		var td := marker_layer.get_cell_tile_data(c)
+		if td != null and bool(td.get_custom_data(flag_key) or false):
+			out.append(c)
+	return out
+
+# Simple BFS for reachability on our rules (flesh required, no walls, no hazards).
+func _is_reachable(start: Vector2i, goal: Vector2i) -> bool:
+	# Trivial case: same cell
+	if start == goal:
+		return true
+	# visited can be typed; Vector2i works fine as a Dictionary key
+	var visited: Dictionary = {}
+	var q: Array[Vector2i] = []
+	q.append(start)
+	visited[start] = true
+	while q.size() > 0:
+		# pop_front() returns Variant → cast or type the variable explicitly
+		var cur: Vector2i = q.pop_front() as Vector2i
+		if cur == goal:
+			return true
+		# DIRS is a typed Array[Vector2i], so 'dir' is Vector2i too
+		for dir in DIRS:
+			var nxt: Vector2i = cur + dir
+			# Walk rules: must have Flesh, no Walls, no Hazards
+			# ---- Traversal rules (MVP):
+			# 1) Must have Flesh on Base
+			if not _has_base(nxt):
+				continue
+			# 2) Solid walls block (digest walls DO NOT block)
+			if _is_solid_wall(nxt):
+				continue
+			# 3) Hazards do NOT block (acid/sticky are passable with upgrades)
+			#    -> intentionally no check of _hazard_kind_at(nxt)
+			if not visited.has(nxt):
+				visited[nxt] = true
+				q.append(nxt)
+	return false
+
+# Fill and show the AcceptDialog nicely.
+func _show_validation_dialog(r: ValidationResult) -> void:
+	if validate_dialog == null or validate_body == null:
+		_show_status("Validation dialog missing in scene.")
+		return
+	
+	# Force a readable size & wrapping on open
+	validate_dialog.min_size = Vector2i(560, 360)     # floor
+	validate_dialog.size = Vector2i(640, 420)         # actual open size
+	validate_body.autowrap_mode = TextServer.AUTOWRAP_WORD
+	validate_body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	validate_body.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	
+	validate_body.clear()
+	validate_body.append_text("")  # ensures we start fresh
+	
+	if r.ok:
+		validate_dialog.title = "Validation Passed"
+	else:
+		validate_dialog.title = "Validation Issues"
+	# Build the message list
+	for m in r.messages:
+		validate_body.append_text(m + "\n")
+	# Extra friendly coords if available
+	if r.spawn.x > -900000:
+		validate_body.append_text("• Spawn at %s\n" % [str(r.spawn)])
+	if r.heart.x > -900000:
+		validate_body.append_text("• Heartroot at %s\n" % [str(r.heart)])
+	validate_dialog.popup_centered() # uses 'size' above
+
+# Returns true only when a SOLID wall tile is at coords.
+func _is_solid_wall(coords: Vector2i) -> bool:
+	if walls_layer == null:
+		return false
+	var td: TileData = walls_layer.get_cell_tile_data(coords)
+	if td == null:
+		return false
+	# Preferred: boolean custom data
+	var v = td.get_custom_data("is_solid")
+	if v is bool:
+		return v
+	# Fallback: string kind, e.g. "SOLID" / "DIGEST"
+	var k = td.get_custom_data("wall_kind")
+	if k is String:
+		return (String(k) == "SOLID")
+	# If no metadata, be conservative: treat as solid.
+	return true
+
+
 ## DEV MODE gate: show/hide dev-only UI and ping status
 func _on_dev_mode_changed(enabled: bool) -> void:
 	if start_with_flesh_cb:
@@ -445,9 +684,5 @@ func _on_dev_mode_changed(enabled: bool) -> void:
 		dev_badge.visible = enabled
 	# Friendly ping so you always know the state
 	_show_status("Dev Mode: " + ("ON" if enabled else "OFF"))
-
-#func _reject(msg: String) -> bool:
-	#_show_status("🚫 " + msg)
-	#return false
 
 ## end builder_mode.gd

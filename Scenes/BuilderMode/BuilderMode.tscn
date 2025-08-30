@@ -41,8 +41,10 @@ tile_set = ExtResource("1_8psy0")
 [node name="UI" type="CanvasLayer" parent="."]
 
 [node name="TopBar" type="VBoxContainer" parent="UI"]
-offset_right = 238.0
-offset_bottom = 58.0
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 85.0
+grow_horizontal = 2
 size_flags_vertical = 4
 mouse_filter = 2
 theme_override_constants/separation = 4
@@ -51,6 +53,11 @@ theme_override_constants/separation = 4
 layout_mode = 2
 size_flags_vertical = 3
 mouse_filter = 2
+
+[node name="Spacer" type="Control" parent="UI/TopBar/PaletteRow"]
+custom_minimum_size = Vector2(4, 0)
+layout_mode = 2
+size_flags_vertical = 4
 
 [node name="FleshBTtn" type="TextureButton" parent="UI/TopBar/PaletteRow"]
 layout_mode = 2
@@ -84,15 +91,42 @@ toggle_mode = true
 layout_mode = 2
 toggle_mode = true
 
-[node name="Spacer" type="Control" parent="UI/TopBar/PaletteRow"]
+[node name="Spacer2" type="Control" parent="UI/TopBar/PaletteRow"]
 custom_minimum_size = Vector2(16, 0)
 layout_mode = 2
 size_flags_horizontal = 3
+size_flags_vertical = 4
 
 [node name="BiomassLabel" type="Label" parent="UI/TopBar/PaletteRow"]
 layout_mode = 2
 size_flags_horizontal = 8
 text = "Biomass: 0 / 100"
+
+[node name="ValidateBtn" type="Button" parent="UI/TopBar/PaletteRow"]
+custom_minimum_size = Vector2(84, 0)
+layout_mode = 2
+size_flags_vertical = 4
+theme_override_font_sizes/font_size = 16
+text = "Validate"
+
+[node name="SaveBtn" type="Button" parent="UI/TopBar/PaletteRow"]
+custom_minimum_size = Vector2(84, 0)
+layout_mode = 2
+size_flags_vertical = 4
+theme_override_font_sizes/font_size = 16
+text = "Save"
+
+[node name="PlaytestBtn" type="Button" parent="UI/TopBar/PaletteRow"]
+custom_minimum_size = Vector2(84, 0)
+layout_mode = 2
+size_flags_vertical = 4
+theme_override_font_sizes/font_size = 16
+text = "Playtests"
+
+[node name="Spacer3" type="Control" parent="UI/TopBar/PaletteRow"]
+custom_minimum_size = Vector2(4, 0)
+layout_mode = 2
+size_flags_vertical = 4
 
 [node name="StartWithFlesh" type="CheckBox" parent="UI/TopBar"]
 layout_mode = 2
@@ -104,11 +138,27 @@ text = "Start with 24 x 24 base"
 layout_mode = 2
 size_flags_vertical = 6
 text = "[READY]"
+horizontal_alignment = 1
 
 [node name="ClearBaseConfirm" type="ConfirmationDialog" parent="UI/TopBar"]
 size = Vector2i(772, 160)
 min_size = Vector2i(420, 160)
 dialog_text = "This will erase Flesh in the seeded area and remove Walls/Pools/Markers on those cells. Continue?"
+
+[node name="ValidateDialog" type="AcceptDialog" parent="UI/TopBar"]
+initial_position = 2
+size = Vector2i(560, 360)
+min_size = Vector2i(560, 360)
+
+[node name="Body" type="RichTextLabel" parent="UI/TopBar/ValidateDialog"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+bbcode_enabled = true
+fit_content = true
+autowrap_mode = 2
 
 [node name="DevOverlay" type="Control" parent="UI"]
 layout_mode = 3
