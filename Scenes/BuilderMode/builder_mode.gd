@@ -17,20 +17,24 @@ const DIRS: Array[Vector2i] = [
 @export var walls_layer: TileMapLayer
 @export var hazard_layer: TileMapLayer
 @export var marker_layer: TileMapLayer
+@export_group("Save/Export")
+@export var save_dir: String = "user://coils"
 
 ## --- Scene references ---
 @onready var coil_map: TileMap = $CoilMap
 @onready var palette_row: HBoxContainer = $UI/TopBar/PaletteRow
-@onready var biomass_label: Label = $UI/TopBar/PaletteRow/BiomassLabel
-@onready var status_label: Label = $UI/TopBar/StatusLabel
+@onready var status_label: Label = $UI/TopBar/InfoRow/StatusLabel
+@onready var biomass_label: Label = $UI/TopBar/InfoRow/BiomassLabel
 @onready var start_with_flesh_cb: CheckBox = $UI/TopBar/StartWithFlesh
 @onready var clear_base_confirm: ConfirmationDialog = $UI/TopBar/ClearBaseConfirm
 @onready var dev_badge: Label = $UI/DevOverlay/DevBadge
+@onready var validate_dialog: AcceptDialog = $UI/TopBar/ValidateDialog
+@onready var validate_body: RichTextLabel = $UI/TopBar/ValidateDialog/Body
 @onready var validate_btn: Button = $UI/TopBar/PaletteRow/ValidateBtn
 @onready var save_btn: Button = $UI/TopBar/PaletteRow/SaveBtn
 @onready var playtest_btn: Button = $UI/TopBar/PaletteRow/PlaytestBtn
-@onready var validate_dialog: AcceptDialog = $UI/TopBar/ValidateDialog
-@onready var validate_body: RichTextLabel = $UI/TopBar/ValidateDialog/Body
+@onready var load_btn: Button = $UI/TopBar/PaletteRow/LoadBtn
+@onready var load_dialog: FileDialog = $UI/TopBar/LoadDialog
 
 ## Size of the prefill area for Flesh (adjust to your map size)
 @export var start_flesh_rect: Rect2i = Rect2i(Vector2i(0, 0), Vector2i(24, 24))
@@ -54,40 +58,17 @@ func _ready() -> void:
 	if walls_layer == null: push_error("❌ walls_layer not assigned on BuilderMode.")
 	if hazard_layer == null: push_error("❌ hazard_layer not assigned on BuilderMode.")
 	if marker_layer == null: push_error("❌ marker_layer not assigned on BuilderMode.")
-	
 	if validate_btn:
 		validate_btn.pressed.connect(_on_validate_pressed)
 	if save_btn:
 		save_btn.pressed.connect(_on_save_pressed)
 	if playtest_btn:
 		playtest_btn.pressed.connect(_on_playtest_pressed)
-
-	# Wire each palette button (by order) to a brush (by order).
-	# Left to right buttons map to registry.brushes[0..N]
-	#var _palette_group := ButtonGroup.new()  # keep one group
-	#var i := 0
-	#for child in palette_row.get_children():
-		#print("child :", child)
-		#if child is TextureButton:
-			#child.toggle_mode = true
-			#child.button_group = _palette_group
-			#child.focus_mode = Control.FOCUS_NONE
-			#child.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-			#child.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
-			#child.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_CENTERED
-			#
-			#var idx := i
-			#child.pressed.connect(func(): _select_brush(idx))
-			## Set icon
-			#if brush_registry != null and idx < brush_registry.brushes.size():
-				#var be := brush_registry.brushes[idx]
-				#if be.icon:
-					#child.texture_normal = be.icon
-				#child.tooltip_text = be.display_name
-			## Inactive look by default
-			#child.self_modulate = Color(0.7, 0.7, 0.7, 1.0)
-			#child.scale = Vector2.ONE
-			#i += 1
+	if load_btn:
+		load_btn.pressed.connect(_on_load_pressed)
+	if load_dialog:
+		load_dialog.file_selected.connect(_on_load_file_selected)
+	
 	# Wire each palette button (by order) to a brush (by order).
 	# Left to right buttons map to registry.brushes[0..N]
 	var _palette_group := ButtonGroup.new()
@@ -133,6 +114,18 @@ func _ready() -> void:
 		var gf = get_node("/root/GameFlags")
 		gf.dev_mode_changed.connect(_on_dev_mode_changed)
 		_on_dev_mode_changed(gf.dev_mode_enabled)
+	
+	# ---- restore coil if returning from Playtest ----
+	if has_node("/root/CoilSession"):
+		var cs: Node = get_node("/root/CoilSession")
+		var pc_v: Variant = cs.get("pending_coil")
+		if typeof(pc_v) == TYPE_DICTIONARY:
+			var pc: Dictionary = pc_v as Dictionary
+			if pc.has("layers"):
+				_apply_coil(pc)
+				_show_status("Restored coil from Playtest.")
+	
+	# keep numbers fresh after applying
 	_recalc_biomass()
 
 func _process(_delta: float) -> void:
@@ -527,18 +520,62 @@ func _update_biomass_label() -> void:
 
 func _on_validate_pressed() -> void:
 	# Run a full check list and show a friendly popup
+	_recalc_biomass()
 	var result := _run_validation()
 	_show_validation_dialog(result)
 
 func _on_save_pressed() -> void:
-	# Phase 1.5 will implement real JSON save/export.
-	_show_status("Save: coming in Phase 1.5 (JSON export).")
-	# (Optional: gray this button out until 1.5.)
+	# Keep numbers fresh in the save
+	_recalc_biomass()
+	# Ensure directory exists
+	if DirAccess.open(save_dir) == null:
+		var ok := DirAccess.make_dir_recursive_absolute(save_dir)
+		if ok != OK:
+			_show_status("Save failed: couldn't create " + save_dir)
+			return
+	# Build a timestamped filename
+	var ts := Time.get_datetime_string_from_system(false, true).replace(":", "-")
+	var path := "%s/coil_%s.json" % [save_dir, ts]
+	# Write JSON
+	var data := _capture_coil()
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	if f == null:
+		_show_status("Save failed (" + str(FileAccess.get_open_error()) + ").")
+		return
+	f.store_string(JSON.stringify(data, "\t"))
+	f.close()
+	_show_status("Saved: " + path)
+
+func _on_load_pressed() -> void:
+	# Ensure save_dir exists (e.g., "user://coils")
+	if DirAccess.open(save_dir) == null:
+		DirAccess.make_dir_recursive_absolute(save_dir)
+
+	if load_dialog:
+		load_dialog.access = FileDialog.ACCESS_USERDATA
+		load_dialog.current_dir = save_dir        # e.g., "user://coils"
+		# Optional: enforce filter programmatically too
+		# load_dialog.filters = PackedStringArray(["*.json"])
+		load_dialog.popup_centered()
 
 func _on_playtest_pressed() -> void:
-	# We’ll hook this in soon via a tiny Autoload handoff to ExploreMode.
-	_show_status("Playtest: coming next — quick handoff to ExploreMode.")
-
+	# Validate first
+	_recalc_biomass()
+	var result := _run_validation()
+	if not result.ok:
+		_show_validation_dialog(result)
+		return
+	
+	# Optional but handy: autosave a snapshot
+	_autosave_playtest()
+	
+	# Hand off to Explore via CoilSession
+	var data: Dictionary = _capture_coil()
+	if has_node("/root/CoilSession"):
+		get_node("/root/CoilSession").call("start_playtest", data)
+	else:
+		_show_status("Playtest: CoilSession autoload missing.")
+	
 # Data container for validation results
 class ValidationResult:
 	var ok: bool = false
@@ -546,25 +583,33 @@ class ValidationResult:
 	var spawn: Vector2i = Vector2i(-999999, -999999)
 	var heart: Vector2i = Vector2i(-999999, -999999)
 
+func _autosave_playtest() -> void:
+	if DirAccess.open(save_dir) == null:
+		DirAccess.make_dir_recursive_absolute(save_dir)
+	var path := "%s/_autosave_playtest.json" % [save_dir]
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	if f:
+		f.store_string(JSON.stringify(_capture_coil(), "\t"))
+		f.close()
+		_show_status("Autosaved: " + path)
+
 # Run the checks defined in our docs (spawn, heartroot, solvable path).
 # Biomass budget check is kept soft here until your BiomassManager is in.
 func _run_validation() -> ValidationResult:
 	var r := ValidationResult.new()
-
+	
 	# 1) Exactly one Spawn and Heartroot (Markers layer)
 	var spawn_cells := _find_marker_cells("is_spawn")
 	var heart_cells := _find_marker_cells("is_goal")
-
 	if spawn_cells.size() != 1:
 		r.messages.append("❌ Place exactly one Spawn (found %d)." % spawn_cells.size())
 	else:
 		r.spawn = spawn_cells[0]
-
 	if heart_cells.size() != 1:
 		r.messages.append("❌ Place exactly one Heartroot (found %d)." % heart_cells.size())
 	else:
 		r.heart = heart_cells[0]
-
+		
 	# 2) Path exists from Spawn → Heartroot (walkable flesh, no walls, no blocking hazards)
 	if r.spawn.x > -900000 and r.heart.x > -900000:
 		if not _is_reachable(r.spawn, r.heart):
@@ -572,11 +617,12 @@ func _run_validation() -> ValidationResult:
 	else:
 		# If either is missing, the path check is moot.
 		pass
-
-	# (Optional) 3) Biomass cap — wire to your real budget when ready.
-	# if _current_biomass() > _biomass_cap():
-	#     r.messages.append("❌ Biomass over cap by %d." % (_current_biomass() - _biomass_cap()))
-
+	
+	# 3) Biomass must be under or equal to the cap (soft check for 1.4)
+	if _biomass_used > biomass_cap:
+		var over := _biomass_used - biomass_cap
+		r.messages.append("❌ Biomass over cap by %d (used %d / %d)." % [over, _biomass_used, biomass_cap])
+	
 	# Result state
 	r.ok = (r.messages.size() == 0)
 	if r.ok:
@@ -674,6 +720,100 @@ func _is_solid_wall(coords: Vector2i) -> bool:
 		return (String(k) == "SOLID")
 	# If no metadata, be conservative: treat as solid.
 	return true
+
+## --- JSON save and load file helper funcions
+
+## Serialize one TileMapLayer -> array of cells we can rebuild later.
+func _serialize_layer(layer: TileMapLayer) -> Array:
+	var out: Array = []
+	if layer == null:
+		return out
+	for c in layer.get_used_cells():
+		var sid := layer.get_cell_source_id(c)
+		if sid == -1:
+			continue
+		var atlas: Vector2i = layer.get_cell_atlas_coords(c)
+		out.append({
+			"x": c.x, "y": c.y,
+			"source_id": sid,
+			"atlas_x": atlas.x, "atlas_y": atlas.y
+		})
+	return out
+
+## Capture the whole coil (meta + each layer).
+func _capture_coil() -> Dictionary:
+	return {
+		"meta": {
+			"biomass_cap": biomass_cap,
+			"biomass_used": _biomass_used,
+			"tileset": coil_map.tile_set and coil_map.tile_set.resource_path or ""
+		},
+		"layers": {
+			"base": _serialize_layer(base_layer),
+			"walls": _serialize_layer(walls_layer),
+			"hazard": _serialize_layer(hazard_layer),
+			"marker": _serialize_layer(marker_layer)
+		}
+	}
+
+## --- Load ---
+
+func _on_load_file_selected(path: String) -> void:
+	var f := FileAccess.open(path, FileAccess.READ)
+	if f == null:
+		_show_status("Load failed (" + str(FileAccess.get_open_error()) + ").")
+		return
+	var txt: String = f.get_as_text()
+	f.close()
+	var parsed_v: Variant = JSON.parse_string(txt)
+	if typeof(parsed_v) != TYPE_DICTIONARY:
+		_show_status("Load failed: JSON malformed.")
+		return
+	var data: Dictionary = parsed_v as Dictionary
+	_apply_coil(data)
+	_recalc_biomass()
+	_show_status("Loaded: " + path)
+
+# Rebuild one TileMapLayer from JSON array: [{x,y,source_id,atlas_x,atlas_y}, ...]
+func _rebuild_layer_from_json(arr_any: Variant, layer: TileMapLayer) -> void:
+	if layer == null:
+		return
+	if typeof(arr_any) != TYPE_ARRAY:
+		return
+	var arr: Array = arr_any
+	for cell_any in arr:
+		if typeof(cell_any) != TYPE_DICTIONARY:
+			continue
+		var cell: Dictionary = cell_any as Dictionary
+		if not (cell.has("x") and cell.has("y") and cell.has("source_id")):
+			continue
+		var coords: Vector2i = Vector2i(int(cell["x"]), int(cell["y"]))
+		var sid: int = int(cell["source_id"])
+		var ac: Vector2i = Vector2i.ZERO
+		if cell.has("atlas_x") and cell.has("atlas_y"):
+			ac = Vector2i(int(cell["atlas_x"]), int(cell["atlas_y"]))
+		layer.set_cell(coords, sid, ac)
+
+# Apply a saved coil Dictionary onto the current TileMap layers.
+func _apply_coil(data: Dictionary) -> void:
+	# Clear target layers (keep preview separate)
+	if base_layer: base_layer.clear()
+	if walls_layer: walls_layer.clear()
+	if hazard_layer: hazard_layer.clear()
+	if marker_layer: marker_layer.clear()
+	# Pull 'layers' as Dictionary safely
+	var layers_any: Variant = data.get("layers", {})
+	if typeof(layers_any) != TYPE_DICTIONARY:
+		return
+	var layers: Dictionary = layers_any as Dictionary
+	if layers.has("base"):
+		_rebuild_layer_from_json(layers["base"], base_layer)
+	if layers.has("walls"):
+		_rebuild_layer_from_json(layers["walls"], walls_layer)
+	if layers.has("hazard"):
+		_rebuild_layer_from_json(layers["hazard"], hazard_layer)
+	if layers.has("marker"):
+		_rebuild_layer_from_json(layers["marker"], marker_layer)
 
 
 ## DEV MODE gate: show/hide dev-only UI and ping status

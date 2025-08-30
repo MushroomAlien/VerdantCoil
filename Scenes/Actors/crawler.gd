@@ -13,20 +13,10 @@ const GridUtil := preload("res://System/grid.gd")
 
 # --- Movement Settings ---
 @export var move_speed: float = 5.0  # Tiles per second
-#var tilemap: TileMap
-#@export_category("Layer Settings")
-#@export_range(0, 7, 1)
-#var base_layer_index: int = 0  # (legacy) Safe to remove later; replaced by LAYER_* constants.
 
 # --- Internal State ---
 var _is_moving: bool = false
 var _move_direction := Vector2.ZERO
-
-## --- Layer indices (Phase 1.3 layout) ---
-#const LAYER_BASE := 0      # Flesh (walkable floor) lives here
-#const LAYER_WALLS := 1     # Solid & digestible walls, rendered above Flesh
-#const LAYER_HAZARDS := 2   # Acid / Sticky overlays, rendered above Flesh
-#const LAYER_MARKERS := 3   # Spawn / Heartroot markers
 
 # Simple input-skip slow (Sticky uses this to "eat" N inputs after entry)
 var _skip_inputs := 0
@@ -146,12 +136,11 @@ func _start_move() -> void:
 			return
 	
 	# 5) All checks passed → move
-	var target_pos = GridUtil.to_world(next_tile)
-	var tween = create_tween()
+	var target_pos := GridUtil.to_world(next_tile)
+	var tween := create_tween()
 	tween.tween_property(self, "position", target_pos, 1.0 / move_speed)
-	
-	# Apply effects after we arrive (hazards, goal check, then release input lock)
-	tween.connect("finished", func ():
+	# When we arrive, resolve tile effects, then re-enable input
+	tween.finished.connect(func():
 		_on_arrived_at(next_tile)
 	)
 
@@ -175,15 +164,54 @@ func _on_arrived_at(tile: Vector2i) -> void:
 				# Easiest MVP: eat N inputs after this move
 				_consume_future_inputs(slow_ticks)
 	
+	# Dissolve digestible wall on entry if Acid Sac is active
+	var wall_td := _get_tile_data(wall_layer, tile)
+	if wall_td != null and _is_digest_wall(wall_td):
+		var upgrades = get_node_or_null("UpgradeController")
+		var acid_on := false
+		if upgrades != null:
+			acid_on = upgrades.has_upgrade(upgrades.Upgrade.ACID_SAC)
+		if acid_on:
+			wall_layer.erase_cell(tile)
+			# (Optional) TODO: spawn particles/SFX here
+	
 	# Goal check (Marker layer)
 	var marker_td := _get_tile_data(marker_layer, tile)
 	if marker_td != null and bool(marker_td.get_custom_data("is_goal") or false):
 		print("🏆 Reached Heartroot — WIN!")
-	# Release input lock after all on-enter effects resolve
+		if has_node("/root/CoilSession"):
+			get_node("/root/CoilSession").call("return_to_builder")
+		else:
+			# Fallback if autoload missing
+			get_tree().change_scene_to_file("res://Scenes/BuilderMode/BuilderMode.tscn")
+		_is_moving = false
+		return
+	
+	# If we didn’t early-return due to winning, re-enable input now.
 	_is_moving = false
+
+func _win_and_return() -> void:
+	# Lock input so we don't queue more moves during the scene swap
+	_is_moving = true
+	print("🏆 Reached Heartroot — WIN!")
+	if has_node("/root/CoilSession"):
+		get_node("/root/CoilSession").call("return_to_builder")
+	else:
+		# Fallback if the autoload isn't present (update path if needed)
+		get_tree().change_scene_to_file("res://Scenes/BuilderMode/BuilderMode.tscn")
 
 # Increments the number of movement inputs to ignore (used by Sticky slow)
 func _consume_future_inputs(n: int) -> void:
 	_skip_inputs += n
+
+func _is_digest_wall(td: TileData) -> bool:
+	if td == null:
+		return false
+	# Primary: explicit boolean
+	if _get_bool(td, "digestible", false):
+		return true
+	# Fallback: string kind
+	var kind := _get_str(td, "wall_kind", "")
+	return kind == "DIGEST" or kind == "DIGESTIBLE"
 
 ## end crawler.gd

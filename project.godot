@@ -11,7 +11,8 @@ config_version=5
 [application]
 
 config/name="Verdant Coil"
-run/main_scene="uid://igr13b3t33pe"
+config/version="0.0.1"
+run/main_scene="uid://30d2424oam6i"
 config/features=PackedStringArray("4.4", "Forward Plus")
 config/icon="res://Assets/icon.svg"
 
@@ -19,6 +20,7 @@ config/icon="res://Assets/icon.svg"
 
 Grid="*res://System/grid.gd"
 GameFlags="*res://System/game_flags.gd"
+CoilSession="*res://System/autoload/CoilSession.tscn"
 
 [display]
 
