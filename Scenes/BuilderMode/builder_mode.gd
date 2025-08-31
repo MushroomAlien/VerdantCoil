@@ -2,6 +2,7 @@
 ## Data-driven Builder: picks a brush from a registry, validates, then paints.
 extends Node2D
 
+const CoilIO := preload("res://System/coil_io.gd")
 const DIRS: Array[Vector2i] = [
 	Vector2i(1, 0), Vector2i(-1, 0),
 	Vector2i(0, 1), Vector2i(0, -1)
@@ -136,7 +137,7 @@ func _ready() -> void:
 		if typeof(pc_v) == TYPE_DICTIONARY:
 			var pc: Dictionary = pc_v as Dictionary
 			if pc.has("layers"):
-				_apply_coil(pc)
+				CoilIO.apply_coil(pc, base_layer, walls_layer, hazard_layer, marker_layer)
 				_show_status("Restored coil from Playtest.")
 	
 	# keep numbers fresh after applying
@@ -745,22 +746,22 @@ func _is_solid_wall(coords: Vector2i) -> bool:
 
 ## --- JSON save and load file helper funcions
 
-## Serialize one TileMapLayer -> array of cells we can rebuild later.
-func _serialize_layer(layer: TileMapLayer) -> Array:
-	var out: Array = []
-	if layer == null:
-		return out
-	for c in layer.get_used_cells():
-		var sid := layer.get_cell_source_id(c)
-		if sid == -1:
-			continue
-		var atlas: Vector2i = layer.get_cell_atlas_coords(c)
-		out.append({
-			"x": c.x, "y": c.y,
-			"source_id": sid,
-			"atlas_x": atlas.x, "atlas_y": atlas.y
-		})
-	return out
+### Serialize one TileMapLayer -> array of cells we can rebuild later.
+#func _serialize_layer(layer: TileMapLayer) -> Array:
+	#var out: Array = []
+	#if layer == null:
+		#return out
+	#for c in layer.get_used_cells():
+		#var sid := layer.get_cell_source_id(c)
+		#if sid == -1:
+			#continue
+		#var atlas: Vector2i = layer.get_cell_atlas_coords(c)
+		#out.append({
+			#"x": c.x, "y": c.y,
+			#"source_id": sid,
+			#"atlas_x": atlas.x, "atlas_y": atlas.y
+		#})
+	#return out
 
 ## Capture the whole coil (meta + each layer).
 func _capture_coil() -> Dictionary:
@@ -771,10 +772,10 @@ func _capture_coil() -> Dictionary:
 			"tileset": coil_map.tile_set and coil_map.tile_set.resource_path or ""
 		},
 		"layers": {
-			"base": _serialize_layer(base_layer),
-			"walls": _serialize_layer(walls_layer),
-			"hazard": _serialize_layer(hazard_layer),
-			"marker": _serialize_layer(marker_layer)
+			"base": CoilIO.serialize_layer(base_layer),
+			"walls": CoilIO.serialize_layer(walls_layer),
+			"hazard": CoilIO.serialize_layer(hazard_layer),
+			"marker": CoilIO.serialize_layer(marker_layer)
 		}
 	}
 
@@ -792,51 +793,50 @@ func _on_load_file_selected(path: String) -> void:
 		_show_status("Load failed: JSON malformed.")
 		return
 	var data: Dictionary = parsed_v as Dictionary
-	_apply_coil(data)
+	CoilIO.apply_coil(data, base_layer, walls_layer, hazard_layer, marker_layer)
 	_recalc_biomass()
 	_show_status("Loaded: " + path)
 
-# Rebuild one TileMapLayer from JSON array: [{x,y,source_id,atlas_x,atlas_y}, ...]
-func _rebuild_layer_from_json(arr_any: Variant, layer: TileMapLayer) -> void:
-	if layer == null:
-		return
-	if typeof(arr_any) != TYPE_ARRAY:
-		return
-	var arr: Array = arr_any
-	for cell_any in arr:
-		if typeof(cell_any) != TYPE_DICTIONARY:
-			continue
-		var cell: Dictionary = cell_any as Dictionary
-		if not (cell.has("x") and cell.has("y") and cell.has("source_id")):
-			continue
-		var coords: Vector2i = Vector2i(int(cell["x"]), int(cell["y"]))
-		var sid: int = int(cell["source_id"])
-		var ac: Vector2i = Vector2i.ZERO
-		if cell.has("atlas_x") and cell.has("atlas_y"):
-			ac = Vector2i(int(cell["atlas_x"]), int(cell["atlas_y"]))
-		layer.set_cell(coords, sid, ac)
+## Rebuild one TileMapLayer from JSON array: [{x,y,source_id,atlas_x,atlas_y}, ...]
+#func _rebuild_layer_from_json(arr_any: Variant, layer: TileMapLayer) -> void:
+	#if layer == null:
+		#return
+	#if typeof(arr_any) != TYPE_ARRAY:
+		#return
+	#var arr: Array = arr_any
+	#for cell_any in arr:
+		#if typeof(cell_any) != TYPE_DICTIONARY:
+			#continue
+		#var cell: Dictionary = cell_any as Dictionary
+		#if not (cell.has("x") and cell.has("y") and cell.has("source_id")):
+			#continue
+		#var coords: Vector2i = Vector2i(int(cell["x"]), int(cell["y"]))
+		#var sid: int = int(cell["source_id"])
+		#var ac: Vector2i = Vector2i.ZERO
+		#if cell.has("atlas_x") and cell.has("atlas_y"):
+			#ac = Vector2i(int(cell["atlas_x"]), int(cell["atlas_y"]))
+		#layer.set_cell(coords, sid, ac)
 
-# Apply a saved coil Dictionary onto the current TileMap layers.
-func _apply_coil(data: Dictionary) -> void:
-	# Clear target layers (keep preview separate)
-	if base_layer: base_layer.clear()
-	if walls_layer: walls_layer.clear()
-	if hazard_layer: hazard_layer.clear()
-	if marker_layer: marker_layer.clear()
-	# Pull 'layers' as Dictionary safely
-	var layers_any: Variant = data.get("layers", {})
-	if typeof(layers_any) != TYPE_DICTIONARY:
-		return
-	var layers: Dictionary = layers_any as Dictionary
-	if layers.has("base"):
-		_rebuild_layer_from_json(layers["base"], base_layer)
-	if layers.has("walls"):
-		_rebuild_layer_from_json(layers["walls"], walls_layer)
-	if layers.has("hazard"):
-		_rebuild_layer_from_json(layers["hazard"], hazard_layer)
-	if layers.has("marker"):
-		_rebuild_layer_from_json(layers["marker"], marker_layer)
-
+## Apply a saved coil Dictionary onto the current TileMap layers.
+#func _apply_coil(data: Dictionary) -> void:
+	## Clear target layers (keep preview separate)
+	#if base_layer: base_layer.clear()
+	#if walls_layer: walls_layer.clear()
+	#if hazard_layer: hazard_layer.clear()
+	#if marker_layer: marker_layer.clear()
+	## Pull 'layers' as Dictionary safely
+	#var layers_any: Variant = data.get("layers", {})
+	#if typeof(layers_any) != TYPE_DICTIONARY:
+		#return
+	#var layers: Dictionary = layers_any as Dictionary
+	#if layers.has("base"):
+		#_rebuild_layer_from_json(layers["base"], base_layer)
+	#if layers.has("walls"):
+		#_rebuild_layer_from_json(layers["walls"], walls_layer)
+	#if layers.has("hazard"):
+		#_rebuild_layer_from_json(layers["hazard"], hazard_layer)
+	#if layers.has("marker"):
+		#_rebuild_layer_from_json(layers["marker"], marker_layer)
 
 ## DEV MODE gate: show/hide dev-only UI
 func _on_dev_mode_changed(enabled: bool) -> void:
