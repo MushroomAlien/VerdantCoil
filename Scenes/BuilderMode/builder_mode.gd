@@ -1,16 +1,25 @@
 ## builder_mode.gd
-## Data-driven Builder: picks a brush from a registry, validates, then paints.
+## Role: UI wiring + brush selection + painting/erasing + preview + biomass label + playtest handoff.
+## All file I/O (save/load) lives in CoilIO.
+## All tile queries live in CoilQuery.
+## All validation + pathfinding live in CoilValidator.
 extends Node2D
 
+## --- Constants / Modules ---
 const CoilIO := preload("res://System/coil_io.gd")
 const CoilQueryScript := preload("res://System/coil_query.gd")
 @onready var _q: CoilQuery = CoilQueryScript.new()
 const CoilValidatorScript: GDScript = preload("res://System/coil_validator.gd")
 
-## --- External registry (set this in the Inspector) ---
-@export var brush_registry: BrushRegistry
+# Data container for validation results
+class ValidationResult:
+	var ok: bool = false
+	var messages: Array[String] = []
+	var spawn: Vector2i = Vector2i(-999999, -999999)
+	var heart: Vector2i = Vector2i(-999999, -999999)
 
-## --- Coil map layer nodes ---
+## --- Exports ---
+@export var brush_registry: BrushRegistry
 @export var preview_layer: TileMapLayer
 @export var base_layer: TileMapLayer
 @export var walls_layer: TileMapLayer
@@ -28,7 +37,6 @@ const CoilValidatorScript: GDScript = preload("res://System/coil_validator.gd")
 @onready var ignore_biomass_limit: CheckBox = $UI/DevOverlay/DevControlsRoot/DevControls/IgnoreBiomassLimit
 @onready var dev_controls_root: MarginContainer = $UI/DevOverlay/DevControlsRoot
 @onready var top_bar: VBoxContainer = $UI/TopBar
-@onready var dev_controls: VBoxContainer = $UI/DevOverlay/DevControlsRoot/DevControls
 @onready var clear_base_confirm: ConfirmationDialog = $UI/TopBar/ClearBaseConfirm
 @onready var dev_badge: Label = $UI/DevOverlay/DevBadge
 @onready var validate_dialog: AcceptDialog = $UI/TopBar/ValidateDialog
@@ -38,21 +46,18 @@ const CoilValidatorScript: GDScript = preload("res://System/coil_validator.gd")
 @onready var playtest_btn: Button = $UI/TopBar/PaletteRow/PlaytestBtn
 @onready var load_btn: Button = $UI/TopBar/PaletteRow/LoadBtn
 @onready var load_dialog: FileDialog = $UI/TopBar/LoadDialog
-
-## Size of the prefill area for Flesh (adjust to your map size)
 @export var start_flesh_rect: Rect2i = Rect2i(Vector2i(0, 0), Vector2i(24, 24))
+@export var biomass_cap: int = 100  # tweak anytime in Inspector
 
-## --- Current brush selection ---
+## --- State ---
 var _current_index: int = 0
 var _is_painting_left := false
 var _is_erasing_right := false
 var _last_preview_cell: Vector2i = Vector2i(999999, 999999)
 var _palette_buttons: Array[TextureButton] = []
-
-## --- Biomass variables ---
-@export var biomass_cap: int = 100  # tweak anytime in Inspector
 var _biomass_used: int = 0
 
+## --- UI wiring / lifecycle ---
 func _ready() -> void:
 	# Basic sanity checks
 	if brush_registry == null: push_error("❌ BrushRegistry not assigned on BuilderMode.")
@@ -122,7 +127,7 @@ func _ready() -> void:
 	if get_viewport():
 		get_viewport().size_changed.connect(_relayout_dev_controls)
 	_relayout_dev_controls()  # initial placement
-
+	
 	# --- Ignore Biomass Limit: connect and apply once on load if ON ---
 	if ignore_biomass_limit:
 		ignore_biomass_limit.button_pressed = false
@@ -144,20 +149,6 @@ func _ready() -> void:
 
 func _process(_delta: float) -> void:
 	_update_preview()
-
-func _layer_for(index: int) -> TileMapLayer:
-	match index:
-		0: return base_layer
-		1: return walls_layer
-		2: return hazard_layer
-		3: return marker_layer
-		_: return null
-
-func _cell_under_mouse() -> Vector2i:
-	# Convert current global mouse position to a TileMap cell once.
-	var mouse_world: Vector2 = get_global_mouse_position()
-	var mouse_local: Vector2 = base_layer.to_local(mouse_world)
-	return base_layer.local_to_map(mouse_local)
 
 func _unhandled_input(event: InputEvent) -> void:
 	# Mouse BUTTONS ------------------------------------------------------------
@@ -184,7 +175,27 @@ func _unhandled_input(event: InputEvent) -> void:
 			elif _is_erasing_right:
 				_erase_at(coords)
 
-## --- Selection / Status -------------------------------------------------------
+## DEV MODE gate: show/hide dev-only UI
+func _on_dev_mode_changed(enabled: bool) -> void:
+	if dev_controls_root:
+		dev_controls_root.visible = enabled  # show the entire dev panel
+	if start_with_flesh_cb:
+		start_with_flesh_cb.visible = enabled
+	if ignore_biomass_limit:
+		ignore_biomass_limit.visible = enabled  # <-- this was the missing bit
+	if dev_badge:
+		dev_badge.visible = enabled
+	_show_status("Dev Mode: " + ("ON" if enabled else "OFF"))
+
+func _relayout_dev_controls() -> void:
+	if dev_controls_root == null or top_bar == null:
+		return
+	# Place the dev checkboxes just below the whole TopBar (PaletteRow + InfoRow)
+	var r: Rect2 = top_bar.get_global_rect()
+	# 8px pad from left and from the bottom edge of TopBar
+	dev_controls_root.position = Vector2(r.position.x + 8, r.position.y + r.size.y + 8)
+
+## --- Selection / Painting & Erasing ---
 func _select_brush(index: int) -> void:
 	if brush_registry == null or index < 0 or index >= brush_registry.brushes.size():
 		_show_status("⚠️ No brush at index " + str(index))
@@ -208,9 +219,12 @@ func _select_brush(index: int) -> void:
 	var b: BrushEntry = brush_registry.brushes[index]
 	_show_status("Brush: " + (b.display_name if b.display_name != "" else "Unnamed"))
 
-func _show_status(msg: String) -> void:
-	status_label.text = msg
-	print(msg)
+func _current_brush() -> BrushEntry:
+	if brush_registry == null:
+		return null
+	if _current_index < 0 or _current_index >= brush_registry.brushes.size():
+		return null
+	return brush_registry.brushes[_current_index]
 
 ## --- Painting / Erasing -------------------------------------------------------
 func _paint_at(coords: Vector2i) -> void:
@@ -258,13 +272,91 @@ func _erase_at(coords: Vector2i) -> void:
 	# Recalc biomass after successful placement
 	_recalc_biomass()
 
-## --- Validation helpers -------------------------------------------------------
-func _current_brush() -> BrushEntry:
-	if brush_registry == null:
-		return null
-	if _current_index < 0 or _current_index >= brush_registry.brushes.size():
-		return null
-	return brush_registry.brushes[_current_index]
+# Return false silently, or route through _reject if reporting is enabled.
+func _reject_or_false(msg: String, report: bool) -> bool:
+	if report:
+		_show_status("🚫 " + msg)
+		#return _reject(msg)  # prints + shakes/beeps (if you wired SFX)
+	return false
+
+## Ensures only one spawn marker exists on the Markers layer.
+## If the tile we just placed at `coords` has custom_data is_spawn = true,
+## erase all other cells in the Markers layer that also have is_spawn = true.
+func _enforce_single_spawn_at(coords: Vector2i) -> void:
+	# Read back the tile we just placed
+	var td := marker_layer.get_cell_tile_data(coords)
+	if td == null:
+		return
+	
+	var is_spawn := bool(td.get_custom_data("is_spawn") or false)
+	if not is_spawn:
+		return  # We placed a non-spawn marker (e.g., Heartroot) — do nothing
+		
+	# Erase any other spawn markers elsewhere on the map
+	for c in marker_layer.get_used_cells():
+		if c == coords:
+			continue
+		var other_td := marker_layer.get_cell_tile_data(c)
+		if other_td != null and bool(other_td.get_custom_data("is_spawn") or false):
+			marker_layer.erase_cell(c)
+
+## Ensures only one Heartroot exists on the Markers layer.
+## If the tile at `coords` has custom_data is_goal = true,
+## erase any other cells in the Markers layer that also have is_goal = true.
+func _enforce_single_heartroot_at(coords: Vector2i) -> void:
+	var td := marker_layer.get_cell_tile_data(coords)
+	if td == null:
+		return
+	var is_goal := bool(td.get_custom_data("is_goal") or false)
+	if not is_goal:
+		return
+	
+	for c in marker_layer.get_used_cells():
+		if c == coords:
+			continue
+		var other_td := marker_layer.get_cell_tile_data(c)
+		if other_td != null and bool(other_td.get_custom_data("is_goal") or false):
+			marker_layer.erase_cell(c)
+
+## --- Preview ---
+
+## Update the preview cell under the mouse
+func _update_preview() -> void:
+	# Clear the previous preview cell
+	if preview_layer and _last_preview_cell.x < 900000:
+		preview_layer.erase_cell(_last_preview_cell)
+	
+	# Compute current mouse cell
+	var coords := _cell_under_mouse()
+	_last_preview_cell = coords
+	
+	var b := _current_brush()
+	if b == null or b.rule_profile == "ERASER":
+		return
+	
+	# Always place the ghost tile
+	if preview_layer and b.source_id >= 0:
+		preview_layer.set_cell(coords, b.source_id, b.atlas_coords)
+		# Now tint based on validity
+		var ok := _validate_placement(b, coords, false)
+		var col := Color(1, 1, 1, 0.5)
+		if not ok:
+			col = Color(1, 0.2, 0.2, 0.5)
+		preview_layer.modulate = col
+
+func _cell_under_mouse() -> Vector2i:
+	# Convert current global mouse position to a TileMap cell once.
+	var mouse_world: Vector2 = get_global_mouse_position()
+	var mouse_local: Vector2 = base_layer.to_local(mouse_world)
+	return base_layer.local_to_map(mouse_local)
+
+func _layer_for(index: int) -> TileMapLayer:
+	match index:
+		0: return base_layer
+		1: return walls_layer
+		2: return hazard_layer
+		3: return marker_layer
+		_: return null
 
 func _validate_placement(b: BrushEntry, coords: Vector2i, report := true) -> bool:
 	match b.rule_profile:
@@ -306,46 +398,39 @@ func _validate_placement(b: BrushEntry, coords: Vector2i, report := true) -> boo
 			#return _reject("Unknown rule profile: " + b.rule_profile)
 			return _reject_or_false("Unknown rule profile: " + b.rule_profile, report)
 
-## Ensures only one spawn marker exists on the Markers layer.
-## If the tile we just placed at `coords` has custom_data is_spawn = true,
-## erase all other cells in the Markers layer that also have is_spawn = true.
-func _enforce_single_spawn_at(coords: Vector2i) -> void:
-	# Read back the tile we just placed
-	var td := marker_layer.get_cell_tile_data(coords)
+## --- Biomass label ---
+## Safely read 'cost' from a cell on a given layer. If no tile or no key -> 0.
+func _tile_cost(layer: TileMapLayer, coords: Vector2i) -> int:
+	if layer == null:
+		return 0
+	var td: TileData = layer.get_cell_tile_data(coords)
 	if td == null:
+		return 0
+	var v = td.get_custom_data("cost")
+	return int(v) if (v is int) else 0
+
+## Recalculate total biomass by scanning all layers (fast enough for 24x24).
+func _recalc_biomass() -> void:
+	var total := 0
+	for layer_node in [base_layer, walls_layer, hazard_layer, marker_layer]:
+		if layer_node:
+			for c in layer_node.get_used_cells():
+				total += _tile_cost(layer_node, c)
+	_biomass_used = total
+	_update_biomass_label()
+
+## Update the label and warn softly if over cap.
+func _update_biomass_label() -> void:
+	if biomass_label == null:
 		return
 	
-	var is_spawn := bool(td.get_custom_data("is_spawn") or false)
-	if not is_spawn:
-		return  # We placed a non-spawn marker (e.g., Heartroot) — do nothing
-		
-	# Erase any other spawn markers elsewhere on the map
-	for c in marker_layer.get_used_cells():
-		if c == coords:
-			continue
-		var other_td := marker_layer.get_cell_tile_data(c)
-		if other_td != null and bool(other_td.get_custom_data("is_spawn") or false):
-			marker_layer.erase_cell(c)
+	biomass_label.text = "Biomass: %d / %d" % [_biomass_used, biomass_cap]
+	var col := Color(1, 1, 1)
+	if _biomass_used > biomass_cap:
+		col = Color(1, 0.25, 0.25)
+	biomass_label.modulate = col
 
-## Ensures only one Heartroot exists on the Markers layer.
-## If the tile at `coords` has custom_data is_goal = true,
-## erase any other cells in the Markers layer that also have is_goal = true.
-func _enforce_single_heartroot_at(coords: Vector2i) -> void:
-	var td := marker_layer.get_cell_tile_data(coords)
-	if td == null:
-		return
-	var is_goal := bool(td.get_custom_data("is_goal") or false)
-	if not is_goal:
-		return
-	
-	for c in marker_layer.get_used_cells():
-		if c == coords:
-			continue
-		var other_td := marker_layer.get_cell_tile_data(c)
-		if other_td != null and bool(other_td.get_custom_data("is_goal") or false):
-			marker_layer.erase_cell(c)
-
-## --- Start-with-Flesh ---------------------------------------------------------
+## --- Start-with-Flesh controls ---
 ## Called when the checkbox is toggled. We only *add* flesh; never auto-erase.
 func _on_start_with_flesh_toggled(pressed: bool) -> void:
 	if pressed:
@@ -445,86 +530,7 @@ func _smart_clear_base_rect(rect: Rect2i) -> void:
 			if base_layer.get_cell_source_id(c) != -1:
 				base_layer.erase_cell(c)
 
-## Helper: find a brush whose rule_profile is "BASE"
-func _find_default_flesh_brush() -> BrushEntry:
-	if brush_registry == null:
-		return null
-	for be in brush_registry.brushes:
-		if be is BrushEntry and be.rule_profile == "BASE" and be.source_id >= 0:
-			return be
-	return null
-
-# Return false silently, or route through _reject if reporting is enabled.
-func _reject_or_false(msg: String, report: bool) -> bool:
-	if report:
-		_show_status("🚫 " + msg)
-		#return _reject(msg)  # prints + shakes/beeps (if you wired SFX)
-	return false
-
-## Update the preview cell under the mouse
-func _update_preview() -> void:
-	# Clear the previous preview cell
-	if preview_layer and _last_preview_cell.x < 900000:
-		preview_layer.erase_cell(_last_preview_cell)
-	
-	# Compute current mouse cell
-	var coords := _cell_under_mouse()
-	_last_preview_cell = coords
-	
-	var b := _current_brush()
-	if b == null or b.rule_profile == "ERASER":
-		return
-	
-	# Always place the ghost tile
-	if preview_layer and b.source_id >= 0:
-		preview_layer.set_cell(coords, b.source_id, b.atlas_coords)
-		# Now tint based on validity
-		var ok := _validate_placement(b, coords, false)
-		var col := Color(1, 1, 1, 0.5)
-		if not ok:
-			col = Color(1, 0.2, 0.2, 0.5)
-		preview_layer.modulate = col
-
-## --- Biomass helpers ----------------------------------------------------------
-## Safely read 'cost' from a cell on a given layer. If no tile or no key -> 0.
-func _tile_cost(layer: TileMapLayer, coords: Vector2i) -> int:
-	if layer == null:
-		return 0
-	var td: TileData = layer.get_cell_tile_data(coords)
-	if td == null:
-		return 0
-	var v = td.get_custom_data("cost")
-	return int(v) if (v is int) else 0
-
-## Recalculate total biomass by scanning all layers (fast enough for 24x24).
-func _recalc_biomass() -> void:
-	var total := 0
-	for layer_node in [base_layer, walls_layer, hazard_layer, marker_layer]:
-		if layer_node:
-			for c in layer_node.get_used_cells():
-				total += _tile_cost(layer_node, c)
-	_biomass_used = total
-	_update_biomass_label()
-
-## Update the label and warn softly if over cap.
-func _update_biomass_label() -> void:
-	if biomass_label == null:
-		return
-	
-	biomass_label.text = "Biomass: %d / %d" % [_biomass_used, biomass_cap]
-	var col := Color(1, 1, 1)
-	if _biomass_used > biomass_cap:
-		col = Color(1, 0.25, 0.25)
-	biomass_label.modulate = col
-
-# --- Actions: Validate / Save / Playtest --------------------------------------
-
-func _on_validate_pressed() -> void:
-	# Run a full check list and show a friendly popup
-	_recalc_biomass()
-	var result := _run_validation(false) # always strict on Validate
-	_show_validation_dialog(result)
-
+## --- Save / Load UI handlers ---
 func _on_save_pressed() -> void:
 	# Keep numbers fresh in the save
 	_recalc_biomass()
@@ -551,7 +557,6 @@ func _on_load_pressed() -> void:
 	# Ensure save_dir exists (e.g., "user://coils")
 	if DirAccess.open(save_dir) == null:
 		DirAccess.make_dir_recursive_absolute(save_dir)
-
 	if load_dialog:
 		load_dialog.access = FileDialog.ACCESS_USERDATA
 		load_dialog.current_dir = save_dir        # e.g., "user://coils"
@@ -559,38 +564,21 @@ func _on_load_pressed() -> void:
 		# load_dialog.filters = PackedStringArray(["*.json"])
 		load_dialog.popup_centered()
 
-func _on_playtest_pressed() -> void:
-	# Validate first
-	_recalc_biomass()
-	var allow_over := false
-	if has_node("/root/GameFlags"):
-		var gf = get_node("/root/GameFlags")
-		# dev mode must be on, and the checkbox must be ticked
-		if bool(gf.dev_mode_enabled) and ignore_biomass_limit and ignore_biomass_limit.button_pressed:
-			allow_over = true
-	if allow_over and _biomass_used > biomass_cap:
-		_show_status("Dev bypass: biomass over cap (%d/%d), playtesting anyway." % [_biomass_used, biomass_cap])
-	var result := _run_validation(allow_over)
-	if not result.ok:
-		_show_validation_dialog(result)
+func _on_load_file_selected(path: String) -> void:
+	var f := FileAccess.open(path, FileAccess.READ)
+	if f == null:
+		_show_status("Load failed (" + str(FileAccess.get_open_error()) + ").")
 		return
-	
-	# Optional but handy: autosave a snapshot
-	_autosave_playtest()
-	
-	# Hand off to Explore via CoilSession
-	var data: Dictionary = _capture_coil()
-	if has_node("/root/CoilSession"):
-		get_node("/root/CoilSession").call("start_playtest", data)
-	else:
-		_show_status("Playtest: CoilSession autoload missing.")
-	
-# Data container for validation results
-class ValidationResult:
-	var ok: bool = false
-	var messages: Array[String] = []
-	var spawn: Vector2i = Vector2i(-999999, -999999)
-	var heart: Vector2i = Vector2i(-999999, -999999)
+	var txt: String = f.get_as_text()
+	f.close()
+	var parsed_v: Variant = JSON.parse_string(txt)
+	if typeof(parsed_v) != TYPE_DICTIONARY:
+		_show_status("Load failed: JSON malformed.")
+		return
+	var data: Dictionary = parsed_v as Dictionary
+	CoilIO.apply_coil(data, base_layer, walls_layer, hazard_layer, marker_layer)
+	_recalc_biomass()
+	_show_status("Loaded: " + path)
 
 func _autosave_playtest() -> void:
 	if DirAccess.open(save_dir) == null:
@@ -602,10 +590,36 @@ func _autosave_playtest() -> void:
 		f.close()
 		_show_status("Autosaved: " + path)
 
+## Capture the whole coil (meta + each layer).
+func _capture_coil() -> Dictionary:
+	var tileset_path: String = ""
+	if coil_map.tile_set:
+		tileset_path = coil_map.tile_set.resource_path
+	return {
+		"meta": {
+			"biomass_cap": biomass_cap,
+			"biomass_used": _biomass_used,
+			"tileset": tileset_path
+		},
+		"layers": {
+			"base": CoilIO.serialize_layer(base_layer),
+			"walls": CoilIO.serialize_layer(walls_layer),
+			"hazard": CoilIO.serialize_layer(hazard_layer),
+			"marker": CoilIO.serialize_layer(marker_layer)
+		}
+	}
 
+## --- Validation & Playtest handoff ---
+func _on_validate_pressed() -> void:
+	# Run a full check list and show a friendly popup
+	_recalc_biomass()
+	var result := _run_validation(false) # always strict on Validate
+	_show_validation_dialog(result)
+
+## Delegate validation to CoilValidator. Adapt result to ValidationResult for UI.
 func _run_validation(ignore_biomass: bool = false) -> ValidationResult:
 	var out := ValidationResult.new()
-
+	
 	var result: Dictionary = CoilValidatorScript.validate(
 		base_layer,
 		walls_layer,
@@ -615,36 +629,25 @@ func _run_validation(ignore_biomass: bool = false) -> ValidationResult:
 		biomass_cap,
 		ignore_biomass
 	)
-
+	
 	var ok_flag := false
 	if result.has("ok"):
 		ok_flag = bool(result["ok"])
 	out.ok = ok_flag
-
+	
 	out.messages = []
 	if result.has("messages") and result["messages"] is Array:
 		for m in result["messages"]:
 			out.messages.append(String(m))
-
+	
 	if result.has("spawn") and result["spawn"] is Vector2i:
 		out.spawn = result["spawn"]
 	if result.has("heart") and result["heart"] is Vector2i:
 		out.heart = result["heart"]
-
+	
 	if out.ok and out.messages.is_empty():
 		out.messages.append("✅ Valid coil. Ready to Playtest or Save.")
-
-	return out
-
-# Find all cells in Markers layer that have a given boolean flag in custom_data.
-func _find_marker_cells(flag_key: String) -> Array[Vector2i]:
-	var out: Array[Vector2i] = []
-	if marker_layer == null:
-		return out
-	for c in marker_layer.get_used_cells():
-		var td := marker_layer.get_cell_tile_data(c)
-		if td != null and bool(td.get_custom_data(flag_key) or false):
-			out.append(c)
+	
 	return out
 
 # Fill and show the AcceptDialog nicely.
@@ -677,57 +680,45 @@ func _show_validation_dialog(r: ValidationResult) -> void:
 		validate_body.append_text("• Heartroot at %s\n" % [str(r.heart)])
 	validate_dialog.popup_centered() # uses 'size' above
 
-## Capture the whole coil (meta + each layer).
-func _capture_coil() -> Dictionary:
-	return {
-		"meta": {
-			"biomass_cap": biomass_cap,
-			"biomass_used": _biomass_used,
-			"tileset": coil_map.tile_set and coil_map.tile_set.resource_path or ""
-		},
-		"layers": {
-			"base": CoilIO.serialize_layer(base_layer),
-			"walls": CoilIO.serialize_layer(walls_layer),
-			"hazard": CoilIO.serialize_layer(hazard_layer),
-			"marker": CoilIO.serialize_layer(marker_layer)
-		}
-	}
-
-## --- Load ---
-func _on_load_file_selected(path: String) -> void:
-	var f := FileAccess.open(path, FileAccess.READ)
-	if f == null:
-		_show_status("Load failed (" + str(FileAccess.get_open_error()) + ").")
-		return
-	var txt: String = f.get_as_text()
-	f.close()
-	var parsed_v: Variant = JSON.parse_string(txt)
-	if typeof(parsed_v) != TYPE_DICTIONARY:
-		_show_status("Load failed: JSON malformed.")
-		return
-	var data: Dictionary = parsed_v as Dictionary
-	CoilIO.apply_coil(data, base_layer, walls_layer, hazard_layer, marker_layer)
+func _on_playtest_pressed() -> void:
+	# Validate first
 	_recalc_biomass()
-	_show_status("Loaded: " + path)
-
-## DEV MODE gate: show/hide dev-only UI
-func _on_dev_mode_changed(enabled: bool) -> void:
-	if dev_controls_root:
-		dev_controls_root.visible = enabled  # show the entire dev panel
-	if start_with_flesh_cb:
-		start_with_flesh_cb.visible = enabled
-	if ignore_biomass_limit:
-		ignore_biomass_limit.visible = enabled  # <-- this was the missing bit
-	if dev_badge:
-		dev_badge.visible = enabled
-	_show_status("Dev Mode: " + ("ON" if enabled else "OFF"))
-
-func _relayout_dev_controls() -> void:
-	if dev_controls_root == null or top_bar == null:
+	var allow_over := false
+	if has_node("/root/GameFlags"):
+		var gf = get_node("/root/GameFlags")
+		# dev mode must be on, and the checkbox must be ticked
+		if bool(gf.dev_mode_enabled) and ignore_biomass_limit and ignore_biomass_limit.button_pressed:
+			allow_over = true
+	if allow_over and _biomass_used > biomass_cap:
+		_show_status("Dev bypass: biomass over cap (%d/%d), playtesting anyway." % [_biomass_used, biomass_cap])
+	var result := _run_validation(allow_over)
+	if not result.ok:
+		_show_validation_dialog(result)
 		return
-	# Place the dev checkboxes just below the whole TopBar (PaletteRow + InfoRow)
-	var r: Rect2 = top_bar.get_global_rect()
-	# 8px pad from left and from the bottom edge of TopBar
-	dev_controls_root.position = Vector2(r.position.x + 8, r.position.y + r.size.y + 8)
+	
+	# Optional but handy: autosave a snapshot
+	_autosave_playtest()
+	
+	# Hand off to Explore via CoilSession
+	var data: Dictionary = _capture_coil()
+	if has_node("/root/CoilSession"):
+		get_node("/root/CoilSession").call("start_playtest", data)
+	else:
+		_show_status("Playtest: CoilSession autoload missing.")
+
+func _show_status(msg: String) -> void:
+	status_label.text = msg
+	print(msg)
+
+## Helper: find a brush whose rule_profile is "BASE"
+func _find_default_flesh_brush() -> BrushEntry:
+	if brush_registry == null:
+		return null
+	for be in brush_registry.brushes:
+		if be is BrushEntry and be.rule_profile == "BASE" and be.source_id >= 0:
+			return be
+	return null
+
+# --- Actions: Validate / Save / Playtest --------------------------------------
 
 ## end builder_mode.gd
