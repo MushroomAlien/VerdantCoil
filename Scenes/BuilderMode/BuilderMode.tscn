@@ -131,18 +131,6 @@ custom_minimum_size = Vector2(4, 0)
 layout_mode = 2
 size_flags_vertical = 4
 
-[node name="StartWithFlesh" type="CheckBox" parent="UI/TopBar"]
-layout_mode = 2
-size_flags_horizontal = 3
-focus_mode = 0
-text = "Start with 24 x 24 base"
-
-[node name="IgnoreBiomassLimit" type="CheckBox" parent="UI/TopBar"]
-layout_mode = 2
-size_flags_horizontal = 3
-focus_mode = 0
-text = "Ignore Biomass Limit"
-
 [node name="InfoRow" type="HBoxContainer" parent="UI/TopBar"]
 layout_mode = 2
 size_flags_vertical = 4
@@ -155,7 +143,7 @@ text = "[READY]"
 
 [node name="BiomassLabel" type="Label" parent="UI/TopBar/InfoRow"]
 layout_mode = 2
-size_flags_horizontal = 4
+size_flags_horizontal = 8
 text = "Biomass: 0 / 100"
 horizontal_alignment = 2
 
@@ -209,5 +197,27 @@ theme_override_colors/font_color = Color(1, 0.394517, 0.0120473, 1)
 text = "DEV"
 horizontal_alignment = 1
 vertical_alignment = 1
+
+[node name="DevControlsRoot" type="MarginContainer" parent="UI/DevOverlay"]
+custom_minimum_size = Vector2(8, 36)
+layout_mode = 1
+offset_right = 202.0
+offset_bottom = 70.0
+
+[node name="DevControls" type="VBoxContainer" parent="UI/DevOverlay/DevControlsRoot"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="StartWithFlesh" type="CheckBox" parent="UI/DevOverlay/DevControlsRoot/DevControls"]
+layout_mode = 2
+size_flags_horizontal = 3
+focus_mode = 0
+text = "Start with 24 x 24 base"
+
+[node name="IgnoreBiomassLimit" type="CheckBox" parent="UI/DevOverlay/DevControlsRoot/DevControls"]
+layout_mode = 2
+size_flags_horizontal = 3
+focus_mode = 0
+text = "Ignore Biomass Limit"
 
 [node name="SceneTreePrinter" parent="." instance=ExtResource("4_11ljt")]

@@ -1,6 +1,5 @@
 ## builder_mode.gd
 ## Data-driven Builder: picks a brush from a registry, validates, then paints.
-
 extends Node2D
 
 const DIRS: Array[Vector2i] = [
@@ -25,8 +24,11 @@ const DIRS: Array[Vector2i] = [
 @onready var palette_row: HBoxContainer = $UI/TopBar/PaletteRow
 @onready var status_label: Label = $UI/TopBar/InfoRow/StatusLabel
 @onready var biomass_label: Label = $UI/TopBar/InfoRow/BiomassLabel
-@onready var start_with_flesh_cb: CheckBox = $UI/TopBar/StartWithFlesh
-@onready var ignore_biomass_limit: CheckBox = $UI/TopBar/IgnoreBiomassLimit
+@onready var start_with_flesh_cb: CheckBox = $UI/DevOverlay/DevControlsRoot/DevControls/StartWithFlesh
+@onready var ignore_biomass_limit: CheckBox = $UI/DevOverlay/DevControlsRoot/DevControls/IgnoreBiomassLimit
+@onready var dev_controls_root: MarginContainer = $UI/DevOverlay/DevControlsRoot
+@onready var top_bar: VBoxContainer = $UI/TopBar
+@onready var dev_controls: VBoxContainer = $UI/DevOverlay/DevControlsRoot/DevControls
 @onready var clear_base_confirm: ConfirmationDialog = $UI/TopBar/ClearBaseConfirm
 @onready var dev_badge: Label = $UI/DevOverlay/DevBadge
 @onready var validate_dialog: AcceptDialog = $UI/TopBar/ValidateDialog
@@ -115,11 +117,16 @@ func _ready() -> void:
 		var gf = get_node("/root/GameFlags")
 		gf.dev_mode_changed.connect(_on_dev_mode_changed)
 		_on_dev_mode_changed(gf.dev_mode_enabled)
-	
+	if top_bar:
+		top_bar.resized.connect(_relayout_dev_controls)
+	if get_viewport():
+		get_viewport().size_changed.connect(_relayout_dev_controls)
+	_relayout_dev_controls()  # initial placement
+
 	# --- Ignore Biomass Limit: connect and apply once on load if ON ---
 	if ignore_biomass_limit:
 		ignore_biomass_limit.button_pressed = false
-		ignore_biomass_limit.visible = false # hidden unless Dev Mode is ON
+		#ignore_biomass_limit.visible = false # hidden unless Dev Mode is ON
 		ignore_biomass_limit.tooltip_text = "Dev only: bypass biomass cap when Playtesting."
 	
 	# ---- restore coil if returning from Playtest ----
@@ -831,14 +838,24 @@ func _apply_coil(data: Dictionary) -> void:
 		_rebuild_layer_from_json(layers["marker"], marker_layer)
 
 
-## DEV MODE gate: show/hide dev-only UI and ping status
+## DEV MODE gate: show/hide dev-only UI
 func _on_dev_mode_changed(enabled: bool) -> void:
+	if dev_controls_root:
+		dev_controls_root.visible = enabled  # show the entire dev panel
 	if start_with_flesh_cb:
 		start_with_flesh_cb.visible = enabled
 	if ignore_biomass_limit:
-		ignore_biomass_limit.visible = enabled
+		ignore_biomass_limit.visible = enabled  # <-- this was the missing bit
 	if dev_badge:
 		dev_badge.visible = enabled
 	_show_status("Dev Mode: " + ("ON" if enabled else "OFF"))
+
+func _relayout_dev_controls() -> void:
+	if dev_controls_root == null or top_bar == null:
+		return
+	# Place the dev checkboxes just below the whole TopBar (PaletteRow + InfoRow)
+	var r: Rect2 = top_bar.get_global_rect()
+	# 8px pad from left and from the bottom edge of TopBar
+	dev_controls_root.position = Vector2(r.position.x + 8, r.position.y + r.size.y + 8)
 
 ## end builder_mode.gd
