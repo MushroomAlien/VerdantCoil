@@ -1,7 +1,7 @@
 [gd_scene load_steps=6 format=3 uid="uid://c15uxbq7w6irk"]
 
 [ext_resource type="Script" uid="uid://di4q1pkimuoed" path="res://Scenes/UI/upgrade_bar.gd" id="1_cfu8i"]
-[ext_resource type="Texture2D" uid="uid://c4eqrqt63s4vg" path="res://Assets/roguelikeSheet_transparent_32x32.png" id="1_woh8q"]
+[ext_resource type="Texture2D" uid="uid://b7tt3ydw5qm6q" path="res://Assets/roguelikeSheet_transparent_32x32.png" id="1_woh8q"]
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_cfu8i"]
 atlas = ExtResource("1_woh8q")

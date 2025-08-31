@@ -3,10 +3,9 @@
 extends Node2D
 
 const CoilIO := preload("res://System/coil_io.gd")
-const DIRS: Array[Vector2i] = [
-	Vector2i(1, 0), Vector2i(-1, 0),
-	Vector2i(0, 1), Vector2i(0, -1)
-]
+const CoilQueryScript := preload("res://System/coil_query.gd")
+@onready var _q: CoilQuery = CoilQueryScript.new()
+const CoilValidatorScript: GDScript = preload("res://System/coil_validator.gd")
 
 ## --- External registry (set this in the Inspector) ---
 @export var brush_registry: BrushRegistry
@@ -267,19 +266,6 @@ func _current_brush() -> BrushEntry:
 		return null
 	return brush_registry.brushes[_current_index]
 
-func _has_base(coords: Vector2i) -> bool:
-	return base_layer.get_cell_source_id(coords) != -1
-
-func _has_wall(coords: Vector2i) -> bool:
-	return walls_layer.get_cell_source_id(coords) != -1
-
-func _hazard_kind_at(coords: Vector2i) -> String:
-	var td: TileData = hazard_layer.get_cell_tile_data(coords)
-	if td == null:
-		return ""
-	var v = td.get_custom_data("hazard")
-	return String(v) if (v is String) else ""
-
 func _validate_placement(b: BrushEntry, coords: Vector2i, report := true) -> bool:
 	match b.rule_profile:
 		"BASE":
@@ -288,28 +274,28 @@ func _validate_placement(b: BrushEntry, coords: Vector2i, report := true) -> boo
 		
 		"WALL":
 			# Rule A: Walls must sit on Flesh
-			if not _has_base(coords):
+			if not _q.has_base(base_layer, coords):
 				return _reject_or_false("Walls require Flesh beneath.", report)
 			# Rule B: Walls cannot overlap an existing hazard
-			if _hazard_kind_at(coords) != "":
+			if _q.get_hazard_kind(hazard_layer, coords) != "":
 				return _reject_or_false("Walls cannot overlap pools.", report)
 			return true
 		
 		"POOL":
 			# Rule A: Pools must sit on Flesh
-			if not _has_base(coords):
+			if not _q.has_base(base_layer, coords):
 				return _reject_or_false("Pools require Flesh beneath.", report)
 			# Rule B: Pools cannot overlap walls (same cell)
-			if _has_wall(coords):
+			if _q.has_wall(walls_layer, coords):
 				return _reject_or_false("Pools cannot overlap walls.", report)
 			return true
 		
 		"MARKER":
 			# Rule A: Markers require Flesh
-			if not _has_base(coords):
+			if not _q.has_base(base_layer, coords):
 				return _reject_or_false("Markers require Flesh beneath.", report)
 			# Rule B: Must not be blocked or hazardous
-			if _has_wall(coords) or _hazard_kind_at(coords) != "":
+			if _q.has_wall(walls_layer, coords) or _q.get_hazard_kind(hazard_layer, coords) != "":
 				return _reject_or_false("Markers can’t sit under walls or pools.", report)
 			return true
 		
@@ -616,41 +602,39 @@ func _autosave_playtest() -> void:
 		f.close()
 		_show_status("Autosaved: " + path)
 
-# Run the checks defined in our docs (spawn, heartroot, solvable path).
-# Biomass budget check is kept soft here until your BiomassManager is in.
+
 func _run_validation(ignore_biomass: bool = false) -> ValidationResult:
-	var r := ValidationResult.new()
-	
-	# 1) Exactly one Spawn and Heartroot (Markers layer)
-	var spawn_cells := _find_marker_cells("is_spawn")
-	var heart_cells := _find_marker_cells("is_goal")
-	if spawn_cells.size() != 1:
-		r.messages.append("❌ Place exactly one Spawn (found %d)." % spawn_cells.size())
-	else:
-		r.spawn = spawn_cells[0]
-	if heart_cells.size() != 1:
-		r.messages.append("❌ Place exactly one Heartroot (found %d)." % heart_cells.size())
-	else:
-		r.heart = heart_cells[0]
-		
-	# 2) Path exists from Spawn → Heartroot (walkable flesh, no walls, no blocking hazards)
-	if r.spawn.x > -900000 and r.heart.x > -900000:
-		if not _is_reachable(r.spawn, r.heart):
-			r.messages.append("❌ Heartroot unreachable from Spawn.")
-	else:
-		# If either is missing, the path check is moot.
-		pass
-	
-	# 3) Biomass must be under or equal to the cap (soft check for 1.4)
-	if not ignore_biomass and _biomass_used > biomass_cap:
-		var over := _biomass_used - biomass_cap
-		r.messages.append("❌ Biomass over cap by %d (used %d / %d)." % [over, _biomass_used, biomass_cap])
-		
-	# Result state
-	r.ok = (r.messages.size() == 0)
-	if r.ok:
-		r.messages.append("✅ Valid coil. Ready to Playtest or Save.")
-	return r
+	var out := ValidationResult.new()
+
+	var result: Dictionary = CoilValidatorScript.validate(
+		base_layer,
+		walls_layer,
+		hazard_layer,
+		marker_layer,
+		_biomass_used,
+		biomass_cap,
+		ignore_biomass
+	)
+
+	var ok_flag := false
+	if result.has("ok"):
+		ok_flag = bool(result["ok"])
+	out.ok = ok_flag
+
+	out.messages = []
+	if result.has("messages") and result["messages"] is Array:
+		for m in result["messages"]:
+			out.messages.append(String(m))
+
+	if result.has("spawn") and result["spawn"] is Vector2i:
+		out.spawn = result["spawn"]
+	if result.has("heart") and result["heart"] is Vector2i:
+		out.heart = result["heart"]
+
+	if out.ok and out.messages.is_empty():
+		out.messages.append("✅ Valid coil. Ready to Playtest or Save.")
+
+	return out
 
 # Find all cells in Markers layer that have a given boolean flag in custom_data.
 func _find_marker_cells(flag_key: String) -> Array[Vector2i]:
@@ -662,39 +646,6 @@ func _find_marker_cells(flag_key: String) -> Array[Vector2i]:
 		if td != null and bool(td.get_custom_data(flag_key) or false):
 			out.append(c)
 	return out
-
-# Simple BFS for reachability on our rules (flesh required, no walls, no hazards).
-func _is_reachable(start: Vector2i, goal: Vector2i) -> bool:
-	# Trivial case: same cell
-	if start == goal:
-		return true
-	# visited can be typed; Vector2i works fine as a Dictionary key
-	var visited: Dictionary = {}
-	var q: Array[Vector2i] = []
-	q.append(start)
-	visited[start] = true
-	while q.size() > 0:
-		# pop_front() returns Variant → cast or type the variable explicitly
-		var cur: Vector2i = q.pop_front() as Vector2i
-		if cur == goal:
-			return true
-		# DIRS is a typed Array[Vector2i], so 'dir' is Vector2i too
-		for dir in DIRS:
-			var nxt: Vector2i = cur + dir
-			# Walk rules: must have Flesh, no Walls, no Hazards
-			# ---- Traversal rules (MVP):
-			# 1) Must have Flesh on Base
-			if not _has_base(nxt):
-				continue
-			# 2) Solid walls block (digest walls DO NOT block)
-			if _is_solid_wall(nxt):
-				continue
-			# 3) Hazards do NOT block (acid/sticky are passable with upgrades)
-			#    -> intentionally no check of _hazard_kind_at(nxt)
-			if not visited.has(nxt):
-				visited[nxt] = true
-				q.append(nxt)
-	return false
 
 # Fill and show the AcceptDialog nicely.
 func _show_validation_dialog(r: ValidationResult) -> void:
@@ -726,43 +677,6 @@ func _show_validation_dialog(r: ValidationResult) -> void:
 		validate_body.append_text("• Heartroot at %s\n" % [str(r.heart)])
 	validate_dialog.popup_centered() # uses 'size' above
 
-# Returns true only when a SOLID wall tile is at coords.
-func _is_solid_wall(coords: Vector2i) -> bool:
-	if walls_layer == null:
-		return false
-	var td: TileData = walls_layer.get_cell_tile_data(coords)
-	if td == null:
-		return false
-	# Preferred: boolean custom data
-	var v = td.get_custom_data("is_solid")
-	if v is bool:
-		return v
-	# Fallback: string kind, e.g. "SOLID" / "DIGEST"
-	var k = td.get_custom_data("wall_kind")
-	if k is String:
-		return (String(k) == "SOLID")
-	# If no metadata, be conservative: treat as solid.
-	return true
-
-## --- JSON save and load file helper funcions
-
-### Serialize one TileMapLayer -> array of cells we can rebuild later.
-#func _serialize_layer(layer: TileMapLayer) -> Array:
-	#var out: Array = []
-	#if layer == null:
-		#return out
-	#for c in layer.get_used_cells():
-		#var sid := layer.get_cell_source_id(c)
-		#if sid == -1:
-			#continue
-		#var atlas: Vector2i = layer.get_cell_atlas_coords(c)
-		#out.append({
-			#"x": c.x, "y": c.y,
-			#"source_id": sid,
-			#"atlas_x": atlas.x, "atlas_y": atlas.y
-		#})
-	#return out
-
 ## Capture the whole coil (meta + each layer).
 func _capture_coil() -> Dictionary:
 	return {
@@ -780,7 +694,6 @@ func _capture_coil() -> Dictionary:
 	}
 
 ## --- Load ---
-
 func _on_load_file_selected(path: String) -> void:
 	var f := FileAccess.open(path, FileAccess.READ)
 	if f == null:
@@ -796,47 +709,6 @@ func _on_load_file_selected(path: String) -> void:
 	CoilIO.apply_coil(data, base_layer, walls_layer, hazard_layer, marker_layer)
 	_recalc_biomass()
 	_show_status("Loaded: " + path)
-
-## Rebuild one TileMapLayer from JSON array: [{x,y,source_id,atlas_x,atlas_y}, ...]
-#func _rebuild_layer_from_json(arr_any: Variant, layer: TileMapLayer) -> void:
-	#if layer == null:
-		#return
-	#if typeof(arr_any) != TYPE_ARRAY:
-		#return
-	#var arr: Array = arr_any
-	#for cell_any in arr:
-		#if typeof(cell_any) != TYPE_DICTIONARY:
-			#continue
-		#var cell: Dictionary = cell_any as Dictionary
-		#if not (cell.has("x") and cell.has("y") and cell.has("source_id")):
-			#continue
-		#var coords: Vector2i = Vector2i(int(cell["x"]), int(cell["y"]))
-		#var sid: int = int(cell["source_id"])
-		#var ac: Vector2i = Vector2i.ZERO
-		#if cell.has("atlas_x") and cell.has("atlas_y"):
-			#ac = Vector2i(int(cell["atlas_x"]), int(cell["atlas_y"]))
-		#layer.set_cell(coords, sid, ac)
-
-## Apply a saved coil Dictionary onto the current TileMap layers.
-#func _apply_coil(data: Dictionary) -> void:
-	## Clear target layers (keep preview separate)
-	#if base_layer: base_layer.clear()
-	#if walls_layer: walls_layer.clear()
-	#if hazard_layer: hazard_layer.clear()
-	#if marker_layer: marker_layer.clear()
-	## Pull 'layers' as Dictionary safely
-	#var layers_any: Variant = data.get("layers", {})
-	#if typeof(layers_any) != TYPE_DICTIONARY:
-		#return
-	#var layers: Dictionary = layers_any as Dictionary
-	#if layers.has("base"):
-		#_rebuild_layer_from_json(layers["base"], base_layer)
-	#if layers.has("walls"):
-		#_rebuild_layer_from_json(layers["walls"], walls_layer)
-	#if layers.has("hazard"):
-		#_rebuild_layer_from_json(layers["hazard"], hazard_layer)
-	#if layers.has("marker"):
-		#_rebuild_layer_from_json(layers["marker"], marker_layer)
 
 ## DEV MODE gate: show/hide dev-only UI
 func _on_dev_mode_changed(enabled: bool) -> void:
