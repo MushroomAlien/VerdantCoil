@@ -1,8 +1,9 @@
-[gd_scene load_steps=4 format=3 uid="uid://30d2424oam6i"]
+[gd_scene load_steps=5 format=3 uid="uid://30d2424oam6i"]
 
 [ext_resource type="TileSet" uid="uid://0dggvm2m4qyl" path="res://Assets/Resources/flesh_tile.tres" id="1_8psy0"]
 [ext_resource type="Script" uid="uid://dktegqxr56fql" path="res://Scenes/BuilderMode/builder_mode.gd" id="1_y85i2"]
 [ext_resource type="Resource" uid="uid://bscmx8itty5qg" path="res://System/brush_registry.tres" id="2_obs3p"]
+[ext_resource type="PackedScene" uid="uid://khw225w867t3" path="res://System/debug/scene_tree_printer.tscn" id="4_11ljt"]
 
 [node name="BuilderMode" type="Node2D" node_paths=PackedStringArray("preview_layer", "base_layer", "walls_layer", "hazard_layer", "marker_layer")]
 script = ExtResource("1_y85i2")
@@ -136,6 +137,12 @@ size_flags_horizontal = 3
 focus_mode = 0
 text = "Start with 24 x 24 base"
 
+[node name="IgnoreBiomassLimit" type="CheckBox" parent="UI/TopBar"]
+layout_mode = 2
+size_flags_horizontal = 3
+focus_mode = 0
+text = "Ignore Biomass Limit"
+
 [node name="InfoRow" type="HBoxContainer" parent="UI/TopBar"]
 layout_mode = 2
 size_flags_vertical = 4
@@ -202,3 +209,5 @@ theme_override_colors/font_color = Color(1, 0.394517, 0.0120473, 1)
 text = "DEV"
 horizontal_alignment = 1
 vertical_alignment = 1
+
+[node name="SceneTreePrinter" parent="." instance=ExtResource("4_11ljt")]

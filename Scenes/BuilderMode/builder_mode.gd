@@ -26,6 +26,7 @@ const DIRS: Array[Vector2i] = [
 @onready var status_label: Label = $UI/TopBar/InfoRow/StatusLabel
 @onready var biomass_label: Label = $UI/TopBar/InfoRow/BiomassLabel
 @onready var start_with_flesh_cb: CheckBox = $UI/TopBar/StartWithFlesh
+@onready var ignore_biomass_limit: CheckBox = $UI/TopBar/IgnoreBiomassLimit
 @onready var clear_base_confirm: ConfirmationDialog = $UI/TopBar/ClearBaseConfirm
 @onready var dev_badge: Label = $UI/DevOverlay/DevBadge
 @onready var validate_dialog: AcceptDialog = $UI/TopBar/ValidateDialog
@@ -98,11 +99,11 @@ func _ready() -> void:
 			child.self_modulate = Color(0.7, 0.7, 0.7, 1.0)
 			child.scale = Vector2.ONE
 	
-	# Default select the first brush, if any
+	# --- Default select the first brush, if any ---
 	if brush_registry != null and brush_registry.brushes.size() > 0:
 		_select_brush(0)
 	
-	# -- Start-with-Flesh: connect and apply once on load if ON
+	# --- Start-with-Flesh: connect and apply once on load if ON ---
 	if start_with_flesh_cb:
 		start_with_flesh_cb.toggled.connect(_on_start_with_flesh_toggled)
 		_apply_start_with_flesh(start_with_flesh_cb.button_pressed)
@@ -114,6 +115,12 @@ func _ready() -> void:
 		var gf = get_node("/root/GameFlags")
 		gf.dev_mode_changed.connect(_on_dev_mode_changed)
 		_on_dev_mode_changed(gf.dev_mode_enabled)
+	
+	# --- Ignore Biomass Limit: connect and apply once on load if ON ---
+	if ignore_biomass_limit:
+		ignore_biomass_limit.button_pressed = false
+		ignore_biomass_limit.visible = false # hidden unless Dev Mode is ON
+		ignore_biomass_limit.tooltip_text = "Dev only: bypass biomass cap when Playtesting."
 	
 	# ---- restore coil if returning from Playtest ----
 	if has_node("/root/CoilSession"):
@@ -521,7 +528,7 @@ func _update_biomass_label() -> void:
 func _on_validate_pressed() -> void:
 	# Run a full check list and show a friendly popup
 	_recalc_biomass()
-	var result := _run_validation()
+	var result := _run_validation(false) # always strict on Validate
 	_show_validation_dialog(result)
 
 func _on_save_pressed() -> void:
@@ -561,7 +568,15 @@ func _on_load_pressed() -> void:
 func _on_playtest_pressed() -> void:
 	# Validate first
 	_recalc_biomass()
-	var result := _run_validation()
+	var allow_over := false
+	if has_node("/root/GameFlags"):
+		var gf = get_node("/root/GameFlags")
+		# dev mode must be on, and the checkbox must be ticked
+		if bool(gf.dev_mode_enabled) and ignore_biomass_limit and ignore_biomass_limit.button_pressed:
+			allow_over = true
+	if allow_over and _biomass_used > biomass_cap:
+		_show_status("Dev bypass: biomass over cap (%d/%d), playtesting anyway." % [_biomass_used, biomass_cap])
+	var result := _run_validation(allow_over)
 	if not result.ok:
 		_show_validation_dialog(result)
 		return
@@ -595,7 +610,7 @@ func _autosave_playtest() -> void:
 
 # Run the checks defined in our docs (spawn, heartroot, solvable path).
 # Biomass budget check is kept soft here until your BiomassManager is in.
-func _run_validation() -> ValidationResult:
+func _run_validation(ignore_biomass: bool = false) -> ValidationResult:
 	var r := ValidationResult.new()
 	
 	# 1) Exactly one Spawn and Heartroot (Markers layer)
@@ -619,10 +634,10 @@ func _run_validation() -> ValidationResult:
 		pass
 	
 	# 3) Biomass must be under or equal to the cap (soft check for 1.4)
-	if _biomass_used > biomass_cap:
+	if not ignore_biomass and _biomass_used > biomass_cap:
 		var over := _biomass_used - biomass_cap
 		r.messages.append("❌ Biomass over cap by %d (used %d / %d)." % [over, _biomass_used, biomass_cap])
-	
+		
 	# Result state
 	r.ok = (r.messages.size() == 0)
 	if r.ok:
@@ -820,9 +835,10 @@ func _apply_coil(data: Dictionary) -> void:
 func _on_dev_mode_changed(enabled: bool) -> void:
 	if start_with_flesh_cb:
 		start_with_flesh_cb.visible = enabled
+	if ignore_biomass_limit:
+		ignore_biomass_limit.visible = enabled
 	if dev_badge:
 		dev_badge.visible = enabled
-	# Friendly ping so you always know the state
 	_show_status("Dev Mode: " + ("ON" if enabled else "OFF"))
 
 ## end builder_mode.gd

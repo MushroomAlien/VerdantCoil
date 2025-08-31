@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://khw225w867t3"]
+
+[ext_resource type="Script" uid="uid://danryeromshwg" path="res://System/debug/scene_tree_printer.gd" id="1_qnc7s"]
+
+[node name="SceneTreePrinter" type="Node"]
+script = ExtResource("1_qnc7s")
