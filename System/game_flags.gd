@@ -2,8 +2,12 @@
 extends Node
 
 signal dev_mode_changed(enabled: bool)
-
+signal ignore_biomass_limit_changed(enabled: bool)
 var dev_mode_enabled: bool = false
+
+## Mirror from Dev Controls; persisted while the app runs
+var ignore_biomass_limit: bool = false
+
 
 func _ready() -> void:
 	# Default ON in editor or if build has 'dev' feature; otherwise OFF.

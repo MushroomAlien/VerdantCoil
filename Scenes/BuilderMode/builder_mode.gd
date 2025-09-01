@@ -708,14 +708,31 @@ func _show_validation_dialog(r: ValidationResult) -> void:
 ## Validate, optionally bypass cap in dev, autosave, then start playtest
 func _on_playtest_pressed() -> void:
 	# Validate first
+	
 	_recalc_biomass()
-	var allow_over := false
+	#var allow_over := false
+	#if has_node("/root/GameFlags"):
+		#var gf = get_node("/root/GameFlags")
+		#var bypass_v: Variant = gf.get("ignore_biomass_limit")
+		#var bypass: bool = typeof(bypass_v) == TYPE_BOOL and bool(bypass_v)
+		#if bool(gf.dev_mode_enabled) and bypass:
+			#allow_over = true
+	## Validate, then decide if biomass cap can be bypassed in dev
+	var allow_over: bool = false
 	if has_node("/root/GameFlags"):
-		var gf = get_node("/root/GameFlags")
+		var gf: Node = get_node("/root/GameFlags")
+
+		var bypass: bool = false
 		var bypass_v: Variant = gf.get("ignore_biomass_limit")
-		var bypass: bool = typeof(bypass_v) == TYPE_BOOL and bool(bypass_v)
+		if typeof(bypass_v) == TYPE_BOOL:
+			bypass = bool(bypass_v)
+		elif gf.has_meta("ignore_biomass_limit"):
+			bypass = bool(gf.get_meta("ignore_biomass_limit"))
+		elif ignore_biomass_limit:
+			bypass = ignore_biomass_limit.button_pressed  ## last-resort fallback
 		if bool(gf.dev_mode_enabled) and bypass:
 			allow_over = true
+	
 	if allow_over and _biomass_used > biomass_cap:
 		_show_status("Dev bypass: biomass over cap (%d/%d), playtesting anyway." % [_biomass_used, biomass_cap])
 	var result := _run_validation(allow_over)

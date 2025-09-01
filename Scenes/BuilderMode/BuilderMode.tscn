@@ -205,6 +205,7 @@ layout_mode = 1
 offset_right = 202.0
 offset_bottom = 70.0
 script = ExtResource("4_ubaq5")
+top_bar_path = NodePath("../../TopBar")
 
 [node name="DevControls" type="VBoxContainer" parent="UI/DevOverlay/DevControlsRoot"]
 layout_mode = 2
