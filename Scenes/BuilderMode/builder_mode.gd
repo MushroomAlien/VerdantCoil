@@ -42,8 +42,8 @@ class ValidationResult:
 @onready var biomass_label: Label = $UI/TopBar/InfoRow/BiomassLabel
 @onready var start_with_flesh_cb: CheckBox = $UI/DevOverlay/DevControlsRoot/DevControls/StartWithFlesh
 @onready var ignore_biomass_limit: CheckBox = $UI/DevOverlay/DevControlsRoot/DevControls/IgnoreBiomassLimit
-@onready var dev_controls_root: MarginContainer = $UI/DevOverlay/DevControlsRoot
-@onready var top_bar: VBoxContainer = $UI/TopBar
+#@onready var dev_controls_root: MarginContainer = $UI/DevOverlay/DevControlsRoot
+#@onready var top_bar: VBoxContainer = $UI/TopBar
 @onready var clear_base_confirm: ConfirmationDialog = $UI/TopBar/ClearBaseConfirm
 @onready var dev_badge: Label = $UI/DevOverlay/DevBadge
 @onready var validate_dialog: AcceptDialog = $UI/TopBar/ValidateDialog
@@ -130,11 +130,11 @@ func _ready() -> void:
 		var gf = get_node("/root/GameFlags")
 		gf.dev_mode_changed.connect(_on_dev_mode_changed)
 		_on_dev_mode_changed(gf.dev_mode_enabled)
-	if top_bar:
-		top_bar.resized.connect(_relayout_dev_controls)
-	if get_viewport():
-		get_viewport().size_changed.connect(_relayout_dev_controls)
-	_relayout_dev_controls()  # initial placement
+	#if top_bar:
+		#top_bar.resized.connect(_relayout_dev_controls)
+	#if get_viewport():
+		#get_viewport().size_changed.connect(_relayout_dev_controls)
+	#_relayout_dev_controls()  # initial placement
 	
 	# --- Ignore Biomass Limit: connect and apply once on load if ON ---
 	if ignore_biomass_limit:
@@ -185,26 +185,29 @@ func _unhandled_input(event: InputEvent) -> void:
 			elif _is_erasing_right:
 				_erase_at(coords)
 
-## Toggle visibility for dev-only UI elements
+## Toggle visibility for dev-only badge
 func _on_dev_mode_changed(enabled: bool) -> void:
-	if dev_controls_root:
-		dev_controls_root.visible = enabled  # show the entire dev panel
-	if start_with_flesh_cb:
-		start_with_flesh_cb.visible = enabled
-	if ignore_biomass_limit:
-		ignore_biomass_limit.visible = enabled  # <-- this was the missing bit
+	#if dev_controls_root:
+		#dev_controls_root.visible = enabled  # show the entire dev panel
+	#if start_with_flesh_cb:
+		#start_with_flesh_cb.visible = enabled
+	#if ignore_biomass_limit:
+		#ignore_biomass_limit.visible = enabled  # <-- this was the missing bit
+	#if dev_badge:
+		#dev_badge.visible = enabled
+	#_show_status("Dev Mode: " + ("ON" if enabled else "OFF"))
 	if dev_badge:
 		dev_badge.visible = enabled
 	_show_status("Dev Mode: " + ("ON" if enabled else "OFF"))
-
-## Position the dev controls below the top bar
-func _relayout_dev_controls() -> void:
-	if dev_controls_root == null or top_bar == null:
-		return
-	# Place the dev checkboxes just below the whole TopBar (PaletteRow + InfoRow)
-	var r: Rect2 = top_bar.get_global_rect()
-	# 8px pad from left and from the bottom edge of TopBar
-	dev_controls_root.position = Vector2(r.position.x + 8, r.position.y + r.size.y + 8)
+	
+### Position the dev controls below the top bar
+#func _relayout_dev_controls() -> void:
+	#if dev_controls_root == null or top_bar == null:
+		#return
+	## Place the dev checkboxes just below the whole TopBar (PaletteRow + InfoRow)
+	#var r: Rect2 = top_bar.get_global_rect()
+	## 8px pad from left and from the bottom edge of TopBar
+	#dev_controls_root.position = Vector2(r.position.x + 8, r.position.y + r.size.y + 8)
 
 ## --- Selection --------------------------------------------------------
 
@@ -709,8 +712,9 @@ func _on_playtest_pressed() -> void:
 	var allow_over := false
 	if has_node("/root/GameFlags"):
 		var gf = get_node("/root/GameFlags")
-		# dev mode must be on, and the checkbox must be ticked
-		if bool(gf.dev_mode_enabled) and ignore_biomass_limit and ignore_biomass_limit.button_pressed:
+		var bypass_v: Variant = gf.get("ignore_biomass_limit")
+		var bypass: bool = typeof(bypass_v) == TYPE_BOOL and bool(bypass_v)
+		if bool(gf.dev_mode_enabled) and bypass:
 			allow_over = true
 	if allow_over and _biomass_used > biomass_cap:
 		_show_status("Dev bypass: biomass over cap (%d/%d), playtesting anyway." % [_biomass_used, biomass_cap])

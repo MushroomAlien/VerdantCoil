@@ -1,9 +1,10 @@
-[gd_scene load_steps=5 format=3 uid="uid://30d2424oam6i"]
+[gd_scene load_steps=6 format=3 uid="uid://30d2424oam6i"]
 
 [ext_resource type="TileSet" uid="uid://0dggvm2m4qyl" path="res://Assets/Resources/flesh_tile.tres" id="1_8psy0"]
 [ext_resource type="Script" uid="uid://dktegqxr56fql" path="res://Scenes/BuilderMode/builder_mode.gd" id="1_y85i2"]
 [ext_resource type="Resource" uid="uid://bscmx8itty5qg" path="res://System/brush_registry.tres" id="2_obs3p"]
 [ext_resource type="PackedScene" uid="uid://khw225w867t3" path="res://System/debug/scene_tree_printer.tscn" id="4_11ljt"]
+[ext_resource type="Script" uid="uid://bfftap0244cuv" path="res://Scenes/BuilderMode/dev_controls_root.gd" id="4_ubaq5"]
 
 [node name="BuilderMode" type="Node2D" node_paths=PackedStringArray("preview_layer", "base_layer", "walls_layer", "hazard_layer", "marker_layer")]
 script = ExtResource("1_y85i2")
@@ -203,6 +204,7 @@ custom_minimum_size = Vector2(8, 36)
 layout_mode = 1
 offset_right = 202.0
 offset_bottom = 70.0
+script = ExtResource("4_ubaq5")
 
 [node name="DevControls" type="VBoxContainer" parent="UI/DevOverlay/DevControlsRoot"]
 layout_mode = 2
