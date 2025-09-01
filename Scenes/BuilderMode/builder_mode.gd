@@ -5,20 +5,24 @@
 ## All validation + pathfinding live in CoilValidator.
 extends Node2D
 
-## --- Constants / Modules ---
+## --- Constants / Modules --------------------------------------------------------
+
 const CoilIO := preload("res://System/coil_io.gd")
 const CoilQueryScript := preload("res://System/coil_query.gd")
 @onready var _q: CoilQuery = CoilQueryScript.new()
 const CoilValidatorScript: GDScript = preload("res://System/coil_validator.gd")
 
-# Data container for validation results
+## --- Data classes --------------------------------------------------------
+
+## Simple data class used by the UI to display validation results
 class ValidationResult:
 	var ok: bool = false
 	var messages: Array[String] = []
 	var spawn: Vector2i = Vector2i(-999999, -999999)
 	var heart: Vector2i = Vector2i(-999999, -999999)
 
-## --- Exports ---
+## --- Exports --------------------------------------------------------
+
 @export var brush_registry: BrushRegistry
 @export var preview_layer: TileMapLayer
 @export var base_layer: TileMapLayer
@@ -27,8 +31,11 @@ class ValidationResult:
 @export var marker_layer: TileMapLayer
 @export_group("Save/Export")
 @export var save_dir: String = "user://coils"
+@export var start_flesh_rect: Rect2i = Rect2i(Vector2i(0, 0), Vector2i(24, 24))
+@export var biomass_cap: int = 100  # tweak anytime in Inspector
 
-## --- Scene references ---
+## --- Scene references --------------------------------------------------------
+
 @onready var coil_map: TileMap = $CoilMap
 @onready var palette_row: HBoxContainer = $UI/TopBar/PaletteRow
 @onready var status_label: Label = $UI/TopBar/InfoRow/StatusLabel
@@ -46,10 +53,9 @@ class ValidationResult:
 @onready var playtest_btn: Button = $UI/TopBar/PaletteRow/PlaytestBtn
 @onready var load_btn: Button = $UI/TopBar/PaletteRow/LoadBtn
 @onready var load_dialog: FileDialog = $UI/TopBar/LoadDialog
-@export var start_flesh_rect: Rect2i = Rect2i(Vector2i(0, 0), Vector2i(24, 24))
-@export var biomass_cap: int = 100  # tweak anytime in Inspector
 
-## --- State ---
+## --- State --------------------------------------------------------
+
 var _current_index: int = 0
 var _is_painting_left := false
 var _is_erasing_right := false
@@ -57,7 +63,9 @@ var _last_preview_cell: Vector2i = Vector2i(999999, 999999)
 var _palette_buttons: Array[TextureButton] = []
 var _biomass_used: int = 0
 
-## --- UI wiring / lifecycle ---
+## --- UI wiring & Lifecycle --------------------------------------------------------
+
+## Set up signals, palette buttons, dev overlay, and initial state
 func _ready() -> void:
 	# Basic sanity checks
 	if brush_registry == null: push_error("❌ BrushRegistry not assigned on BuilderMode.")
@@ -147,9 +155,11 @@ func _ready() -> void:
 	# keep numbers fresh after applying
 	_recalc_biomass()
 
+## Refresh the preview each frame
 func _process(_delta: float) -> void:
 	_update_preview()
 
+## Handle mouse input for painting and erasing
 func _unhandled_input(event: InputEvent) -> void:
 	# Mouse BUTTONS ------------------------------------------------------------
 	if event is InputEventMouseButton:
@@ -175,7 +185,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			elif _is_erasing_right:
 				_erase_at(coords)
 
-## DEV MODE gate: show/hide dev-only UI
+## Toggle visibility for dev-only UI elements
 func _on_dev_mode_changed(enabled: bool) -> void:
 	if dev_controls_root:
 		dev_controls_root.visible = enabled  # show the entire dev panel
@@ -187,6 +197,7 @@ func _on_dev_mode_changed(enabled: bool) -> void:
 		dev_badge.visible = enabled
 	_show_status("Dev Mode: " + ("ON" if enabled else "OFF"))
 
+## Position the dev controls below the top bar
 func _relayout_dev_controls() -> void:
 	if dev_controls_root == null or top_bar == null:
 		return
@@ -195,7 +206,9 @@ func _relayout_dev_controls() -> void:
 	# 8px pad from left and from the bottom edge of TopBar
 	dev_controls_root.position = Vector2(r.position.x + 8, r.position.y + r.size.y + 8)
 
-## --- Selection / Painting & Erasing ---
+## --- Selection --------------------------------------------------------
+
+## Update the current brush and palette button visuals
 func _select_brush(index: int) -> void:
 	if brush_registry == null or index < 0 or index >= brush_registry.brushes.size():
 		_show_status("⚠️ No brush at index " + str(index))
@@ -219,6 +232,7 @@ func _select_brush(index: int) -> void:
 	var b: BrushEntry = brush_registry.brushes[index]
 	_show_status("Brush: " + (b.display_name if b.display_name != "" else "Unnamed"))
 
+## Return the current BrushEntry or null
 func _current_brush() -> BrushEntry:
 	if brush_registry == null:
 		return null
@@ -226,7 +240,9 @@ func _current_brush() -> BrushEntry:
 		return null
 	return brush_registry.brushes[_current_index]
 
-## --- Painting / Erasing -------------------------------------------------------
+## --- Painting / Erasing --------------------------------------------------------
+
+## Place a tile using the selected brush after validation
 func _paint_at(coords: Vector2i) -> void:
 	var b: BrushEntry = _current_brush()
 	if b == null:
@@ -263,6 +279,7 @@ func _paint_at(coords: Vector2i) -> void:
 	# Recalc biomass after successful placement
 	_recalc_biomass()
 
+## Remove tiles at the cell across relevant layers
 func _erase_at(coords: Vector2i) -> void:
 	# Simple MVP: remove from all known layers at this cell
 	for layer_node in [marker_layer, hazard_layer, walls_layer]:
@@ -272,16 +289,14 @@ func _erase_at(coords: Vector2i) -> void:
 	# Recalc biomass after successful placement
 	_recalc_biomass()
 
-# Return false silently, or route through _reject if reporting is enabled.
+## Report an invalid action when requested and return false
 func _reject_or_false(msg: String, report: bool) -> bool:
 	if report:
 		_show_status("🚫 " + msg)
 		#return _reject(msg)  # prints + shakes/beeps (if you wired SFX)
 	return false
 
-## Ensures only one spawn marker exists on the Markers layer.
-## If the tile we just placed at `coords` has custom_data is_spawn = true,
-## erase all other cells in the Markers layer that also have is_spawn = true.
+## Ensure only one spawn marker exists in the markers layer
 func _enforce_single_spawn_at(coords: Vector2i) -> void:
 	# Read back the tile we just placed
 	var td := marker_layer.get_cell_tile_data(coords)
@@ -300,9 +315,7 @@ func _enforce_single_spawn_at(coords: Vector2i) -> void:
 		if other_td != null and bool(other_td.get_custom_data("is_spawn") or false):
 			marker_layer.erase_cell(c)
 
-## Ensures only one Heartroot exists on the Markers layer.
-## If the tile at `coords` has custom_data is_goal = true,
-## erase any other cells in the Markers layer that also have is_goal = true.
+## Ensure only one Heartroot marker exists in the markers layer
 func _enforce_single_heartroot_at(coords: Vector2i) -> void:
 	var td := marker_layer.get_cell_tile_data(coords)
 	if td == null:
@@ -318,9 +331,9 @@ func _enforce_single_heartroot_at(coords: Vector2i) -> void:
 		if other_td != null and bool(other_td.get_custom_data("is_goal") or false):
 			marker_layer.erase_cell(c)
 
-## --- Preview ---
+## --- Preview --------------------------------------------------------
 
-## Update the preview cell under the mouse
+## Draw a ghost tile at the mouse cell and tint by validity
 func _update_preview() -> void:
 	# Clear the previous preview cell
 	if preview_layer and _last_preview_cell.x < 900000:
@@ -344,12 +357,14 @@ func _update_preview() -> void:
 			col = Color(1, 0.2, 0.2, 0.5)
 		preview_layer.modulate = col
 
+## Convert the global mouse position to a base-layer cell
 func _cell_under_mouse() -> Vector2i:
 	# Convert current global mouse position to a TileMap cell once.
 	var mouse_world: Vector2 = get_global_mouse_position()
 	var mouse_local: Vector2 = base_layer.to_local(mouse_world)
 	return base_layer.local_to_map(mouse_local)
 
+## Map a brush target index to its TileMapLayer
 func _layer_for(index: int) -> TileMapLayer:
 	match index:
 		0: return base_layer
@@ -358,6 +373,7 @@ func _layer_for(index: int) -> TileMapLayer:
 		3: return marker_layer
 		_: return null
 
+## Apply placement rules using CoilQuery lookups
 func _validate_placement(b: BrushEntry, coords: Vector2i, report := true) -> bool:
 	match b.rule_profile:
 		"BASE":
@@ -398,8 +414,9 @@ func _validate_placement(b: BrushEntry, coords: Vector2i, report := true) -> boo
 			#return _reject("Unknown rule profile: " + b.rule_profile)
 			return _reject_or_false("Unknown rule profile: " + b.rule_profile, report)
 
-## --- Biomass label ---
-## Safely read 'cost' from a cell on a given layer. If no tile or no key -> 0.
+## --- Biomass label --------------------------------------------------------
+
+## Read the 'cost' custom data for a cell, or zero when missing
 func _tile_cost(layer: TileMapLayer, coords: Vector2i) -> int:
 	if layer == null:
 		return 0
@@ -409,7 +426,7 @@ func _tile_cost(layer: TileMapLayer, coords: Vector2i) -> int:
 	var v = td.get_custom_data("cost")
 	return int(v) if (v is int) else 0
 
-## Recalculate total biomass by scanning all layers (fast enough for 24x24).
+## Recompute the biomass total across all layers
 func _recalc_biomass() -> void:
 	var total := 0
 	for layer_node in [base_layer, walls_layer, hazard_layer, marker_layer]:
@@ -419,7 +436,7 @@ func _recalc_biomass() -> void:
 	_biomass_used = total
 	_update_biomass_label()
 
-## Update the label and warn softly if over cap.
+## Update the biomass label and its warning color
 func _update_biomass_label() -> void:
 	if biomass_label == null:
 		return
@@ -430,15 +447,16 @@ func _update_biomass_label() -> void:
 		col = Color(1, 0.25, 0.25)
 	biomass_label.modulate = col
 
-## --- Start-with-Flesh controls ---
-## Called when the checkbox is toggled. We only *add* flesh; never auto-erase.
+## --- Start-with-Flesh and Smart Clear --------------------------------------------------------
+
+## Toggle prefill mode and prompt clear when turning off
 func _on_start_with_flesh_toggled(pressed: bool) -> void:
 	if pressed:
 		_apply_start_with_flesh(true)
 	else:
 		_prompt_clear_base()
 
-## One-shot prefill of the base layer. Skips cells that already have something.
+## Prefill the base layer with Flesh within the configured rectangle
 func _apply_start_with_flesh(enabled: bool) -> void:
 	if not enabled:
 		return
@@ -462,9 +480,7 @@ func _apply_start_with_flesh(enabled: bool) -> void:
 				base_layer.set_cell(c, flesh_brush.source_id, flesh_brush.atlas_coords)
 	_show_status("Filled base with Flesh: %dx%d" % [start_flesh_rect.size.x, start_flesh_rect.size.y])
 
-## Remove all cells from the Base/Flesh layer.
-## Note: This only clears the base layer; walls/pools/markers remain as-is.
-## --- Smart Clear (with confirmation) ------------------------------------------
+## Show a confirmation dialog for clearing Flesh and dependents
 func _prompt_clear_base() -> void:
 	if clear_base_confirm == null:
 		# Fallback: clear immediately if no dialog node
@@ -481,13 +497,13 @@ func _prompt_clear_base() -> void:
 	clear_base_confirm.dialog_text = "This will erase Flesh in a %dx%d area (%d cells) and remove:\n• %d wall tiles\n• %d pool tiles\n• %d markers\nProceed?" % [w, h, w*h, walls, pools, marks]
 	clear_base_confirm.popup_centered()
 
-## Called when the user clicks "OK" in the dialog
+## Clear Flesh and dependent tiles after confirmation
 func _on_clear_base_confirmed() -> void:
 	_smart_clear_base_rect(start_flesh_rect)
 	_show_status("Cleared base and dependent tiles in %dx%d area." % [start_flesh_rect.size.x, start_flesh_rect.size.y])
 	# Keep the checkbox unticked (it already is). No refill.
 
-## Counts used cells for a given layer within rect
+## Count used cells in a layer within a rectangle
 func _count_used_in_rect(layer: TileMapLayer, rect: Rect2i) -> int:
 	if layer == null:
 		return 0
@@ -502,8 +518,7 @@ func _count_used_in_rect(layer: TileMapLayer, rect: Rect2i) -> int:
 				count += 1
 	return count
 
-## Remove Flesh in the rect, and also remove any walls/pools/markers in that rect.
-## "Smart" = only within the seeded rectangle; everything outside remains untouched.
+## Clear Flesh and dependent layers within a rectangle
 func _smart_clear_base_rect(rect: Rect2i) -> void:
 	if base_layer == null:
 		return
@@ -530,7 +545,9 @@ func _smart_clear_base_rect(rect: Rect2i) -> void:
 			if base_layer.get_cell_source_id(c) != -1:
 				base_layer.erase_cell(c)
 
-## --- Save / Load UI handlers ---
+## --- Save / Load UI Handlers --------------------------------------------------------
+
+## Save the current coil to a JSON file in the user directory
 func _on_save_pressed() -> void:
 	# Keep numbers fresh in the save
 	_recalc_biomass()
@@ -553,6 +570,7 @@ func _on_save_pressed() -> void:
 	f.close()
 	_show_status("Saved: " + path)
 
+## Open a file dialog to choose a coil to load
 func _on_load_pressed() -> void:
 	# Ensure save_dir exists (e.g., "user://coils")
 	if DirAccess.open(save_dir) == null:
@@ -564,6 +582,7 @@ func _on_load_pressed() -> void:
 		# load_dialog.filters = PackedStringArray(["*.json"])
 		load_dialog.popup_centered()
 
+## Load a selected coil JSON and apply it to layers
 func _on_load_file_selected(path: String) -> void:
 	var f := FileAccess.open(path, FileAccess.READ)
 	if f == null:
@@ -580,6 +599,7 @@ func _on_load_file_selected(path: String) -> void:
 	_recalc_biomass()
 	_show_status("Loaded: " + path)
 
+## Autosave a snapshot before starting playtest
 func _autosave_playtest() -> void:
 	if DirAccess.open(save_dir) == null:
 		DirAccess.make_dir_recursive_absolute(save_dir)
@@ -590,7 +610,7 @@ func _autosave_playtest() -> void:
 		f.close()
 		_show_status("Autosaved: " + path)
 
-## Capture the whole coil (meta + each layer).
+## Build a Dictionary snapshot of the current coil
 func _capture_coil() -> Dictionary:
 	var tileset_path: String = ""
 	if coil_map.tile_set:
@@ -609,14 +629,16 @@ func _capture_coil() -> Dictionary:
 		}
 	}
 
-## --- Validation & Playtest handoff ---
+## --- Validation & Playtest Handoff --------------------------------------------------------
+
+## Recalculate biomass, run validation, and show results
 func _on_validate_pressed() -> void:
 	# Run a full check list and show a friendly popup
 	_recalc_biomass()
 	var result := _run_validation(false) # always strict on Validate
 	_show_validation_dialog(result)
 
-## Delegate validation to CoilValidator. Adapt result to ValidationResult for UI.
+## Delegate to CoilValidator and adapt its result for the UI
 func _run_validation(ignore_biomass: bool = false) -> ValidationResult:
 	var out := ValidationResult.new()
 	
@@ -650,7 +672,7 @@ func _run_validation(ignore_biomass: bool = false) -> ValidationResult:
 	
 	return out
 
-# Fill and show the AcceptDialog nicely.
+## Populate and show the validation dialog
 func _show_validation_dialog(r: ValidationResult) -> void:
 	if validate_dialog == null or validate_body == null:
 		_show_status("Validation dialog missing in scene.")
@@ -680,6 +702,7 @@ func _show_validation_dialog(r: ValidationResult) -> void:
 		validate_body.append_text("• Heartroot at %s\n" % [str(r.heart)])
 	validate_dialog.popup_centered() # uses 'size' above
 
+## Validate, optionally bypass cap in dev, autosave, then start playtest
 func _on_playtest_pressed() -> void:
 	# Validate first
 	_recalc_biomass()
@@ -706,11 +729,14 @@ func _on_playtest_pressed() -> void:
 	else:
 		_show_status("Playtest: CoilSession autoload missing.")
 
+## --- Utility Helpers --------------------------------------------------------
+
+## Update the status label and print to the console
 func _show_status(msg: String) -> void:
 	status_label.text = msg
 	print(msg)
 
-## Helper: find a brush whose rule_profile is "BASE"
+## Find the default Flesh brush with rule_profile BASE
 func _find_default_flesh_brush() -> BrushEntry:
 	if brush_registry == null:
 		return null
@@ -718,7 +744,5 @@ func _find_default_flesh_brush() -> BrushEntry:
 		if be is BrushEntry and be.rule_profile == "BASE" and be.source_id >= 0:
 			return be
 	return null
-
-# --- Actions: Validate / Save / Playtest --------------------------------------
 
 ## end builder_mode.gd
