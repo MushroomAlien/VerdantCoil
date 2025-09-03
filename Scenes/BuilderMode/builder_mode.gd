@@ -130,27 +130,13 @@ func _ready() -> void:
 		var gf = get_node("/root/GameFlags")
 		gf.dev_mode_changed.connect(_on_dev_mode_changed)
 		_on_dev_mode_changed(gf.dev_mode_enabled)
-	#if top_bar:
-		#top_bar.resized.connect(_relayout_dev_controls)
-	#if get_viewport():
-		#get_viewport().size_changed.connect(_relayout_dev_controls)
-	#_relayout_dev_controls()  # initial placement
 	
 	# --- Ignore Biomass Limit: connect and apply once on load if ON ---
 	if ignore_biomass_limit:
-		ignore_biomass_limit.button_pressed = false
-		#ignore_biomass_limit.visible = false # hidden unless Dev Mode is ON
 		ignore_biomass_limit.tooltip_text = "Dev only: bypass biomass cap when Playtesting."
 	
 	# ---- restore coil if returning from Playtest ----
-	if has_node("/root/CoilSession"):
-		var cs: Node = get_node("/root/CoilSession")
-		var pc_v: Variant = cs.get("pending_coil")
-		if typeof(pc_v) == TYPE_DICTIONARY:
-			var pc: Dictionary = pc_v as Dictionary
-			if pc.has("layers"):
-				CoilIO.apply_coil(pc, base_layer, walls_layer, hazard_layer, marker_layer)
-				_show_status("Restored coil from Playtest.")
+	_restore_pending_coil_if_any()
 	
 	# keep numbers fresh after applying
 	_recalc_biomass()
@@ -187,27 +173,9 @@ func _unhandled_input(event: InputEvent) -> void:
 
 ## Toggle visibility for dev-only badge
 func _on_dev_mode_changed(enabled: bool) -> void:
-	#if dev_controls_root:
-		#dev_controls_root.visible = enabled  # show the entire dev panel
-	#if start_with_flesh_cb:
-		#start_with_flesh_cb.visible = enabled
-	#if ignore_biomass_limit:
-		#ignore_biomass_limit.visible = enabled  # <-- this was the missing bit
-	#if dev_badge:
-		#dev_badge.visible = enabled
-	#_show_status("Dev Mode: " + ("ON" if enabled else "OFF"))
 	if dev_badge:
 		dev_badge.visible = enabled
 	_show_status("Dev Mode: " + ("ON" if enabled else "OFF"))
-	
-### Position the dev controls below the top bar
-#func _relayout_dev_controls() -> void:
-	#if dev_controls_root == null or top_bar == null:
-		#return
-	## Place the dev checkboxes just below the whole TopBar (PaletteRow + InfoRow)
-	#var r: Rect2 = top_bar.get_global_rect()
-	## 8px pad from left and from the bottom edge of TopBar
-	#dev_controls_root.position = Vector2(r.position.x + 8, r.position.y + r.size.y + 8)
 
 ## --- Selection --------------------------------------------------------
 
@@ -632,6 +600,32 @@ func _capture_coil() -> Dictionary:
 		}
 	}
 
+## Restore and clear any pending coil handed back from Playtest
+func _restore_pending_coil_if_any() -> void:
+	if not has_node("/root/CoilSession"):
+		return
+	
+	var cs: Node = get_node("/root/CoilSession")
+	var data: Dictionary = {}
+	
+	# Preferred: use consume_pending_coil() if present
+	if cs.has_method("consume_pending_coil"):
+		var data_v: Variant = cs.call("consume_pending_coil")
+		if typeof(data_v) == TYPE_DICTIONARY:
+			data = data_v as Dictionary
+	else:
+		# Fallback to the raw property once, then clear it
+		var pc_v: Variant = cs.get("pending_coil")
+		if typeof(pc_v) == TYPE_DICTIONARY:
+			data = pc_v as Dictionary
+			cs.set("pending_coil", {})
+	
+	if data.has("layers"):
+		CoilIO.apply_coil(data, base_layer, walls_layer, hazard_layer, marker_layer)
+		_recalc_biomass()
+		_show_status("Restored coil from Playtest.")
+		print("BuilderMode: restored coil snapshot from CoilSession.")
+
 ## --- Validation & Playtest Handoff --------------------------------------------------------
 
 ## Recalculate biomass, run validation, and show results
@@ -710,31 +704,24 @@ func _on_playtest_pressed() -> void:
 	# Validate first
 	
 	_recalc_biomass()
-	#var allow_over := false
-	#if has_node("/root/GameFlags"):
-		#var gf = get_node("/root/GameFlags")
-		#var bypass_v: Variant = gf.get("ignore_biomass_limit")
-		#var bypass: bool = typeof(bypass_v) == TYPE_BOOL and bool(bypass_v)
-		#if bool(gf.dev_mode_enabled) and bypass:
-			#allow_over = true
 	## Validate, then decide if biomass cap can be bypassed in dev
 	var allow_over: bool = false
 	if has_node("/root/GameFlags"):
 		var gf: Node = get_node("/root/GameFlags")
 
 		var bypass: bool = false
-		var bypass_v: Variant = gf.get("ignore_biomass_limit")
-		if typeof(bypass_v) == TYPE_BOOL:
-			bypass = bool(bypass_v)
-		elif gf.has_meta("ignore_biomass_limit"):
+		if gf.has_meta("ignore_biomass_limit"):
 			bypass = bool(gf.get_meta("ignore_biomass_limit"))
 		elif ignore_biomass_limit:
-			bypass = ignore_biomass_limit.button_pressed  ## last-resort fallback
+			bypass = ignore_biomass_limit.button_pressed
+		
 		if bool(gf.dev_mode_enabled) and bypass:
 			allow_over = true
 	
 	if allow_over and _biomass_used > biomass_cap:
 		_show_status("Dev bypass: biomass over cap (%d/%d), playtesting anyway." % [_biomass_used, biomass_cap])
+	
+	print("BuilderMode: start_playtest request → biomass ", _biomass_used, "/", biomass_cap, ", allow_over=", allow_over)
 	var result := _run_validation(allow_over)
 	if not result.ok:
 		_show_validation_dialog(result)

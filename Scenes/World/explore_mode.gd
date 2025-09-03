@@ -54,17 +54,19 @@ func _load_from_coil(data: Dictionary) -> void:
 	if walls_layer: walls_layer.clear()
 	if hazard_layer: hazard_layer.clear()
 	if marker_layer: marker_layer.clear()
-
+	
 	# Pull "layers" safely from Variant
 	var layers_v: Variant = data.get("layers", {})
 	if typeof(layers_v) != TYPE_DICTIONARY:
 		return
+		
 	var layers: Dictionary = layers_v as Dictionary
-
 	_rebuild_layer_from_json(layers.get("base", []),   base_layer)
 	_rebuild_layer_from_json(layers.get("walls", []),  walls_layer)
 	_rebuild_layer_from_json(layers.get("hazard", []), hazard_layer)
 	_rebuild_layer_from_json(layers.get("marker", []), marker_layer)
+	
+	print("ExploreMode: loaded coil from CoilSession (layers applied).")
 
 ## Rebuild one TileMapLayer from JSON array entries:
 ## [{x,y,source_id,atlas_x,atlas_y}, ...]

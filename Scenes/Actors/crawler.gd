@@ -177,15 +177,11 @@ func _on_arrived_at(tile: Vector2i) -> void:
 	
 	# Goal check (Marker layer)
 	var marker_td := _get_tile_data(marker_layer, tile)
-	if marker_td != null and bool(marker_td.get_custom_data("is_goal") or false):
-		print("🏆 Reached Heartroot — WIN!")
-		if has_node("/root/CoilSession"):
-			get_node("/root/CoilSession").call("return_to_builder")
-		else:
-			# Fallback if autoload missing
-			get_tree().change_scene_to_file("res://Scenes/BuilderMode/BuilderMode.tscn")
-		_is_moving = false
-		return
+	if marker_td != null:
+		var reached_goal: bool = _get_bool(marker_td, "is_goal", false)
+		if reached_goal:
+			_win_and_return()
+			return
 	
 	# If we didn’t early-return due to winning, re-enable input now.
 	_is_moving = false
