@@ -1,8 +1,7 @@
 ## builder_mode.gd
 ## Role: UI wiring + brush selection + painting/erasing + preview + biomass label + playtest handoff.
-## All file I/O (save/load) lives in CoilIO.
-## All tile queries live in CoilQuery.
-## All validation + pathfinding live in CoilValidator.
+## IO (save/load) is in CoilIO. Read-only tile queries are in CoilQuery. Validation + pathfinding are in CoilValidator.
+## Validate button = strict (no bypass). Playtest = strict unless Dev Mode is ON and ignore_biomass_limit is set (GameFlags or the checkbox).
 extends Node2D
 
 ## --- Constants / Modules --------------------------------------------------------
@@ -31,8 +30,8 @@ class ValidationResult:
 @export var marker_layer: TileMapLayer
 @export_group("Save/Export")
 @export var save_dir: String = "user://coils"
-@export var start_flesh_rect: Rect2i = Rect2i(Vector2i(0, 0), Vector2i(24, 24))
-@export var biomass_cap: int = 100  # tweak anytime in Inspector
+@export var start_flesh_rect: Rect2i = Rect2i(Vector2i(0, 0), Vector2i(24, 24)) # auto-fill area when Start With Flesh is ON
+@export var biomass_cap: int = 100  # hard cap unless dev bypass is enabled
 
 ## --- Scene references --------------------------------------------------------
 
@@ -42,8 +41,6 @@ class ValidationResult:
 @onready var biomass_label: Label = $UI/TopBar/InfoRow/BiomassLabel
 @onready var start_with_flesh_cb: CheckBox = $UI/DevOverlay/DevControlsRoot/DevControls/StartWithFlesh
 @onready var ignore_biomass_limit: CheckBox = $UI/DevOverlay/DevControlsRoot/DevControls/IgnoreBiomassLimit
-#@onready var dev_controls_root: MarginContainer = $UI/DevOverlay/DevControlsRoot
-#@onready var top_bar: VBoxContainer = $UI/TopBar
 @onready var clear_base_confirm: ConfirmationDialog = $UI/TopBar/ClearBaseConfirm
 @onready var dev_badge: Label = $UI/DevOverlay/DevBadge
 @onready var validate_dialog: AcceptDialog = $UI/TopBar/ValidateDialog
@@ -628,7 +625,7 @@ func _restore_pending_coil_if_any() -> void:
 
 ## --- Validation & Playtest Handoff --------------------------------------------------------
 
-## Recalculate biomass, run validation, and show results
+## Validate popup is always strict; no dev bypass here.
 func _on_validate_pressed() -> void:
 	# Run a full check list and show a friendly popup
 	_recalc_biomass()
@@ -699,7 +696,7 @@ func _show_validation_dialog(r: ValidationResult) -> void:
 		validate_body.append_text("• Heartroot at %s\n" % [str(r.heart)])
 	validate_dialog.popup_centered() # uses 'size' above
 
-## Validate, optionally bypass cap in dev, autosave, then start playtest
+## Playtest is strict unless Dev Mode is ON and ignore_biomass_limit is true (GameFlags/meta/checkbox).
 func _on_playtest_pressed() -> void:
 	# Validate first
 	

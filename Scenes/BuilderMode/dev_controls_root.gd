@@ -18,7 +18,7 @@ func _ready() -> void:
 	anchor_top = 0.0
 	anchor_bottom = 0.0
 	offset_left = left_padding
-	offset_right = -right_padding
+	offset_right = -right_padding  # negative because right anchor = 1.0 (creates right-side padding)
 	_update_top_offset()
 
 	if _top_bar:

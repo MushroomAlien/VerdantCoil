@@ -16,10 +16,10 @@ const GridUtil := preload("res://System/grid.gd")
 
 # --- Internal State ---
 var _is_moving: bool = false
-var _move_direction := Vector2.ZERO
+var _move_direction: Vector2 = Vector2.ZERO
 
 # Simple input-skip slow (Sticky uses this to "eat" N inputs after entry)
-var _skip_inputs := 0
+var _skip_inputs: int = 0
 
 func _ready() -> void:
 	if base_layer == null: push_error("Crawler.base_layer not set")
@@ -27,7 +27,8 @@ func _ready() -> void:
 	if hazard_layer == null: push_error("Crawler.hazard_layer not set")
 	if marker_layer == null: push_error("Crawler.marker_layer not set")
 	print("Crawler ready at ", position)
-	var camera := get_node("Camera2D")
+	
+	var camera: Camera2D = get_node("Camera2D")
 	if camera:
 		camera.make_current()
 
@@ -89,7 +90,7 @@ func _unhandled_input(event: InputEvent) -> void:
 func _start_move() -> void:
 	_is_moving = true
 	
-		# Safety guard – helpful during wiring
+	# Safety guard – helpful during wiring
 	if base_layer == null or wall_layer == null or hazard_layer == null or marker_layer == null:
 		push_error("Crawler layers not assigned. Check ExploreMode exports & assignment.")
 		_is_moving = false

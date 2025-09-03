@@ -3,7 +3,7 @@ extends Node2D
 
 const GridUtil := preload("res://System/grid.gd")
 
-@onready var crawler_scene := preload("res://Scenes/Actors/Crawler.tscn")
+const CRAWLER_SCENE: PackedScene = preload("res://Scenes/Actors/Crawler.tscn")
 @export var base_layer: TileMapLayer
 @export var walls_layer: TileMapLayer
 @export var hazard_layer: TileMapLayer
@@ -18,7 +18,7 @@ func _ready() -> void:
 			var data: Dictionary = data_v as Dictionary
 			_load_from_coil(data)  # fills base/walls/hazard/marker
 	# 2) Spawn the crawler at the Spawn marker (or fallback)
-	var crawler := crawler_scene.instantiate()
+	var crawler: Area2D = CRAWLER_SCENE.instantiate()
 	crawler.base_layer   = base_layer
 	crawler.wall_layer   = walls_layer
 	crawler.hazard_layer = hazard_layer
@@ -27,10 +27,8 @@ func _ready() -> void:
 	crawler.position = GridUtil.to_world(spawn_tile)  # your util converts map→world
 	add_child(crawler)
 
-## Returns the tile coordinates of the tile marked with is_spawn = true in the "marker" layer.
-## If none is found, falls back to (12, 23) with a warning.
-## Returns the tile coordinates of the spawn tile marked with `is_spawn = true`.
-## This uses TileMap layer index 3 (marker). Falls back to (12, 23) if none is found.
+## Returns the tile coordinates of the spawn tile marked with `is_spawn = true` in the Marker layer.
+## Falls back to (12, 23) with a warning if none is found.
 func get_spawn_position() -> Vector2i:
 	if marker_layer == null:
 		push_error("Marker layer not assigned")
