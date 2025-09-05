@@ -127,6 +127,13 @@ size_flags_vertical = 4
 theme_override_font_sizes/font_size = 16
 text = "Playtest"
 
+[node name="PublishBtn" type="Button" parent="UI/TopBar/PaletteRow"]
+custom_minimum_size = Vector2(84, 0)
+layout_mode = 2
+size_flags_vertical = 4
+focus_mode = 0
+text = "Publish"
+
 [node name="Spacer3" type="Control" parent="UI/TopBar/PaletteRow"]
 custom_minimum_size = Vector2(4, 0)
 layout_mode = 2
@@ -141,6 +148,12 @@ layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 6
 text = "[READY]"
+
+[node name="ValidationChip" type="Label" parent="UI/TopBar/InfoRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(1, 0.392157, 0, 1)
+text = "Draft"
 
 [node name="BiomassLabel" type="Label" parent="UI/TopBar/InfoRow"]
 layout_mode = 2
@@ -224,3 +237,5 @@ focus_mode = 0
 text = "Ignore Biomass Limit"
 
 [node name="SceneTreePrinter" parent="." instance=ExtResource("4_11ljt")]
+
+[connection signal="pressed" from="UI/TopBar/PaletteRow/PublishBtn" to="." method="_on_publish_btn_pressed"]

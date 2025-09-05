@@ -578,20 +578,44 @@ func _autosave_playtest() -> void:
 		f.close()
 		_show_status("Autosaved: " + path)
 
-## Build a Dictionary snapshot of the current coil
+### Build a Dictionary snapshot of the current coil
+#func _capture_coil() -> Dictionary:
+	#var tileset_path: String = ""
+	#if coil_map.tile_set:
+		#tileset_path = coil_map.tile_set.resource_path
+	#return {
+		#"meta": {
+			#"biomass_cap": biomass_cap,
+			#"biomass_used": _biomass_used,
+			#"tileset": tileset_path
+		#},
+		#"layers": {
+			#"base": CoilIO.serialize_layer(base_layer),
+			#"walls": CoilIO.serialize_layer(walls_layer),
+			#"hazard": CoilIO.serialize_layer(hazard_layer),
+			#"marker": CoilIO.serialize_layer(marker_layer)
+		#}
+	#}
+## --- Save current coil as Dictionary snapshot (with validation flag) ---
 func _capture_coil() -> Dictionary:
 	var tileset_path: String = ""
 	if coil_map.tile_set:
 		tileset_path = coil_map.tile_set.resource_path
+	
+	# --- NEW: run a strict validation here just to tag the save ---
+	var validation_result: ValidationResult = _run_validation(false)  # false = no biomass bypass
+	var is_valid: bool = validation_result.ok
+	
 	return {
 		"meta": {
 			"biomass_cap": biomass_cap,
 			"biomass_used": _biomass_used,
-			"tileset": tileset_path
+			"tileset": tileset_path,
+			"validated": is_valid   # <-- NEW FIELD
 		},
 		"layers": {
-			"base": CoilIO.serialize_layer(base_layer),
-			"walls": CoilIO.serialize_layer(walls_layer),
+			"base":   CoilIO.serialize_layer(base_layer),
+			"walls":  CoilIO.serialize_layer(walls_layer),
 			"hazard": CoilIO.serialize_layer(hazard_layer),
 			"marker": CoilIO.serialize_layer(marker_layer)
 		}
@@ -751,3 +775,7 @@ func _find_default_flesh_brush() -> BrushEntry:
 	return null
 
 ## end builder_mode.gd
+
+
+func _on_publish_btn_pressed() -> void:
+	pass # Replace with function body.
