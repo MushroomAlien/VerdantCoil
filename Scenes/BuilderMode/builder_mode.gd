@@ -50,6 +50,8 @@ class ValidationResult:
 @onready var playtest_btn: Button = $UI/TopBar/PaletteRow/PlaytestBtn
 @onready var load_btn: Button = $UI/TopBar/PaletteRow/LoadBtn
 @onready var load_dialog: FileDialog = $UI/TopBar/LoadDialog
+@onready var publish_btn: Button = $UI/TopBar/PaletteRow/PublishBtn
+@onready var validation_chip: Label = $UI/TopBar/InfoRow/ValidationChip
 
 ## --- State --------------------------------------------------------
 
@@ -59,6 +61,7 @@ var _is_erasing_right := false
 var _last_preview_cell: Vector2i = Vector2i(999999, 999999)
 var _palette_buttons: Array[TextureButton] = []
 var _biomass_used: int = 0
+var _last_validation_ok: bool = false
 
 ## --- UI wiring & Lifecycle --------------------------------------------------------
 
@@ -79,6 +82,8 @@ func _ready() -> void:
 		playtest_btn.pressed.connect(_on_playtest_pressed)
 	if load_btn:
 		load_btn.pressed.connect(_on_load_pressed)
+	if publish_btn:
+		publish_btn.pressed.connect(_on_publish_pressed)
 	if load_dialog:
 		load_dialog.file_selected.connect(_on_load_file_selected)
 	
@@ -137,6 +142,10 @@ func _ready() -> void:
 	
 	# keep numbers fresh after applying
 	_recalc_biomass()
+	
+	# --- Initial strict validation -> set Draft/Valid chip & Publish enable ---
+	_refresh_validation_state()
+
 
 ## Refresh the preview each frame
 func _process(_delta: float) -> void:
@@ -515,21 +524,50 @@ func _smart_clear_base_rect(rect: Rect2i) -> void:
 
 ## --- Save / Load UI Handlers --------------------------------------------------------
 
+### Save the current coil to a JSON file in the user directory
+#func _on_save_pressed() -> void:
+	## Keep numbers fresh in the save
+	#_recalc_biomass()
+	## Ensure directory exists
+	#if DirAccess.open(save_dir) == null:
+		#var ok := DirAccess.make_dir_recursive_absolute(save_dir)
+		#if ok != OK:
+			#_show_status("Save failed: couldn't create " + save_dir)
+			#return
+	## Build a timestamped filename
+	#var ts := Time.get_datetime_string_from_system(false, true).replace(":", "-")
+	#var path := "%s/coil_%s.json" % [save_dir, ts]
+	## Write JSON
+	#var data := _capture_coil()
+	#var f := FileAccess.open(path, FileAccess.WRITE)
+	#if f == null:
+		#_show_status("Save failed (" + str(FileAccess.get_open_error()) + ").")
+		#return
+	#f.store_string(JSON.stringify(data, "\t"))
+	#f.close()
+	#_show_status("Saved: " + path)
+
 ## Save the current coil to a JSON file in the user directory
 func _on_save_pressed() -> void:
 	# Keep numbers fresh in the save
 	_recalc_biomass()
+	
 	# Ensure directory exists
 	if DirAccess.open(save_dir) == null:
-		var ok := DirAccess.make_dir_recursive_absolute(save_dir)
-		if ok != OK:
+		#var ok := DirAccess.make_dir_recursive_absolute(save_dir)
+		#if ok != OK:
+			#_show_status("Save failed: couldn't create " + save_dir)
+			#return
+		var err: int = DirAccess.make_dir_recursive_absolute(save_dir)
+		if err != OK:
 			_show_status("Save failed: couldn't create " + save_dir)
 			return
+	
 	# Build a timestamped filename
 	var ts := Time.get_datetime_string_from_system(false, true).replace(":", "-")
 	var path := "%s/coil_%s.json" % [save_dir, ts]
 	# Write JSON
-	var data := _capture_coil()
+	var data := _capture_coil()  # CHANGED: _capture_coil now includes validation snapshot
 	var f := FileAccess.open(path, FileAccess.WRITE)
 	if f == null:
 		_show_status("Save failed (" + str(FileAccess.get_open_error()) + ").")
@@ -537,6 +575,11 @@ func _on_save_pressed() -> void:
 	f.store_string(JSON.stringify(data, "\t"))
 	f.close()
 	_show_status("Saved: " + path)
+
+	# NEW: Update the chip & Publish button from the just-saved validation result
+	if data.has("meta") and (data["meta"] as Dictionary).has("validated"):
+		var ok_now := bool((data["meta"] as Dictionary)["validated"])
+		_update_validation_chip(ok_now)
 
 ## Open a file dialog to choose a coil to load
 func _on_load_pressed() -> void:
@@ -550,6 +593,22 @@ func _on_load_pressed() -> void:
 		# load_dialog.filters = PackedStringArray(["*.json"])
 		load_dialog.popup_centered()
 
+### Load a selected coil JSON and apply it to layers
+#func _on_load_file_selected(path: String) -> void:
+	#var f := FileAccess.open(path, FileAccess.READ)
+	#if f == null:
+		#_show_status("Load failed (" + str(FileAccess.get_open_error()) + ").")
+		#return
+	#var txt: String = f.get_as_text()
+	#f.close()
+	#var parsed_v: Variant = JSON.parse_string(txt)
+	#if typeof(parsed_v) != TYPE_DICTIONARY:
+		#_show_status("Load failed: JSON malformed.")
+		#return
+	#var data: Dictionary = parsed_v as Dictionary
+	#CoilIO.apply_coil(data, base_layer, walls_layer, hazard_layer, marker_layer)
+	#_recalc_biomass()
+	#_show_status("Loaded: " + path)
 ## Load a selected coil JSON and apply it to layers
 func _on_load_file_selected(path: String) -> void:
 	var f := FileAccess.open(path, FileAccess.READ)
@@ -566,6 +625,9 @@ func _on_load_file_selected(path: String) -> void:
 	CoilIO.apply_coil(data, base_layer, walls_layer, hazard_layer, marker_layer)
 	_recalc_biomass()
 	_show_status("Loaded: " + path)
+
+	# NEW: Immediately run strict validation in memory and refresh the chip
+	_refresh_validation_state()  # don't touch disk; just reflect truth in UI
 
 ## Autosave a snapshot before starting playtest
 func _autosave_playtest() -> void:
@@ -596,22 +658,66 @@ func _autosave_playtest() -> void:
 			#"marker": CoilIO.serialize_layer(marker_layer)
 		#}
 	#}
-## --- Save current coil as Dictionary snapshot (with validation flag) ---
+### --- Save current coil as Dictionary snapshot (with validation flag) ---
+#func _capture_coil() -> Dictionary:
+	#var tileset_path: String = ""
+	#if coil_map.tile_set:
+		#tileset_path = coil_map.tile_set.resource_path
+	#
+	## --- NEW: run a strict validation here just to tag the save ---
+	#var validation_result: ValidationResult = _run_validation(false)  # false = no biomass bypass
+	#var is_valid: bool = validation_result.ok
+	#
+	#return {
+		#"meta": {
+			#"biomass_cap": biomass_cap,
+			#"biomass_used": _biomass_used,
+			#"tileset": tileset_path,
+			#"validated": is_valid   # <-- NEW FIELD
+		#},
+		#"layers": {
+			#"base":   CoilIO.serialize_layer(base_layer),
+			#"walls":  CoilIO.serialize_layer(walls_layer),
+			#"hazard": CoilIO.serialize_layer(hazard_layer),
+			#"marker": CoilIO.serialize_layer(marker_layer)
+		#}
+	#}
+## --- Save current coil as Dictionary snapshot (with validation flag & details) ---
 func _capture_coil() -> Dictionary:
 	var tileset_path: String = ""
 	if coil_map.tile_set:
 		tileset_path = coil_map.tile_set.resource_path
 	
-	# --- NEW: run a strict validation here just to tag the save ---
-	var validation_result: ValidationResult = _run_validation(false)  # false = no biomass bypass
-	var is_valid: bool = validation_result.ok
+	# Strict validation snapshot (no biomass bypass)
+	var validation_result: ValidationResult = _run_validation(false)
+	_last_validation_ok = validation_result.ok  # cache for UI
+	
+	# Convert optional coords to small dicts only if set
+	var spawn_dict := {}
+	if validation_result.spawn.x > -900000:
+		spawn_dict = {"x": validation_result.spawn.x, "y": validation_result.spawn.y}
+	var heart_dict := {}
+	if validation_result.heart.x > -900000:
+		heart_dict = {"x": validation_result.heart.x, "y": validation_result.heart.y}
+	
+	var validation_payload := {
+		"ok": validation_result.ok,
+		"messages": validation_result.messages,
+		"spawn": spawn_dict,
+		"heart": heart_dict,
+		"biomass_used": _biomass_used,
+		"biomass_cap": biomass_cap,
+		"validator_version": "1",
+		"timestamp": _iso_timestamp()
+	}
 	
 	return {
 		"meta": {
 			"biomass_cap": biomass_cap,
 			"biomass_used": _biomass_used,
 			"tileset": tileset_path,
-			"validated": is_valid   # <-- NEW FIELD
+			"validated": validation_result.ok,   # NEW
+			"validation": validation_payload     # NEW
 		},
 		"layers": {
 			"base":   CoilIO.serialize_layer(base_layer),
@@ -774,8 +880,186 @@ func _find_default_flesh_brush() -> BrushEntry:
 			return be
 	return null
 
+#func _on_publish_btn_pressed() -> void:
+	#pass # Replace with function body.
+## Publish is ALWAYS strict. No dev bypass. Writes to user://Published/ and updates manifest.
+func _on_publish_pressed() -> void:
+	_recalc_biomass()
+	var result := _run_validation(false)  # false => no biomass bypass (STRICT)
+	if not result.ok:
+		_show_validation_dialog(result)  # Friendly popup you already have
+		return
+	
+	# Ensure Published/ exists (sibling to save_dir)
+	var pub_dir := "user://Published"
+	_ensure_dir(pub_dir)
+	
+	# Timestamped publish path
+	var ts := Time.get_datetime_string_from_system(false, true).replace(":", "-")
+	var pub_path := "%s/coil_%s.json" % [pub_dir, ts]
+	
+	# Capture a fresh, validated snapshot (includes validated flag + details)
+	var data := _capture_coil()
+	
+	var f := FileAccess.open(pub_path, FileAccess.WRITE)
+	if f == null:
+		_show_status("Publish failed (" + str(FileAccess.get_open_error()) + ").")
+		return
+	f.store_string(JSON.stringify(data, "\t"))
+	f.close()
+	
+	# Update/append manifest entry
+	_update_publish_manifest(pub_dir, pub_path, data)
+	
+	_show_status("Published to Local: " + pub_path)
+	
+	# Sync chip state (should be valid at this point)
+	_update_validation_chip(true)
+
+## Strictly recompute validation and refresh Draft/Valid chip & Publish enable
+func _refresh_validation_state() -> void:
+	var r := _run_validation(false)  # strict
+	_last_validation_ok = r.ok
+	_update_validation_chip(_last_validation_ok)
+
+## Small UI updater for the ValidationChip and Publish button
+func _update_validation_chip(is_ok: bool) -> void:
+	if validation_chip:
+		if is_ok:
+			validation_chip.text = "Valid"
+			validation_chip.modulate = Color(0.75, 1.0, 0.75)  # soft green
+		else:
+			validation_chip.text = "Draft"
+			validation_chip.modulate = Color(1.0, 0.75, 0.75)  # soft red
+
+	# Enable/disable Publish affordance (belt & braces: we still re-check inside publish)
+	if publish_btn:
+		publish_btn.disabled = not is_ok
+
+## Ensure a directory exists (recursive)
+#func _ensure_dir(dir_path: String) -> void:
+	#if DirAccess.open(dir_path) == null:
+		#var ok := DirAccess.make_dir_recursive_absolute(dir_path)
+		#if ok != OK:
+			#_show_status("Failed to create: " + dir_path)
+func _ensure_dir(dir_path: String) -> void:
+	if DirAccess.open(dir_path) == null:
+		var err: int = DirAccess.make_dir_recursive_absolute(dir_path)  # typed int (Error enum)
+		if err != OK:
+			_show_status("Failed to create: " + dir_path)
+
+### Append/update publish manifest with a single entry
+#func _update_publish_manifest(pub_dir: String, pub_path: String, data: Dictionary) -> void:
+	#var manifest_path := pub_dir + "/manifest.json"
+	#var manifest: Dictionary = {"version": 1, "items": []}
+#
+	## Load existing manifest if present
+	#if FileAccess.file_exists(manifest_path):
+		#var f_in := FileAccess.open(manifest_path, FileAccess.READ)
+		#if f_in:
+			#var txt := f_in.get_as_text()
+			#f_in.close()
+			#var parsed := JSON.parse_string(txt)
+			#if typeof(parsed) == TYPE_DICTIONARY:
+				#manifest = parsed
+#
+	## Build new/updated entry
+	#var meta := data.get("meta", {}) as Dictionary
+	#var entry := {
+		#"path": pub_path,
+		#"title": "Untitled",  # placeholder; later you can add a Title field in UI/meta
+		#"published_at": _iso_timestamp(),
+		#"biomass_used": meta.get("biomass_used", _biomass_used),
+		#"biomass_cap": meta.get("biomass_cap", biomass_cap)
+	#}
+#
+	## Upsert by path
+	#var items := manifest.get("items", []) as Array
+	#var replaced := false
+	#for i in range(items.size()):
+		#var it := items[i] as Dictionary
+		#if (it.get("path", "") as String) == pub_path:
+			#items[i] = entry
+			#replaced = true
+			#break
+	#if not replaced:
+		#items.append(entry)
+	#manifest["items"] = items
+#
+	## Write manifest back
+	#var f_out := FileAccess.open(manifest_path, FileAccess.WRITE)
+	#if f_out:
+		#f_out.store_string(JSON.stringify(manifest, "\t"))
+		#f_out.close()
+## Append/update publish manifest with a single entry (STRICT TYPING)
+func _update_publish_manifest(pub_dir: String, pub_path: String, data: Dictionary) -> void:
+	var manifest_path: String = pub_dir + "/manifest.json"
+	
+	# Start with a default manifest object
+	var manifest: Dictionary = {
+		"version": 1,
+		"items": []  # Array of Dictionary entries
+	}
+	
+	# If a manifest already exists, read and parse it
+	if FileAccess.file_exists(manifest_path):
+		var f_in: FileAccess = FileAccess.open(manifest_path, FileAccess.READ)
+		if f_in != null:
+			var txt: String = f_in.get_as_text()
+			f_in.close()
+			
+			# IMPORTANT: parse result is Variant → store in a Variant first
+			var parsed_v: Variant = JSON.parse_string(txt)
+			if typeof(parsed_v) == TYPE_DICTIONARY:
+				# Safe cast AFTER typeof check to satisfy typing
+				manifest = parsed_v as Dictionary
+	
+	# Pull meta from the just-published coil data (also Variant-safe)
+	var meta: Dictionary = {}
+	var meta_v: Variant = data.get("meta", {})
+	if typeof(meta_v) == TYPE_DICTIONARY:
+		meta = meta_v as Dictionary
+	
+	# Build the manifest entry (use explicit ints/strings for strict typing)
+	var entry: Dictionary = {
+		"path": pub_path,
+		"title": "Untitled",  # TODO: wire a title field later
+		"published_at": _iso_timestamp(),
+		"biomass_used": int(meta.get("biomass_used", _biomass_used)),
+		"biomass_cap": int(meta.get("biomass_cap", biomass_cap))
+	}
+	
+	# Get current items as a typed Array (via Variant)
+	var items: Array = []
+	var items_v: Variant = manifest.get("items", [])
+	if typeof(items_v) == TYPE_ARRAY:
+		items = items_v as Array
+	# Upsert by matching "path"
+	var replaced: bool = false
+	for i in range(items.size()):
+		var it_v: Variant = items[i]
+		if typeof(it_v) == TYPE_DICTIONARY:
+			var it: Dictionary = it_v as Dictionary
+			var path_field_v: Variant = it.get("path", "")
+			var path_field: String = path_field_v as String
+			if path_field == pub_path:
+				items[i] = entry
+				replaced = true
+				break
+	
+	if not replaced:
+		items.append(entry)
+	
+	manifest["items"] = items
+	
+	# Write back to disk
+	var f_out: FileAccess = FileAccess.open(manifest_path, FileAccess.WRITE)
+	if f_out != null:
+		f_out.store_string(JSON.stringify(manifest, "\t"))
+		f_out.close()
+
+## ISO8601-like timestamp for metadata
+func _iso_timestamp() -> String:
+	return Time.get_datetime_string_from_system(true, true)  # UTC, with separators
+
 ## end builder_mode.gd
-
-
-func _on_publish_btn_pressed() -> void:
-	pass # Replace with function body.
