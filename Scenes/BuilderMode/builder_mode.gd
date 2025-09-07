@@ -1,15 +1,32 @@
-## builder_mode.gd
-## Role: UI wiring + brush selection + painting/erasing + preview + biomass label + playtest handoff.
-## IO (save/load) is in CoilIO. Read-only tile queries are in CoilQuery. Validation + pathfinding are in CoilValidator.
-## Validate button = strict (no bypass). Playtest = strict unless Dev Mode is ON and ignore_biomass_limit is set (GameFlags or the checkbox).
+## builder_mode.gd — Godot 4.4.1
+## Responsibility: UI wiring (palette, dialogs, dev overlay), brush selection, paint/erase, live preview tinting,
+## biomass counter, strict validation popup, playtest handoff, save/load/publish, and profile menu.
+## Ownership boundaries:
+##   • IO:        System/coil_io.gd
+##   • Queries:   System/coil_query.gd
+##   • Validate:  System/coil_validator.gd  (strict; playtest may bypass biomass if DevMode + flag)
+## Strictness rules:
+##   • Validate button: always strict (no bypass)
+##   • Playtest: strict unless Dev Mode is ON and 'ignore_biomass_limit' is true (GameFlags meta or checkbox)
+##   • Publish: ALWAYS strict
+## External expectations:
+##   • Autoloads: /root/GameFlags (dev flags), /root/CoilSession (playtest handoff), /root/ProfileManager (optional)
+##   • Tile layers: Base, Walls, Hazard, Marker must be assigned via Inspector
 extends Node2D
 
 ## --- Constants / Modules --------------------------------------------------------
 
 const CoilIO := preload("res://System/coil_io.gd")
 const CoilQueryScript := preload("res://System/coil_query.gd")
-@onready var _q: CoilQuery = CoilQueryScript.new()
 const CoilValidatorScript: GDScript = preload("res://System/coil_validator.gd")
+const DIR_COILS: String = "user://coils"
+const DIR_PUBLISHED: String = "user://Published"
+const EXT_JSON: String = ".json"
+const F_COIL_PREFIX: String = "coil_"
+const PUBLISHED_MANIFEST: String = DIR_PUBLISHED + "/manifest.json"
+const MENU_MANAGE_ID: int = 9999
+const MANIFEST_VERSION: int = 1
+const COIL_SCHEMA_VERSION: int = 1
 
 ## --- Data classes --------------------------------------------------------
 
@@ -22,15 +39,17 @@ class ValidationResult:
 
 ## --- Exports --------------------------------------------------------
 
+@export_group("Registry & Layers")
 @export var brush_registry: BrushRegistry
 @export var preview_layer: TileMapLayer
 @export var base_layer: TileMapLayer
 @export var walls_layer: TileMapLayer
 @export var hazard_layer: TileMapLayer
 @export var marker_layer: TileMapLayer
+
 @export_group("Save/Export")
-@export var save_dir: String = "user://coils"
-@export var start_flesh_rect: Rect2i = Rect2i(Vector2i(0, 0), Vector2i(24, 24)) # auto-fill area when Start With Flesh is ON
+@export var save_dir: String = DIR_COILS
+@export var start_flesh_rect: Rect2i = Rect2i(Vector2i(0, 0), Vector2i(24, 24)) # auto-fill when Start With Flesh is ON
 @export var biomass_cap: int = 100  # hard cap unless dev bypass is enabled
 
 ## --- Scene references --------------------------------------------------------
@@ -52,6 +71,16 @@ class ValidationResult:
 @onready var load_dialog: FileDialog = $UI/TopBar/LoadDialog
 @onready var publish_btn: Button = $UI/TopBar/PaletteRow/PublishBtn
 @onready var validation_chip: Label = $UI/TopBar/InfoRow/ValidationChip
+@onready var _q: CoilQuery = CoilQueryScript.new()
+@onready var profile_btn: Button = $UI/TopBar/PaletteRow/ProfileBtn
+@onready var profile_menu: PopupMenu = $UI/TopBar/PaletteRow/ProfileBtn/ProfileMenu
+@onready var profile_dialog: AcceptDialog = $UI/TopBar/ProfileDialog
+@onready var profile_list: ItemList = $UI/TopBar/ProfileDialog/Content/ProfileList
+@onready var profile_new_name: LineEdit = $UI/TopBar/ProfileDialog/Content/NewRow/NewName
+@onready var profile_create_btn: Button = $UI/TopBar/ProfileDialog/Content/NewRow/CreateBtn
+@onready var profile_rename_btn: Button = $UI/TopBar/ProfileDialog/Content/Actions/RenameBtn
+@onready var profile_delete_btn: Button = $UI/TopBar/ProfileDialog/Content/Actions/DeleteBtn
+@onready var profile_set_active_btn: Button = $UI/TopBar/ProfileDialog/Content/Actions/SetActiveBtn
 
 ## --- State --------------------------------------------------------
 
@@ -65,7 +94,9 @@ var _last_validation_ok: bool = false
 
 ## --- UI wiring & Lifecycle --------------------------------------------------------
 
-## Set up signals, palette buttons, dev overlay, and initial state
+## Wires all UI and dev controls, mirrors palette → brushes, selects default brush,
+## optionally pre-fills Base with Flesh, restores a pending coil from Playtest, and
+## syncs biomass + validation chip on entry.
 func _ready() -> void:
 	# Basic sanity checks
 	if brush_registry == null: push_error("❌ BrushRegistry not assigned on BuilderMode.")
@@ -89,6 +120,7 @@ func _ready() -> void:
 	
 	# Wire each palette button (by order) to a brush (by order).
 	# Left to right buttons map to registry.brushes[0..N]
+	# Use a ButtonGroup so only one brush is active at a time; this keeps selection state in sync with the registry.
 	var _palette_group := ButtonGroup.new()
 	_palette_buttons.clear()
 	for child in palette_row.get_children():
@@ -137,15 +169,37 @@ func _ready() -> void:
 	if ignore_biomass_limit:
 		ignore_biomass_limit.tooltip_text = "Dev only: bypass biomass cap when Playtesting."
 	
+	# --- Profile UI wiring ---
+	if is_instance_valid(profile_btn):
+		profile_btn.pressed.connect(_on_profile_btn_pressed)
+	if is_instance_valid(profile_menu):
+		profile_menu.id_pressed.connect(_on_profile_menu_id_pressed)
+	# Dialog buttons
+	if is_instance_valid(profile_create_btn):
+		profile_create_btn.pressed.connect(_on_profile_create_pressed)
+	if is_instance_valid(profile_rename_btn):
+		profile_rename_btn.pressed.connect(_on_profile_rename_pressed)
+	if is_instance_valid(profile_delete_btn):
+		profile_delete_btn.pressed.connect(_on_profile_delete_pressed)
+	if is_instance_valid(profile_set_active_btn):
+		profile_set_active_btn.pressed.connect(_on_profile_set_active_pressed)
+	
+	# Subscribe to ProfileManager signals (safe if autoload missing)
+	if has_node("/root/ProfileManager"):
+		var pm: Node = get_node("/root/ProfileManager")
+		if pm.has_signal("profile_list_changed"):
+			pm.connect("profile_list_changed", Callable(self, "_refresh_profile_ui"))
+		if pm.has_signal("current_profile_changed"):
+			pm.connect("current_profile_changed", Callable(self, "_on_current_profile_changed"))
+	
+	# Initial populate
+	_refresh_profile_ui()
 	# ---- restore coil if returning from Playtest ----
 	_restore_pending_coil_if_any()
-	
 	# keep numbers fresh after applying
 	_recalc_biomass()
-	
 	# --- Initial strict validation -> set Draft/Valid chip & Publish enable ---
 	_refresh_validation_state()
-
 
 ## Refresh the preview each frame
 func _process(_delta: float) -> void:
@@ -181,7 +235,10 @@ func _unhandled_input(event: InputEvent) -> void:
 func _on_dev_mode_changed(enabled: bool) -> void:
 	if dev_badge:
 		dev_badge.visible = enabled
-	_show_status("Dev Mode: " + ("ON" if enabled else "OFF"))
+	var state_text: String = "OFF"
+	if enabled:
+		state_text = "ON"
+	_show_status("Dev Mode: " + state_text)
 
 ## --- Selection --------------------------------------------------------
 
@@ -258,7 +315,7 @@ func _paint_at(coords: Vector2i) -> void:
 
 ## Remove tiles at the cell across relevant layers
 func _erase_at(coords: Vector2i) -> void:
-	# Simple MVP: remove from all known layers at this cell
+	# Simple MVP: erase Hazards/Walls/Markers at this cell; keep Base Flesh intact.
 	for layer_node in [marker_layer, hazard_layer, walls_layer]:
 		if layer_node:
 			layer_node.erase_cell(coords)
@@ -266,11 +323,10 @@ func _erase_at(coords: Vector2i) -> void:
 	# Recalc biomass after successful placement
 	_recalc_biomass()
 
-## Report an invalid action when requested and return false
+## Emit a friendly inline status and return false (used by placement validators).
 func _reject_or_false(msg: String, report: bool) -> bool:
 	if report:
 		_show_status("🚫 " + msg)
-		#return _reject(msg)  # prints + shakes/beeps (if you wired SFX)
 	return false
 
 ## Ensure only one spawn marker exists in the markers layer
@@ -312,6 +368,9 @@ func _enforce_single_heartroot_at(coords: Vector2i) -> void:
 
 ## Draw a ghost tile at the mouse cell and tint by validity
 func _update_preview() -> void:
+	# Note: we tint the WHOLE preview layer (not per-cell materials). This is simple and cheap; if we ever want per-cell tint,
+	# we'll switch to a separate ghost atlas or shaders.
+	
 	# Clear the previous preview cell
 	if preview_layer and _last_preview_cell.x < 900000:
 		preview_layer.erase_cell(_last_preview_cell)
@@ -328,7 +387,7 @@ func _update_preview() -> void:
 	if preview_layer and b.source_id >= 0:
 		preview_layer.set_cell(coords, b.source_id, b.atlas_coords)
 		# Now tint based on validity
-		var ok := _validate_placement(b, coords, false)
+		var ok: bool = _validate_placement(b, coords, false)
 		var col := Color(1, 1, 1, 0.5)
 		if not ok:
 			col = Color(1, 0.2, 0.2, 0.5)
@@ -400,11 +459,14 @@ func _tile_cost(layer: TileMapLayer, coords: Vector2i) -> int:
 	var td: TileData = layer.get_cell_tile_data(coords)
 	if td == null:
 		return 0
-	var v = td.get_custom_data("cost")
-	return int(v) if (v is int) else 0
+	var v: Variant = td.get_custom_data("cost")
+	if v is int:
+		return int(v)
+	return 0
 
 ## Recompute the biomass total across all layers
 func _recalc_biomass() -> void:
+	# O(N used cells) recompute for clarity. For larger maps we can micro-opt by delta-adjusting on each paint/erase.
 	var total := 0
 	for layer_node in [base_layer, walls_layer, hazard_layer, marker_layer]:
 		if layer_node:
@@ -426,7 +488,8 @@ func _update_biomass_label() -> void:
 
 ## --- Start-with-Flesh and Smart Clear --------------------------------------------------------
 
-## Toggle prefill mode and prompt clear when turning off
+## Start-with-Flesh: convenience for quick greyboxing. Turning it OFF offers a smart clear of the same rect,
+## removing dependent tiles inside that area first (Walls/Hazards/Markers) before erasing Flesh.
 func _on_start_with_flesh_toggled(pressed: bool) -> void:
 	if pressed:
 		_apply_start_with_flesh(true)
@@ -524,48 +587,19 @@ func _smart_clear_base_rect(rect: Rect2i) -> void:
 
 ## --- Save / Load UI Handlers --------------------------------------------------------
 
-### Save the current coil to a JSON file in the user directory
-#func _on_save_pressed() -> void:
-	## Keep numbers fresh in the save
-	#_recalc_biomass()
-	## Ensure directory exists
-	#if DirAccess.open(save_dir) == null:
-		#var ok := DirAccess.make_dir_recursive_absolute(save_dir)
-		#if ok != OK:
-			#_show_status("Save failed: couldn't create " + save_dir)
-			#return
-	## Build a timestamped filename
-	#var ts := Time.get_datetime_string_from_system(false, true).replace(":", "-")
-	#var path := "%s/coil_%s.json" % [save_dir, ts]
-	## Write JSON
-	#var data := _capture_coil()
-	#var f := FileAccess.open(path, FileAccess.WRITE)
-	#if f == null:
-		#_show_status("Save failed (" + str(FileAccess.get_open_error()) + ").")
-		#return
-	#f.store_string(JSON.stringify(data, "\t"))
-	#f.close()
-	#_show_status("Saved: " + path)
-
 ## Save the current coil to a JSON file in the user directory
 func _on_save_pressed() -> void:
 	# Keep numbers fresh in the save
 	_recalc_biomass()
-	
 	# Ensure directory exists
 	if DirAccess.open(save_dir) == null:
-		#var ok := DirAccess.make_dir_recursive_absolute(save_dir)
-		#if ok != OK:
-			#_show_status("Save failed: couldn't create " + save_dir)
-			#return
 		var err: int = DirAccess.make_dir_recursive_absolute(save_dir)
 		if err != OK:
 			_show_status("Save failed: couldn't create " + save_dir)
 			return
 	
 	# Build a timestamped filename
-	var ts := Time.get_datetime_string_from_system(false, true).replace(":", "-")
-	var path := "%s/coil_%s.json" % [save_dir, ts]
+	var path: String = _timestamp_file(save_dir, F_COIL_PREFIX, EXT_JSON)
 	# Write JSON
 	var data := _capture_coil()  # CHANGED: _capture_coil now includes validation snapshot
 	var f := FileAccess.open(path, FileAccess.WRITE)
@@ -575,40 +609,29 @@ func _on_save_pressed() -> void:
 	f.store_string(JSON.stringify(data, "\t"))
 	f.close()
 	_show_status("Saved: " + path)
-
-	# NEW: Update the chip & Publish button from the just-saved validation result
+	
 	if data.has("meta") and (data["meta"] as Dictionary).has("validated"):
 		var ok_now := bool((data["meta"] as Dictionary)["validated"])
 		_update_validation_chip(ok_now)
+	
+	# Remember last_opened_coil_path on current profile
+	if has_node("/root/ProfileManager"):
+		var pm2: Node = get_node("/root/ProfileManager")
+		if pm2.has_method("set_current_last_opened_coil"):
+			pm2.call("set_current_last_opened_coil", path)
 
 ## Open a file dialog to choose a coil to load
 func _on_load_pressed() -> void:
 	# Ensure save_dir exists (e.g., "user://coils")
 	if DirAccess.open(save_dir) == null:
-		DirAccess.make_dir_recursive_absolute(save_dir)
+		var err: int = DirAccess.make_dir_recursive_absolute(save_dir)
+		if err != OK:
+			_show_status("Failed to create " + save_dir)
 	if load_dialog:
 		load_dialog.access = FileDialog.ACCESS_USERDATA
 		load_dialog.current_dir = save_dir        # e.g., "user://coils"
-		# Optional: enforce filter programmatically too
-		# load_dialog.filters = PackedStringArray(["*.json"])
 		load_dialog.popup_centered()
 
-### Load a selected coil JSON and apply it to layers
-#func _on_load_file_selected(path: String) -> void:
-	#var f := FileAccess.open(path, FileAccess.READ)
-	#if f == null:
-		#_show_status("Load failed (" + str(FileAccess.get_open_error()) + ").")
-		#return
-	#var txt: String = f.get_as_text()
-	#f.close()
-	#var parsed_v: Variant = JSON.parse_string(txt)
-	#if typeof(parsed_v) != TYPE_DICTIONARY:
-		#_show_status("Load failed: JSON malformed.")
-		#return
-	#var data: Dictionary = parsed_v as Dictionary
-	#CoilIO.apply_coil(data, base_layer, walls_layer, hazard_layer, marker_layer)
-	#_recalc_biomass()
-	#_show_status("Loaded: " + path)
 ## Load a selected coil JSON and apply it to layers
 func _on_load_file_selected(path: String) -> void:
 	var f := FileAccess.open(path, FileAccess.READ)
@@ -625,14 +648,20 @@ func _on_load_file_selected(path: String) -> void:
 	CoilIO.apply_coil(data, base_layer, walls_layer, hazard_layer, marker_layer)
 	_recalc_biomass()
 	_show_status("Loaded: " + path)
-
-	# NEW: Immediately run strict validation in memory and refresh the chip
 	_refresh_validation_state()  # don't touch disk; just reflect truth in UI
+	# Remember last_opened_coil_path on current profile
+	if has_node("/root/ProfileManager"):
+		var pm3: Node = get_node("/root/ProfileManager")
+		if pm3.has_method("set_current_last_opened_coil"):
+			pm3.call("set_current_last_opened_coil", path)
 
 ## Autosave a snapshot before starting playtest
 func _autosave_playtest() -> void:
 	if DirAccess.open(save_dir) == null:
-		DirAccess.make_dir_recursive_absolute(save_dir)
+		var err2: int = DirAccess.make_dir_recursive_absolute(save_dir)
+		if err2 != OK:
+			_show_status("Failed to create " + save_dir)
+			return
 	var path := "%s/_autosave_playtest.json" % [save_dir]
 	var f := FileAccess.open(path, FileAccess.WRITE)
 	if f:
@@ -640,48 +669,6 @@ func _autosave_playtest() -> void:
 		f.close()
 		_show_status("Autosaved: " + path)
 
-### Build a Dictionary snapshot of the current coil
-#func _capture_coil() -> Dictionary:
-	#var tileset_path: String = ""
-	#if coil_map.tile_set:
-		#tileset_path = coil_map.tile_set.resource_path
-	#return {
-		#"meta": {
-			#"biomass_cap": biomass_cap,
-			#"biomass_used": _biomass_used,
-			#"tileset": tileset_path
-		#},
-		#"layers": {
-			#"base": CoilIO.serialize_layer(base_layer),
-			#"walls": CoilIO.serialize_layer(walls_layer),
-			#"hazard": CoilIO.serialize_layer(hazard_layer),
-			#"marker": CoilIO.serialize_layer(marker_layer)
-		#}
-	#}
-### --- Save current coil as Dictionary snapshot (with validation flag) ---
-#func _capture_coil() -> Dictionary:
-	#var tileset_path: String = ""
-	#if coil_map.tile_set:
-		#tileset_path = coil_map.tile_set.resource_path
-	#
-	## --- NEW: run a strict validation here just to tag the save ---
-	#var validation_result: ValidationResult = _run_validation(false)  # false = no biomass bypass
-	#var is_valid: bool = validation_result.ok
-	#
-	#return {
-		#"meta": {
-			#"biomass_cap": biomass_cap,
-			#"biomass_used": _biomass_used,
-			#"tileset": tileset_path,
-			#"validated": is_valid   # <-- NEW FIELD
-		#},
-		#"layers": {
-			#"base":   CoilIO.serialize_layer(base_layer),
-			#"walls":  CoilIO.serialize_layer(walls_layer),
-			#"hazard": CoilIO.serialize_layer(hazard_layer),
-			#"marker": CoilIO.serialize_layer(marker_layer)
-		#}
-	#}
 ## --- Save current coil as Dictionary snapshot (with validation flag & details) ---
 func _capture_coil() -> Dictionary:
 	var tileset_path: String = ""
@@ -692,39 +679,40 @@ func _capture_coil() -> Dictionary:
 	var validation_result: ValidationResult = _run_validation(false)
 	_last_validation_ok = validation_result.ok  # cache for UI
 	
-	# Convert optional coords to small dicts only if set
-	var spawn_dict := {}
+	# Optional coords: null when not present (strictly typed)
+	var spawn_v: Variant = null
 	if validation_result.spawn.x > -900000:
-		spawn_dict = {"x": validation_result.spawn.x, "y": validation_result.spawn.y}
-	var heart_dict := {}
+		spawn_v = {"x": validation_result.spawn.x, "y": validation_result.spawn.y}
+	var heart_v: Variant = null
 	if validation_result.heart.x > -900000:
-		heart_dict = {"x": validation_result.heart.x, "y": validation_result.heart.y}
+		heart_v = {"x": validation_result.heart.x, "y": validation_result.heart.y}
 	
-	var validation_payload := {
-		"ok": validation_result.ok,
-		"messages": validation_result.messages,
-		"spawn": spawn_dict,
-		"heart": heart_dict,
-		"biomass_used": _biomass_used,
-		"biomass_cap": biomass_cap,
-		"validator_version": "1",
-		"timestamp": _iso_timestamp()
+	var validation_payload: Dictionary = {
+	"ok": validation_result.ok,
+	"messages": validation_result.messages,
+	"spawn": spawn_v,          # ← will be null when not present
+	"heart": heart_v,          # ← will be null when not present
+	"biomass_used": _biomass_used,
+	"biomass_cap": biomass_cap,
+	"validator_version": 1,
+	"timestamp": _iso_timestamp()
 	}
 	
 	return {
-		"meta": {
-			"biomass_cap": biomass_cap,
-			"biomass_used": _biomass_used,
-			"tileset": tileset_path,
-			"validated": validation_result.ok,   # NEW
-			"validation": validation_payload     # NEW
-		},
-		"layers": {
-			"base":   CoilIO.serialize_layer(base_layer),
-			"walls":  CoilIO.serialize_layer(walls_layer),
-			"hazard": CoilIO.serialize_layer(hazard_layer),
-			"marker": CoilIO.serialize_layer(marker_layer)
-		}
+	"meta": {
+		"schema_version": COIL_SCHEMA_VERSION,             # integer schema version for coil files
+		"biomass_cap": biomass_cap,
+		"biomass_used": _biomass_used,
+		"tileset": tileset_path,
+		"validated": validation_result.ok,
+		"validation": validation_payload
+	},
+	"layers": {
+		"base":   CoilIO.serialize_layer(base_layer),
+		"walls":  CoilIO.serialize_layer(walls_layer),
+		"hazard": CoilIO.serialize_layer(hazard_layer),
+		"marker": CoilIO.serialize_layer(marker_layer)
+	}
 	}
 
 ## Restore and clear any pending coil handed back from Playtest
@@ -755,17 +743,9 @@ func _restore_pending_coil_if_any() -> void:
 
 ## --- Validation & Playtest Handoff --------------------------------------------------------
 
-## Validate popup is always strict; no dev bypass here.
-func _on_validate_pressed() -> void:
-	# Run a full check list and show a friendly popup
-	_recalc_biomass()
-	var result := _run_validation(false) # always strict on Validate
-	_show_validation_dialog(result)
-
-## Delegate to CoilValidator and adapt its result for the UI
+## Delegate to CoilValidator (strict by default). Only Playtest may pass ignore_biomass=true when DevMode + flag is set.
 func _run_validation(ignore_biomass: bool = false) -> ValidationResult:
 	var out := ValidationResult.new()
-	
 	var result: Dictionary = CoilValidatorScript.validate(
 		base_layer,
 		walls_layer,
@@ -826,16 +806,20 @@ func _show_validation_dialog(r: ValidationResult) -> void:
 		validate_body.append_text("• Heartroot at %s\n" % [str(r.heart)])
 	validate_dialog.popup_centered() # uses 'size' above
 
+## Validate popup is always strict; no dev bypass here.
+func _on_validate_pressed() -> void:
+	# Run a full check list and show a friendly popup
+	_recalc_biomass()
+	var result: ValidationResult = _run_validation(false) # always strict on Validate
+	_show_validation_dialog(result)
+
 ## Playtest is strict unless Dev Mode is ON and ignore_biomass_limit is true (GameFlags/meta/checkbox).
 func _on_playtest_pressed() -> void:
-	# Validate first
-	
 	_recalc_biomass()
 	## Validate, then decide if biomass cap can be bypassed in dev
 	var allow_over: bool = false
 	if has_node("/root/GameFlags"):
 		var gf: Node = get_node("/root/GameFlags")
-
 		var bypass: bool = false
 		if gf.has_meta("ignore_biomass_limit"):
 			bypass = bool(gf.get_meta("ignore_biomass_limit"))
@@ -864,39 +848,23 @@ func _on_playtest_pressed() -> void:
 	else:
 		_show_status("Playtest: CoilSession autoload missing.")
 
-## --- Utility Helpers --------------------------------------------------------
+## --- Publish Cluster --------------------------------------------------------
 
-## Update the status label and print to the console
-func _show_status(msg: String) -> void:
-	status_label.text = msg
-	print(msg)
-
-## Find the default Flesh brush with rule_profile BASE
-func _find_default_flesh_brush() -> BrushEntry:
-	if brush_registry == null:
-		return null
-	for be in brush_registry.brushes:
-		if be is BrushEntry and be.rule_profile == "BASE" and be.source_id >= 0:
-			return be
-	return null
-
-#func _on_publish_btn_pressed() -> void:
-	#pass # Replace with function body.
-## Publish is ALWAYS strict. No dev bypass. Writes to user://Published/ and updates manifest.
+## Publish (Local Stub): strict validation → JSON to user://Published/ → manifest upsert.
+## No backend yet; this is Phase 1.4/1.5 local “share” semantics.
 func _on_publish_pressed() -> void:
 	_recalc_biomass()
-	var result := _run_validation(false)  # false => no biomass bypass (STRICT)
+	var result: ValidationResult = _run_validation(false) # false => no biomass bypass (STRICT)
 	if not result.ok:
 		_show_validation_dialog(result)  # Friendly popup you already have
 		return
 	
 	# Ensure Published/ exists (sibling to save_dir)
-	var pub_dir := "user://Published"
+	var pub_dir: String = DIR_PUBLISHED
 	_ensure_dir(pub_dir)
 	
 	# Timestamped publish path
-	var ts := Time.get_datetime_string_from_system(false, true).replace(":", "-")
-	var pub_path := "%s/coil_%s.json" % [pub_dir, ts]
+	var pub_path: String = _timestamp_file(pub_dir, F_COIL_PREFIX, EXT_JSON)
 	
 	# Capture a fresh, validated snapshot (includes validated flag + details)
 	var data := _capture_coil()
@@ -916,88 +884,21 @@ func _on_publish_pressed() -> void:
 	# Sync chip state (should be valid at this point)
 	_update_validation_chip(true)
 
-## Strictly recompute validation and refresh Draft/Valid chip & Publish enable
-func _refresh_validation_state() -> void:
-	var r := _run_validation(false)  # strict
-	_last_validation_ok = r.ok
-	_update_validation_chip(_last_validation_ok)
-
-## Small UI updater for the ValidationChip and Publish button
-func _update_validation_chip(is_ok: bool) -> void:
-	if validation_chip:
-		if is_ok:
-			validation_chip.text = "Valid"
-			validation_chip.modulate = Color(0.75, 1.0, 0.75)  # soft green
-		else:
-			validation_chip.text = "Draft"
-			validation_chip.modulate = Color(1.0, 0.75, 0.75)  # soft red
-
-	# Enable/disable Publish affordance (belt & braces: we still re-check inside publish)
-	if publish_btn:
-		publish_btn.disabled = not is_ok
-
 ## Ensure a directory exists (recursive)
-#func _ensure_dir(dir_path: String) -> void:
-	#if DirAccess.open(dir_path) == null:
-		#var ok := DirAccess.make_dir_recursive_absolute(dir_path)
-		#if ok != OK:
-			#_show_status("Failed to create: " + dir_path)
 func _ensure_dir(dir_path: String) -> void:
 	if DirAccess.open(dir_path) == null:
 		var err: int = DirAccess.make_dir_recursive_absolute(dir_path)  # typed int (Error enum)
 		if err != OK:
 			_show_status("Failed to create: " + dir_path)
 
-### Append/update publish manifest with a single entry
-#func _update_publish_manifest(pub_dir: String, pub_path: String, data: Dictionary) -> void:
-	#var manifest_path := pub_dir + "/manifest.json"
-	#var manifest: Dictionary = {"version": 1, "items": []}
-#
-	## Load existing manifest if present
-	#if FileAccess.file_exists(manifest_path):
-		#var f_in := FileAccess.open(manifest_path, FileAccess.READ)
-		#if f_in:
-			#var txt := f_in.get_as_text()
-			#f_in.close()
-			#var parsed := JSON.parse_string(txt)
-			#if typeof(parsed) == TYPE_DICTIONARY:
-				#manifest = parsed
-#
-	## Build new/updated entry
-	#var meta := data.get("meta", {}) as Dictionary
-	#var entry := {
-		#"path": pub_path,
-		#"title": "Untitled",  # placeholder; later you can add a Title field in UI/meta
-		#"published_at": _iso_timestamp(),
-		#"biomass_used": meta.get("biomass_used", _biomass_used),
-		#"biomass_cap": meta.get("biomass_cap", biomass_cap)
-	#}
-#
-	## Upsert by path
-	#var items := manifest.get("items", []) as Array
-	#var replaced := false
-	#for i in range(items.size()):
-		#var it := items[i] as Dictionary
-		#if (it.get("path", "") as String) == pub_path:
-			#items[i] = entry
-			#replaced = true
-			#break
-	#if not replaced:
-		#items.append(entry)
-	#manifest["items"] = items
-#
-	## Write manifest back
-	#var f_out := FileAccess.open(manifest_path, FileAccess.WRITE)
-	#if f_out:
-		#f_out.store_string(JSON.stringify(manifest, "\t"))
-		#f_out.close()
-## Append/update publish manifest with a single entry (STRICT TYPING)
+## Manifest contract:
+##   version:int, items:Array<{ path, title, published_at, biomass_used:int, biomass_cap:int, profile_id }>
 func _update_publish_manifest(pub_dir: String, pub_path: String, data: Dictionary) -> void:
-	var manifest_path: String = pub_dir + "/manifest.json"
+	var manifest_path: String = PUBLISHED_MANIFEST
 	
 	# Start with a default manifest object
 	var manifest: Dictionary = {
-		"version": 1,
+		"version": MANIFEST_VERSION,
 		"items": []  # Array of Dictionary entries
 	}
 	
@@ -1020,13 +921,23 @@ func _update_publish_manifest(pub_dir: String, pub_path: String, data: Dictionar
 	if typeof(meta_v) == TYPE_DICTIONARY:
 		meta = meta_v as Dictionary
 	
+	# Determine profile_id, safe default ""
+	var profile_id: String = ""
+	if has_node("/root/ProfileManager"):
+		var pm: Node = get_node("/root/ProfileManager")
+		if pm.has_method("get_current_profile_id"):
+			var pid_v: Variant = pm.call("get_current_profile_id")
+			if typeof(pid_v) == TYPE_STRING:
+				profile_id = String(pid_v)
+		
 	# Build the manifest entry (use explicit ints/strings for strict typing)
 	var entry: Dictionary = {
 		"path": pub_path,
 		"title": "Untitled",  # TODO: wire a title field later
 		"published_at": _iso_timestamp(),
 		"biomass_used": int(meta.get("biomass_used", _biomass_used)),
-		"biomass_cap": int(meta.get("biomass_cap", biomass_cap))
+		"biomass_cap": int(meta.get("biomass_cap", biomass_cap)),
+		"profile_id": profile_id
 	}
 	
 	# Get current items as a typed Array (via Variant)
@@ -1061,5 +972,208 @@ func _update_publish_manifest(pub_dir: String, pub_path: String, data: Dictionar
 ## ISO8601-like timestamp for metadata
 func _iso_timestamp() -> String:
 	return Time.get_datetime_string_from_system(true, true)  # UTC, with separators
+
+func _timestamp_file(dir_path: String, prefix: String, ext: String) -> String:
+	var ts: String = Time.get_datetime_string_from_system(false, true).replace(":", "-")
+	return "%s/%s%s%s" % [dir_path, prefix, ts, ext]
+
+## --- Utility Helpers --------------------------------------------------------
+
+## Update the status label and print to the console
+func _show_status(msg: String) -> void:
+	status_label.text = msg
+	print(msg)
+
+## Find the default Flesh brush with rule_profile BASE
+func _find_default_flesh_brush() -> BrushEntry:
+	if brush_registry == null:
+		return null
+	for be in brush_registry.brushes:
+		if be is BrushEntry and be.rule_profile == "BASE" and be.source_id >= 0:
+			return be
+	return null
+
+## Small UI updater for the ValidationChip and Publish button
+func _update_validation_chip(is_ok: bool) -> void:
+	if validation_chip:
+		if is_ok:
+			validation_chip.text = "Valid"
+			validation_chip.modulate = Color(0.75, 1.0, 0.75)  # soft green
+		else:
+			validation_chip.text = "Draft"
+			validation_chip.modulate = Color(1.0, 0.75, 0.75)  # soft red
+
+	# Enable/disable Publish affordance (belt & braces: we still re-check inside publish)
+	if publish_btn:
+		publish_btn.disabled = not is_ok
+
+## Strictly recompute validation and refresh Draft/Valid chip & Publish enable
+func _refresh_validation_state() -> void:
+	var r := _run_validation(false)  # strict
+	_last_validation_ok = r.ok
+	_update_validation_chip(_last_validation_ok)
+
+# Profile UI is optional sugar for local personas. Safe if /root/ProfileManager is missing.
+# (Future: consider moving this chunk to its own scene script for separation of concerns.)
+# --- Profile UI Helpers ---
+
+func _refresh_profile_ui() -> void:
+	var display: String = "Profile: (none)"
+	var items: Array = []
+	var current_id: String = ""
+
+	if has_node("/root/ProfileManager"):
+		var pm: Node = get_node("/root/ProfileManager")
+		
+		# Get current id
+		if pm.has_method("get_current_profile_id"):
+			var id_v: Variant = pm.call("get_current_profile_id")
+			if typeof(id_v) == TYPE_STRING:
+				current_id = String(id_v)
+			else:
+				current_id = ""
+		
+		# Get profiles
+		if pm.has_method("get_profiles"):
+			var items_v: Variant = pm.call("get_profiles")
+			if typeof(items_v) == TYPE_ARRAY:
+				items = items_v as Array
+		
+		# Derive current display name
+		for v in items:
+			if typeof(v) == TYPE_DICTIONARY:
+				var d: Dictionary = v as Dictionary
+				var vid: String = String(d.get("id", ""))
+				if vid == current_id:
+					display = "Profile: " + String(d.get("display_name", "Player"))
+					break
+	
+	if is_instance_valid(profile_btn):
+		profile_btn.text = display
+	
+	# Menu rebuild
+	if is_instance_valid(profile_menu):
+		profile_menu.clear()
+		var idx: int = 0
+		for v in items:
+			if typeof(v) == TYPE_DICTIONARY:
+				var d: Dictionary = v as Dictionary
+				var name: String = String(d.get("display_name", "Player"))
+				profile_menu.add_item(name, idx)
+				profile_menu.set_item_metadata(idx, String(d.get("id", "")))
+				idx += 1
+		# Separator + Manage
+		profile_menu.add_separator()
+		profile_menu.add_item("Manage Profiles…", 9999)
+
+	# Dialog list
+	if is_instance_valid(profile_list):
+		profile_list.clear()
+		for v in items:
+			if typeof(v) == TYPE_DICTIONARY:
+				var d2: Dictionary = v as Dictionary
+				var name2: String = String(d2.get("display_name", "Player"))
+				var id2: String = String(d2.get("id", ""))
+				var row_text: String = name2 + "  (" + id2 + ")"
+				profile_list.add_item(row_text)
+				profile_list.set_item_metadata(profile_list.get_item_count() - 1, id2)
+
+func _on_current_profile_changed(_id: String) -> void:
+	_refresh_profile_ui()
+
+# --- Profile UI Events ---
+
+func _on_profile_btn_pressed() -> void:
+	if is_instance_valid(profile_menu) and is_instance_valid(profile_btn):
+		profile_menu.popup_under_control(profile_btn)
+
+func _on_profile_menu_id_pressed(id: int) -> void:
+	# Manage Profiles
+	if id == MENU_MANAGE_ID:
+		if is_instance_valid(profile_dialog):
+			profile_dialog.popup_centered()
+		return
+	if is_instance_valid(profile_menu):
+		var idx: int = profile_menu.get_item_index(id)   # ← convert id → index
+		if idx >= 0:
+			var meta: Variant = profile_menu.get_item_metadata(idx)
+			var profile_id: String = ""
+			if typeof(meta) == TYPE_STRING:
+				profile_id = String(meta)
+			if profile_id != "" and has_node("/root/ProfileManager"):
+				var pm: Node = get_node("/root/ProfileManager")
+				if pm.has_method("set_current_profile"):
+					pm.call("set_current_profile", profile_id)
+
+func _on_profile_create_pressed() -> void:
+	if not has_node("/root/ProfileManager"):
+		return
+	var name_in: String = ""
+	if is_instance_valid(profile_new_name):
+		name_in = profile_new_name.text
+	var pm: Node = get_node("/root/ProfileManager")
+	if pm.has_method("create_profile"):
+		var new_id_v: Variant = pm.call("create_profile", name_in)
+		# Clear input
+		if is_instance_valid(profile_new_name):
+			profile_new_name.text = ""
+	_refresh_profile_ui()
+
+func _on_profile_rename_pressed() -> void:
+	if not has_node("/root/ProfileManager"):
+		return
+	if not is_instance_valid(profile_list):
+		return
+	var selected: int = _first_selected_or_minus_one(profile_list)
+	if selected < 0:
+		return
+	var id_v: Variant = profile_list.get_item_metadata(selected)
+	var id: String = String(id_v)
+	var new_name: String = ""
+	if is_instance_valid(profile_new_name):
+		new_name = profile_new_name.text
+	if new_name.strip_edges() == "":
+		return
+	var pm: Node = get_node("/root/ProfileManager")
+	if pm.has_method("rename_profile"):
+		pm.call("rename_profile", id, new_name)
+		profile_new_name.text = ""
+	_refresh_profile_ui()
+
+func _on_profile_delete_pressed() -> void:
+	if not has_node("/root/ProfileManager"):
+		return
+	if not is_instance_valid(profile_list):
+		return
+	var selected: int = _first_selected_or_minus_one(profile_list)
+	if selected < 0:
+		return
+	var id_v: Variant = profile_list.get_item_metadata(selected)
+	var id: String = String(id_v)
+	var pm: Node = get_node("/root/ProfileManager")
+	if pm.has_method("delete_profile"):
+		pm.call("delete_profile", id)
+	_refresh_profile_ui()
+
+func _on_profile_set_active_pressed() -> void:
+	if not has_node("/root/ProfileManager"):
+		return
+	if not is_instance_valid(profile_list):
+		return
+	var selected: int = _first_selected_or_minus_one(profile_list)
+	if selected < 0:
+		return
+	var id_v: Variant = profile_list.get_item_metadata(selected)
+	var id: String = String(id_v)
+	var pm: Node = get_node("/root/ProfileManager")
+	if pm.has_method("set_current_profile"):
+		pm.call("set_current_profile", id)
+	_refresh_profile_ui()
+
+func _first_selected_or_minus_one(list: ItemList) -> int:
+	var sel := list.get_selected_items()
+	if sel.size() > 0:
+		return int(sel[0])
+	return -1
 
 ## end builder_mode.gd
