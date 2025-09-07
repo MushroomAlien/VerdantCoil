@@ -188,13 +188,11 @@ func _on_arrived_at(tile: Vector2i) -> void:
 	_is_moving = false
 
 func _win_and_return() -> void:
-	# Lock input so we don't queue more moves during the scene swap
 	_is_moving = true
 	print("🏆 Reached Heartroot — WIN!")
 	if has_node("/root/CoilSession"):
-		get_node("/root/CoilSession").call("return_to_builder")
+		get_node("/root/CoilSession").call("end_playtest")
 	else:
-		# Fallback if the autoload isn't present (update path if needed)
 		get_tree().change_scene_to_file("res://Scenes/BuilderMode/BuilderMode.tscn")
 
 # Increments the number of movement inputs to ignore (used by Sticky slow)

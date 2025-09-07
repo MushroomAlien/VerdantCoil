@@ -1,6 +1,6 @@
-# res://System/profile_manager.gd
-# Godot 4.4.1 — Minimal Player Profile manager
-# Strict typing, JSON stored in user://Profiles/
+ ## res://System/profile_manager.gd
+ ## Godot 4.4.1 — Minimal Player Profile manager
+ ## Strict typing, JSON stored in user://Profiles/
 
 extends Node
 
@@ -25,6 +25,8 @@ func _ready() -> void:
 	
 	# Load or create manifest
 	_manifest = _load_manifest()
+	_dedupe_manifest()
+	_save_manifest()
 	
 	# If empty, create a default profile
 	var items: Array = []
@@ -34,6 +36,7 @@ func _ready() -> void:
 	
 	if items.size() == 0:
 		var new_id: String = _create_profile_file("Player 1")
+		_append_manifest_item(new_id, "Player 1")
 		_set_current_profile_id(new_id)
 		_save_manifest()
 	
@@ -61,14 +64,30 @@ func get_current_profile() -> Dictionary:
 	var id: String = get_current_profile_id()
 	return _load_profile_file(id)
 
+# Create a new profile, append to manifest, persist, and notify UI
 func create_profile(display_name: String) -> String:
 	if display_name.strip_edges() == "":
 		display_name = "Player"
-	var new_id: String = _create_profile_file(display_name)
-	_append_manifest_item(new_id, display_name)
+	var new_id: String = _create_profile_file(display_name)  # writes the profile_*.json
+	_append_manifest_item(new_id, display_name)              # add one entry (no duplicates)
 	_save_manifest()
 	emit_signal("profile_list_changed")
 	return new_id
+
+func _create_profile_file(display_name: String) -> String:
+	var id: String = _new_id()
+	var now: String = _iso_timestamp()
+	var data: Dictionary = {
+		"id": id,
+		"display_name": display_name,
+		"avatar_color": "#87CEEB",
+		"last_opened_coil_path": "",
+		"version": 1,
+		"created_at": now,
+		"last_used_at": now
+	}
+	_save_profile_file(id, data)
+	return id
 
 func rename_profile(id: String, new_name: String) -> void:
 	if id == "":
@@ -176,23 +195,6 @@ func _save_manifest() -> void:
 
 func _profile_path(id: String) -> String:
 	return DIR_PROFILES + "/profile_" + id + ".json"
-
-func _create_profile_file(display_name: String) -> String:
-	var id: String = _new_id()
-	var now: String = _iso_timestamp()
-	var data: Dictionary = {
-		"id": id,
-		"display_name": display_name,
-		"avatar_color": "#87CEEB",
-		"last_opened_coil_path": "",
-		"version": 1,
-		"created_at": now,
-		"last_used_at": now
-	}
-	_save_profile_file(id, data)
-	# Append to manifest
-	_append_manifest_item(id, display_name)
-	return id
 
 func _load_profile_file(id: String) -> Dictionary:
 	if id == "":
@@ -328,3 +330,22 @@ func _pad2(n: int) -> String:
 
 func _iso_timestamp() -> String:
 	return Time.get_datetime_string_from_system(true, true)  # UTC, with separators
+
+func _dedupe_manifest() -> void:
+	var items: Array = []
+	var items_v: Variant = _manifest.get("items", [])
+	if typeof(items_v) == TYPE_ARRAY:
+		items = items_v as Array
+
+	var seen: Dictionary = {}
+	var clean: Array = []
+	for v in items:
+		if typeof(v) == TYPE_DICTIONARY:
+			var d: Dictionary = v as Dictionary
+			var id: String = String(d.get("id", ""))
+			if id != "" and not seen.has(id):
+				seen[id] = true
+				clean.append(d)
+	_manifest["items"] = clean
+
+## end res://System/profile_manager.gd

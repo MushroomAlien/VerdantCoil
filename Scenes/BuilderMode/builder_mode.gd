@@ -64,23 +64,15 @@ class ValidationResult:
 @onready var dev_badge: Label = $UI/DevOverlay/DevBadge
 @onready var validate_dialog: AcceptDialog = $UI/TopBar/ValidateDialog
 @onready var validate_body: RichTextLabel = $UI/TopBar/ValidateDialog/Body
-@onready var validate_btn: Button = $UI/TopBar/PaletteRow/ValidateBtn
-@onready var save_btn: Button = $UI/TopBar/PaletteRow/SaveBtn
-@onready var playtest_btn: Button = $UI/TopBar/PaletteRow/PlaytestBtn
-@onready var load_btn: Button = $UI/TopBar/PaletteRow/LoadBtn
+@onready var validate_btn: Button = %ValidateBtn
+@onready var save_btn: Button = %SaveBtn
+@onready var load_btn: Button = %LoadBtn
+@onready var playtest_btn: Button = %PlaytestBtn
+@onready var publish_btn: Button = %PublishBtn
+@onready var hub_btn: Button = %HubBtn
+@onready var validation_chip: Label = %ValidationChip
 @onready var load_dialog: FileDialog = $UI/TopBar/LoadDialog
-@onready var publish_btn: Button = $UI/TopBar/PaletteRow/PublishBtn
-@onready var validation_chip: Label = $UI/TopBar/InfoRow/ValidationChip
 @onready var _q: CoilQuery = CoilQueryScript.new()
-@onready var profile_btn: Button = $UI/TopBar/PaletteRow/ProfileBtn
-@onready var profile_menu: PopupMenu = $UI/TopBar/PaletteRow/ProfileBtn/ProfileMenu
-@onready var profile_dialog: AcceptDialog = $UI/TopBar/ProfileDialog
-@onready var profile_list: ItemList = $UI/TopBar/ProfileDialog/Content/ProfileList
-@onready var profile_new_name: LineEdit = $UI/TopBar/ProfileDialog/Content/NewRow/NewName
-@onready var profile_create_btn: Button = $UI/TopBar/ProfileDialog/Content/NewRow/CreateBtn
-@onready var profile_rename_btn: Button = $UI/TopBar/ProfileDialog/Content/Actions/RenameBtn
-@onready var profile_delete_btn: Button = $UI/TopBar/ProfileDialog/Content/Actions/DeleteBtn
-@onready var profile_set_active_btn: Button = $UI/TopBar/ProfileDialog/Content/Actions/SetActiveBtn
 
 ## --- State --------------------------------------------------------
 
@@ -115,6 +107,8 @@ func _ready() -> void:
 		load_btn.pressed.connect(_on_load_pressed)
 	if publish_btn:
 		publish_btn.pressed.connect(_on_publish_pressed)
+	if hub_btn:
+		hub_btn.pressed.connect(_on_hub_pressed)
 	if load_dialog:
 		load_dialog.file_selected.connect(_on_load_file_selected)
 	
@@ -169,21 +163,6 @@ func _ready() -> void:
 	if ignore_biomass_limit:
 		ignore_biomass_limit.tooltip_text = "Dev only: bypass biomass cap when Playtesting."
 	
-	# --- Profile UI wiring ---
-	if is_instance_valid(profile_btn):
-		profile_btn.pressed.connect(_on_profile_btn_pressed)
-	if is_instance_valid(profile_menu):
-		profile_menu.id_pressed.connect(_on_profile_menu_id_pressed)
-	# Dialog buttons
-	if is_instance_valid(profile_create_btn):
-		profile_create_btn.pressed.connect(_on_profile_create_pressed)
-	if is_instance_valid(profile_rename_btn):
-		profile_rename_btn.pressed.connect(_on_profile_rename_pressed)
-	if is_instance_valid(profile_delete_btn):
-		profile_delete_btn.pressed.connect(_on_profile_delete_pressed)
-	if is_instance_valid(profile_set_active_btn):
-		profile_set_active_btn.pressed.connect(_on_profile_set_active_pressed)
-	
 	# Subscribe to ProfileManager signals (safe if autoload missing)
 	if has_node("/root/ProfileManager"):
 		var pm: Node = get_node("/root/ProfileManager")
@@ -192,8 +171,6 @@ func _ready() -> void:
 		if pm.has_signal("current_profile_changed"):
 			pm.connect("current_profile_changed", Callable(self, "_on_current_profile_changed"))
 	
-	# Initial populate
-	_refresh_profile_ui()
 	# ---- restore coil if returning from Playtest ----
 	_restore_pending_coil_if_any()
 	# keep numbers fresh after applying
@@ -645,6 +622,13 @@ func _on_load_file_selected(path: String) -> void:
 		_show_status("Load failed: JSON malformed.")
 		return
 	var data: Dictionary = parsed_v as Dictionary
+	var meta_v: Variant = data.get("meta", {})
+	if typeof(meta_v) == TYPE_DICTIONARY:
+		var meta: Dictionary = meta_v
+		var creator_id: String = String(meta.get("creator_profile_id", ""))
+		var cur_id: String = _current_profile_id()
+		if creator_id != "" and cur_id != "" and creator_id != cur_id:
+			_show_status("⚠ Loaded coil from another profile.")
 	CoilIO.apply_coil(data, base_layer, walls_layer, hazard_layer, marker_layer)
 	_recalc_biomass()
 	_show_status("Loaded: " + path)
@@ -700,12 +684,14 @@ func _capture_coil() -> Dictionary:
 	
 	return {
 	"meta": {
-		"schema_version": COIL_SCHEMA_VERSION,             # integer schema version for coil files
+		"schema_version": COIL_SCHEMA_VERSION,
 		"biomass_cap": biomass_cap,
 		"biomass_used": _biomass_used,
 		"tileset": tileset_path,
 		"validated": validation_result.ok,
-		"validation": validation_payload
+		"validation": validation_payload,
+		"creator_profile_id": _current_profile_id(),
+		"creator_profile_name": _current_profile_name()
 	},
 	"layers": {
 		"base":   CoilIO.serialize_layer(base_layer),
@@ -844,7 +830,7 @@ func _on_playtest_pressed() -> void:
 	# Hand off to Explore via CoilSession
 	var data: Dictionary = _capture_coil()
 	if has_node("/root/CoilSession"):
-		get_node("/root/CoilSession").call("start_playtest", data)
+		get_node("/root/CoilSession").call("start_playtest", data, "builder")
 	else:
 		_show_status("Playtest: CoilSession autoload missing.")
 
@@ -1013,167 +999,28 @@ func _refresh_validation_state() -> void:
 	_last_validation_ok = r.ok
 	_update_validation_chip(_last_validation_ok)
 
-# Profile UI is optional sugar for local personas. Safe if /root/ProfileManager is missing.
-# (Future: consider moving this chunk to its own scene script for separation of concerns.)
-# --- Profile UI Helpers ---
-
-func _refresh_profile_ui() -> void:
-	var display: String = "Profile: (none)"
-	var items: Array = []
-	var current_id: String = ""
-
+func _current_profile_id() -> String:
 	if has_node("/root/ProfileManager"):
 		var pm: Node = get_node("/root/ProfileManager")
-		
-		# Get current id
 		if pm.has_method("get_current_profile_id"):
-			var id_v: Variant = pm.call("get_current_profile_id")
-			if typeof(id_v) == TYPE_STRING:
-				current_id = String(id_v)
-			else:
-				current_id = ""
-		
-		# Get profiles
-		if pm.has_method("get_profiles"):
-			var items_v: Variant = pm.call("get_profiles")
-			if typeof(items_v) == TYPE_ARRAY:
-				items = items_v as Array
-		
-		# Derive current display name
-		for v in items:
+			return String(pm.call("get_current_profile_id"))
+	return ""
+
+func _current_profile_name() -> String:
+	if has_node("/root/ProfileManager"):
+		var pm: Node = get_node("/root/ProfileManager")
+		if pm.has_method("get_current_profile"):
+			var v: Variant = pm.call("get_current_profile")
 			if typeof(v) == TYPE_DICTIONARY:
-				var d: Dictionary = v as Dictionary
-				var vid: String = String(d.get("id", ""))
-				if vid == current_id:
-					display = "Profile: " + String(d.get("display_name", "Player"))
-					break
-	
-	if is_instance_valid(profile_btn):
-		profile_btn.text = display
-	
-	# Menu rebuild
-	if is_instance_valid(profile_menu):
-		profile_menu.clear()
-		var idx: int = 0
-		for v in items:
-			if typeof(v) == TYPE_DICTIONARY:
-				var d: Dictionary = v as Dictionary
-				var name: String = String(d.get("display_name", "Player"))
-				profile_menu.add_item(name, idx)
-				profile_menu.set_item_metadata(idx, String(d.get("id", "")))
-				idx += 1
-		# Separator + Manage
-		profile_menu.add_separator()
-		profile_menu.add_item("Manage Profiles…", 9999)
+				return String((v as Dictionary).get("display_name", ""))
+	return ""
 
-	# Dialog list
-	if is_instance_valid(profile_list):
-		profile_list.clear()
-		for v in items:
-			if typeof(v) == TYPE_DICTIONARY:
-				var d2: Dictionary = v as Dictionary
-				var name2: String = String(d2.get("display_name", "Player"))
-				var id2: String = String(d2.get("id", ""))
-				var row_text: String = name2 + "  (" + id2 + ")"
-				profile_list.add_item(row_text)
-				profile_list.set_item_metadata(profile_list.get_item_count() - 1, id2)
-
-func _on_current_profile_changed(_id: String) -> void:
-	_refresh_profile_ui()
-
-# --- Profile UI Events ---
-
-func _on_profile_btn_pressed() -> void:
-	if is_instance_valid(profile_menu) and is_instance_valid(profile_btn):
-		profile_menu.popup_under_control(profile_btn)
-
-func _on_profile_menu_id_pressed(id: int) -> void:
-	# Manage Profiles
-	if id == MENU_MANAGE_ID:
-		if is_instance_valid(profile_dialog):
-			profile_dialog.popup_centered()
-		return
-	if is_instance_valid(profile_menu):
-		var idx: int = profile_menu.get_item_index(id)   # ← convert id → index
-		if idx >= 0:
-			var meta: Variant = profile_menu.get_item_metadata(idx)
-			var profile_id: String = ""
-			if typeof(meta) == TYPE_STRING:
-				profile_id = String(meta)
-			if profile_id != "" and has_node("/root/ProfileManager"):
-				var pm: Node = get_node("/root/ProfileManager")
-				if pm.has_method("set_current_profile"):
-					pm.call("set_current_profile", profile_id)
-
-func _on_profile_create_pressed() -> void:
-	if not has_node("/root/ProfileManager"):
-		return
-	var name_in: String = ""
-	if is_instance_valid(profile_new_name):
-		name_in = profile_new_name.text
-	var pm: Node = get_node("/root/ProfileManager")
-	if pm.has_method("create_profile"):
-		var new_id_v: Variant = pm.call("create_profile", name_in)
-		# Clear input
-		if is_instance_valid(profile_new_name):
-			profile_new_name.text = ""
-	_refresh_profile_ui()
-
-func _on_profile_rename_pressed() -> void:
-	if not has_node("/root/ProfileManager"):
-		return
-	if not is_instance_valid(profile_list):
-		return
-	var selected: int = _first_selected_or_minus_one(profile_list)
-	if selected < 0:
-		return
-	var id_v: Variant = profile_list.get_item_metadata(selected)
-	var id: String = String(id_v)
-	var new_name: String = ""
-	if is_instance_valid(profile_new_name):
-		new_name = profile_new_name.text
-	if new_name.strip_edges() == "":
-		return
-	var pm: Node = get_node("/root/ProfileManager")
-	if pm.has_method("rename_profile"):
-		pm.call("rename_profile", id, new_name)
-		profile_new_name.text = ""
-	_refresh_profile_ui()
-
-func _on_profile_delete_pressed() -> void:
-	if not has_node("/root/ProfileManager"):
-		return
-	if not is_instance_valid(profile_list):
-		return
-	var selected: int = _first_selected_or_minus_one(profile_list)
-	if selected < 0:
-		return
-	var id_v: Variant = profile_list.get_item_metadata(selected)
-	var id: String = String(id_v)
-	var pm: Node = get_node("/root/ProfileManager")
-	if pm.has_method("delete_profile"):
-		pm.call("delete_profile", id)
-	_refresh_profile_ui()
-
-func _on_profile_set_active_pressed() -> void:
-	if not has_node("/root/ProfileManager"):
-		return
-	if not is_instance_valid(profile_list):
-		return
-	var selected: int = _first_selected_or_minus_one(profile_list)
-	if selected < 0:
-		return
-	var id_v: Variant = profile_list.get_item_metadata(selected)
-	var id: String = String(id_v)
-	var pm: Node = get_node("/root/ProfileManager")
-	if pm.has_method("set_current_profile"):
-		pm.call("set_current_profile", id)
-	_refresh_profile_ui()
-
-func _first_selected_or_minus_one(list: ItemList) -> int:
-	var sel := list.get_selected_items()
-	if sel.size() > 0:
-		return int(sel[0])
-	return -1
+func _on_hub_pressed() -> void:
+	# Optional: autosave a snapshot before leaving (comment out if you don’t want it)
+	# _autosave_playtest()
+	if has_node("/root/CoilSession"):
+		get_node("/root/CoilSession").call("return_to_heartroot")
+	else:
+		get_tree().change_scene_to_file("res://Scenes/Heartroot/Heartroot.tscn")
 
 ## end builder_mode.gd

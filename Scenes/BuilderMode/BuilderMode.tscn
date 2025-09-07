@@ -56,7 +56,7 @@ layout_mode = 2
 size_flags_vertical = 3
 mouse_filter = 2
 
-[node name="Spacer" type="Control" parent="UI/TopBar/PaletteRow"]
+[node name="SpacerL" type="Control" parent="UI/TopBar/PaletteRow"]
 custom_minimum_size = Vector2(4, 0)
 layout_mode = 2
 size_flags_vertical = 4
@@ -93,50 +93,69 @@ toggle_mode = true
 layout_mode = 2
 toggle_mode = true
 
-[node name="Spacer2" type="Control" parent="UI/TopBar/PaletteRow"]
+[node name="ActionRow" type="HBoxContainer" parent="UI/TopBar"]
+layout_mode = 2
+size_flags_vertical = 3
+alignment = 1
+
+[node name="SpacerL" type="Control" parent="UI/TopBar/ActionRow"]
 custom_minimum_size = Vector2(16, 0)
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 4
 
-[node name="ValidateBtn" type="Button" parent="UI/TopBar/PaletteRow"]
+[node name="ValidateBtn" type="Button" parent="UI/TopBar/ActionRow"]
+unique_name_in_owner = true
 custom_minimum_size = Vector2(84, 0)
 layout_mode = 2
 size_flags_vertical = 4
 theme_override_font_sizes/font_size = 16
 text = "Validate"
 
-[node name="SaveBtn" type="Button" parent="UI/TopBar/PaletteRow"]
+[node name="SaveBtn" type="Button" parent="UI/TopBar/ActionRow"]
+unique_name_in_owner = true
 custom_minimum_size = Vector2(84, 0)
 layout_mode = 2
 size_flags_vertical = 4
 theme_override_font_sizes/font_size = 16
 text = "Save"
 
-[node name="LoadBtn" type="Button" parent="UI/TopBar/PaletteRow"]
+[node name="LoadBtn" type="Button" parent="UI/TopBar/ActionRow"]
+unique_name_in_owner = true
 custom_minimum_size = Vector2(84, 0)
 layout_mode = 2
 size_flags_vertical = 4
 theme_override_font_sizes/font_size = 16
 text = "Load"
 
-[node name="PlaytestBtn" type="Button" parent="UI/TopBar/PaletteRow"]
+[node name="PlaytestBtn" type="Button" parent="UI/TopBar/ActionRow"]
+unique_name_in_owner = true
 custom_minimum_size = Vector2(84, 0)
 layout_mode = 2
 size_flags_vertical = 4
 theme_override_font_sizes/font_size = 16
 text = "Playtest"
 
-[node name="PublishBtn" type="Button" parent="UI/TopBar/PaletteRow"]
+[node name="PublishBtn" type="Button" parent="UI/TopBar/ActionRow"]
+unique_name_in_owner = true
 custom_minimum_size = Vector2(84, 0)
 layout_mode = 2
 size_flags_vertical = 4
 focus_mode = 0
 text = "Publish"
 
-[node name="Spacer3" type="Control" parent="UI/TopBar/PaletteRow"]
+[node name="HubBtn" type="Button" parent="UI/TopBar/ActionRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(84, 0)
+layout_mode = 2
+size_flags_vertical = 4
+focus_mode = 0
+text = "Hub"
+
+[node name="SpacerR" type="Control" parent="UI/TopBar/ActionRow"]
 custom_minimum_size = Vector2(4, 0)
 layout_mode = 2
+size_flags_horizontal = 3
 size_flags_vertical = 4
 
 [node name="InfoRow" type="HBoxContainer" parent="UI/TopBar"]
@@ -238,4 +257,4 @@ text = "Ignore Biomass Limit"
 
 [node name="SceneTreePrinter" parent="." instance=ExtResource("4_11ljt")]
 
-[connection signal="pressed" from="UI/TopBar/PaletteRow/PublishBtn" to="." method="_on_publish_btn_pressed"]
+[connection signal="pressed" from="UI/TopBar/ActionRow/PublishBtn" to="." method="_on_publish_btn_pressed"]

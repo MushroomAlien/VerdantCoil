@@ -5,8 +5,31 @@ extends Node
 # Set this to your ExploreMode scene path.
 @export var explore_scene_path: String = "res://Scenes/World/ExploreMode.tscn"
 @export var builder_scene_path: String = "res://Scenes/BuilderMode/BuilderMode.tscn"
+@export var heartroot_scene_path: String = "res://Scenes/Heartroot/heartroot.tscn"
 
 var pending_coil: Dictionary = {}  # the last coil handed off from Builder
+var _origin: String = "hub"   # "builder" or "hub"
+
+### Start ExploreMode with an explicit snapshot (Builder hands it in)
+func start_playtest(coil: Dictionary, origin: String = "hub") -> void:
+	pending_coil = coil
+	_origin = origin
+	
+	# Check if the coil that was loaded has the correct meta data
+	var meta := coil.get("meta", {}) as Dictionary
+	var used := int(meta.get("biomass_used", -1))
+	var cap  := int(meta.get("biomass_cap", -1))
+	if used >= 0 and cap >= 0:
+		print("CoilSession: start_playtest → biomass ", used, "/", cap, ".")
+	
+	get_tree().change_scene_to_file(explore_scene_path)
+
+func end_playtest() -> void:
+	# called by Explore when the run ends (win/exit)
+	if _origin == "builder":
+		return_to_builder()
+	else:
+		return_to_heartroot()
 
 ## Return the pending coil snapshot and clear it for the next session
 func consume_pending_coil() -> Dictionary:
@@ -18,24 +41,6 @@ func consume_pending_coil() -> Dictionary:
 	print("CoilSession: consumed pending coil.")
 	return out
 
-## Start ExploreMode with an explicit snapshot (Builder hands it in)
-func start_playtest(coil: Dictionary) -> void:
-	pending_coil = coil
-	var meta_v: Variant = coil.get("meta", {})
-	var used: int = -1
-	var cap: int = -1
-	if typeof(meta_v) == TYPE_DICTIONARY:
-		var meta: Dictionary = meta_v as Dictionary
-		if meta.has("biomass_used"):
-			used = int(meta["biomass_used"])
-		if meta.has("biomass_cap"):
-			cap = int(meta["biomass_cap"])
-	print("CoilSession: start_playtest → biomass ", used, "/", cap, ".")
-	if explore_scene_path == "":
-		push_error("Explore scene path is empty.")
-		return
-	get_tree().change_scene_to_file(explore_scene_path)
-
 ## Return to BuilderMode; Builder will restore from the session snapshot
 func return_to_builder() -> void:
 	print("CoilSession: return_to_builder() called.")
@@ -44,5 +49,11 @@ func return_to_builder() -> void:
 		return
 	get_tree().change_scene_to_file(builder_scene_path)
 
+func return_to_heartroot() -> void:
+	print("CoilSession: return_to_heartroot() called.")
+	if heartroot_scene_path == "":
+		push_error("CoilSession: heartroot_scene_path is empty.")
+		return
+	get_tree().change_scene_to_file(heartroot_scene_path)
 
 ## end coil_session.gd
