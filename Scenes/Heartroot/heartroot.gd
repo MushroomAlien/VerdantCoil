@@ -70,7 +70,7 @@ func _ready() -> void:
 # -----------------------------
 # Profiles
 # -----------------------------
-func _refresh_profiles() -> void:
+func _refresh_profiles(_changed_id: String = "") -> void:
 	profiles_list.clear()
 	
 	if not has_node("/root/ProfileManager"):
@@ -92,10 +92,9 @@ func _refresh_profiles() -> void:
 		
 		var d: Dictionary = d_v as Dictionary
 		var id: String = String(d.get("id", ""))
-		var name: String = String(d.get("display_name", "Player"))
+		var display_name: String = String(d.get("display_name", "Player"))
 		var is_active: bool = (id == current_id)
-		
-		var row_text: String = name + "  (" + id + ")"
+		var row_text: String = display_name + "  (" + id + ")"
 		if is_active:
 			row_text = "★ " + row_text + "   [ACTIVE]"
 		
@@ -277,8 +276,6 @@ func _refresh_library() -> void:
 			
 			var row: int = library_list.add_item(row_text)
 			library_list.set_item_metadata(row, path)
-
-
 
 func _on_refresh_library_pressed() -> void:
 	_refresh_library()

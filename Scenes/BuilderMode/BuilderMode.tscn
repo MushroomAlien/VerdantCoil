@@ -52,6 +52,7 @@ mouse_filter = 2
 theme_override_constants/separation = 4
 
 [node name="PaletteRow" type="HBoxContainer" parent="UI/TopBar"]
+unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 3
 mouse_filter = 2
@@ -163,18 +164,21 @@ layout_mode = 2
 size_flags_vertical = 4
 
 [node name="StatusLabel" type="Label" parent="UI/TopBar/InfoRow"]
+unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 6
 text = "[READY]"
 
 [node name="ValidationChip" type="Label" parent="UI/TopBar/InfoRow"]
+unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_colors/font_color = Color(1, 0.392157, 0, 1)
 text = "Draft"
 
 [node name="BiomassLabel" type="Label" parent="UI/TopBar/InfoRow"]
+unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 8
 text = "Biomass: 0 / 100"
@@ -189,16 +193,19 @@ text = "Coil Title"
 placeholder_text = "Coil Title"
 
 [node name="ClearBaseConfirm" type="ConfirmationDialog" parent="UI/TopBar"]
+unique_name_in_owner = true
 size = Vector2i(772, 160)
 min_size = Vector2i(420, 160)
 dialog_text = "This will erase Flesh in the seeded area and remove Walls/Pools/Markers on those cells. Continue?"
 
 [node name="ValidateDialog" type="AcceptDialog" parent="UI/TopBar"]
+unique_name_in_owner = true
 initial_position = 2
 size = Vector2i(560, 360)
 min_size = Vector2i(560, 360)
 
 [node name="Body" type="RichTextLabel" parent="UI/TopBar/ValidateDialog"]
+unique_name_in_owner = true
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
@@ -209,6 +216,7 @@ fit_content = true
 autowrap_mode = 2
 
 [node name="LoadDialog" type="FileDialog" parent="UI/TopBar"]
+unique_name_in_owner = true
 title = "Open a File"
 ok_button_text = "Open"
 file_mode = 0
@@ -225,6 +233,7 @@ grow_vertical = 2
 mouse_filter = 2
 
 [node name="DevBadge" type="Label" parent="UI/DevOverlay"]
+unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 12
 anchor_top = 1.0
@@ -252,17 +261,17 @@ layout_mode = 2
 theme_override_constants/separation = 8
 
 [node name="StartWithFlesh" type="CheckBox" parent="UI/DevOverlay/DevControlsRoot/DevControls"]
+unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 focus_mode = 0
 text = "Start with 24 x 24 base"
 
 [node name="IgnoreBiomassLimit" type="CheckBox" parent="UI/DevOverlay/DevControlsRoot/DevControls"]
+unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 focus_mode = 0
 text = "Ignore Biomass Limit"
 
 [node name="SceneTreePrinter" parent="." instance=ExtResource("4_11ljt")]
-
-[connection signal="pressed" from="UI/TopBar/ActionRow/PublishBtn" to="." method="_on_publish_btn_pressed"]

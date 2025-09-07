@@ -12,7 +12,6 @@ const PATH_MANIFEST: String = "user://Profiles/manifest.json"
 
 # --- Internal State (cached after load) ---
 var _manifest: Dictionary = {}                 # {"version":1, "current_profile_id":"...", "items":[...]}
-var _profiles_by_id: Dictionary = {}           # id -> Dictionary (loaded lazily when needed)
 
 # --- Lifecycle ---
 func _ready() -> void:
@@ -172,7 +171,8 @@ func _load_manifest() -> Dictionary:
 		return {
 			"version": 1,
 			"current_profile_id": "",
-			"items": []
+			"items": [],
+			"created_at": now_iso
 		}
 	
 	var f: FileAccess = FileAccess.open(PATH_MANIFEST, FileAccess.READ)

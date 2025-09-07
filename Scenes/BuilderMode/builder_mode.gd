@@ -55,15 +55,15 @@ class ValidationResult:
 ## --- Scene references --------------------------------------------------------
 
 @onready var coil_map: TileMap = $CoilMap
-@onready var palette_row: HBoxContainer = $UI/TopBar/PaletteRow
-@onready var status_label: Label = $UI/TopBar/InfoRow/StatusLabel
-@onready var biomass_label: Label = $UI/TopBar/InfoRow/BiomassLabel
-@onready var start_with_flesh_cb: CheckBox = $UI/DevOverlay/DevControlsRoot/DevControls/StartWithFlesh
-@onready var ignore_biomass_limit: CheckBox = $UI/DevOverlay/DevControlsRoot/DevControls/IgnoreBiomassLimit
-@onready var clear_base_confirm: ConfirmationDialog = $UI/TopBar/ClearBaseConfirm
-@onready var dev_badge: Label = $UI/DevOverlay/DevBadge
-@onready var validate_dialog: AcceptDialog = $UI/TopBar/ValidateDialog
-@onready var validate_body: RichTextLabel = $UI/TopBar/ValidateDialog/Body
+@onready var palette_row: HBoxContainer = %PaletteRow
+@onready var status_label: Label = %StatusLabel
+@onready var biomass_label: Label = %BiomassLabel
+@onready var start_with_flesh_cb: CheckBox = %StartWithFlesh
+@onready var ignore_biomass_limit: CheckBox = %IgnoreBiomassLimit
+@onready var clear_base_confirm: ConfirmationDialog = %ClearBaseConfirm
+@onready var dev_badge: Label = %DevBadge
+@onready var validate_dialog: AcceptDialog = %ValidateDialog
+@onready var validate_body: RichTextLabel = %Body
 @onready var validate_btn: Button = %ValidateBtn
 @onready var save_btn: Button = %SaveBtn
 @onready var load_btn: Button = %LoadBtn
@@ -72,11 +72,12 @@ class ValidationResult:
 @onready var hub_btn: Button = %HubBtn
 @onready var title_edit: LineEdit = %TitleEdit
 @onready var validation_chip: Label = %ValidationChip
-@onready var load_dialog: FileDialog = $UI/TopBar/LoadDialog
+@onready var load_dialog: FileDialog = %LoadDialog
 @onready var _q: CoilQuery = CoilQueryScript.new()
 
 ## --- State --------------------------------------------------------
 
+var _title_cache: String = ""
 var _current_index: int = 0
 var _is_painting_left := false
 var _is_erasing_right := false
@@ -112,6 +113,10 @@ func _ready() -> void:
 		hub_btn.pressed.connect(_on_hub_pressed)
 	if load_dialog:
 		load_dialog.file_selected.connect(_on_load_file_selected)
+	if title_edit:
+		title_edit.text_changed.connect(_on_title_changed)
+		# Nice QoL: pressing Enter just blurs the field; not required for saving anymore.
+		title_edit.text_submitted.connect(func(_t): title_edit.release_focus())
 	
 	# Wire each palette button (by order) to a brush (by order).
 	# Left to right buttons map to registry.brushes[0..N]
@@ -919,7 +924,7 @@ func _ensure_dir(dir_path: String) -> void:
 
 ## Manifest contract:
 ##   version:int, items:Array<{ path, title, published_at, biomass_used:int, biomass_cap:int, profile_id }>
-func _update_publish_manifest(pub_dir: String, pub_path: String, data: Dictionary) -> void:
+func _update_publish_manifest(_pub_dir: String, pub_path: String, data: Dictionary) -> void:
 	var manifest_path: String = PUBLISHED_MANIFEST
 	
 	# Start with a default manifest object
@@ -1068,11 +1073,19 @@ func _current_profile_name() -> String:
 	return ""
 
 func _current_title() -> String:
+	# Prefer the live cache updated by text_changed (works even while the field is focused).
+	var t := _title_cache.strip_edges()
+	if t != "":
+		return t
+	# Fallback to the LineEdit’s text (covers loads / first paint).
 	if is_instance_valid(title_edit):
-		var t := title_edit.text.strip_edges()
+		t = title_edit.text.strip_edges()
 		if t != "":
 			return t
 	return "Untitled"
+
+func _on_title_changed(new_text: String) -> void:
+	_title_cache = new_text
 
 func _game_version_string() -> String:
 	if has_node("/root/BuildInfo"):
