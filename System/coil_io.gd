@@ -1,5 +1,5 @@
-# res://System/coil_io.gd
-# Pure save/load helpers for TileMapLayers.
+## res://System/coil_io.gd
+## Pure save/load helpers for TileMapLayers.
 extends RefCounted
 
 static func serialize_layer(layer: TileMapLayer) -> Array:
@@ -72,3 +72,5 @@ static func apply_coil(
 		rebuild_layer_from_json(layers["hazard"], hazard_layer)
 	if layers.has("marker"):
 		rebuild_layer_from_json(layers["marker"], marker_layer)
+
+## end res://System/coil_io.gd

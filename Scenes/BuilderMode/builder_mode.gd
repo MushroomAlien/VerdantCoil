@@ -169,13 +169,13 @@ func _ready() -> void:
 	if ignore_biomass_limit:
 		ignore_biomass_limit.tooltip_text = "Dev only: bypass biomass cap when Playtesting."
 	
-	# Subscribe to ProfileManager signals (safe if autoload missing)
-	if has_node("/root/ProfileManager"):
-		var pm: Node = get_node("/root/ProfileManager")
-		if pm.has_signal("profile_list_changed"):
-			pm.connect("profile_list_changed", Callable(self, "_refresh_profile_ui"))
-		if pm.has_signal("current_profile_changed"):
-			pm.connect("current_profile_changed", Callable(self, "_on_current_profile_changed"))
+	## Subscribe to ProfileManager signals (safe if autoload missing)
+	#if has_node("/root/ProfileManager"):
+		#var pm: Node = get_node("/root/ProfileManager")
+		#if pm.has_signal("profile_list_changed"):
+			#pm.connect("profile_list_changed", Callable(self, "_refresh_profile_ui"))
+		#if pm.has_signal("current_profile_changed"):
+			#pm.connect("current_profile_changed", Callable(self, "_on_current_profile_changed"))
 	
 	# ---- restore coil if returning from Playtest ----
 	_restore_pending_coil_if_any()
@@ -364,6 +364,8 @@ func _update_preview() -> void:
 	
 	var b := _current_brush()
 	if b == null or b.rule_profile == "ERASER":
+		if preview_layer:
+			preview_layer.modulate = Color(1,1,1,0.5)
 		return
 	
 	# Always place the ghost tile

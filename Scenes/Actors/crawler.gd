@@ -55,12 +55,12 @@ func _get_bool(td: TileData, key: String, default_val: bool = false) -> bool:
 
 func _unhandled_input(event: InputEvent) -> void:
 	# Toggle upgrades for testing
-	var upgrade_controller = get_node("UpgradeController")
-	if event.is_action_pressed("toggle_upgrade_1"):
+	var upgrade_controller = get_node_or_null("UpgradeController")
+	if event.is_action_pressed("toggle_upgrade_1") and upgrade_controller:
 		upgrade_controller.toggle_upgrade(upgrade_controller.Upgrade.HARDENED_SKIN)
-	elif event.is_action_pressed("toggle_upgrade_2"):
+	elif event.is_action_pressed("toggle_upgrade_2") and upgrade_controller:
 		upgrade_controller.toggle_upgrade(upgrade_controller.Upgrade.ACID_SAC)
-	elif event.is_action_pressed("toggle_upgrade_3"):
+	elif event.is_action_pressed("toggle_upgrade_3") and upgrade_controller:
 		upgrade_controller.toggle_upgrade(upgrade_controller.Upgrade.GHOST_TRAIL)
 		
 	# --- SLOW/SKIP GUARD (must run BEFORE any movement handling) ---
