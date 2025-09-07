@@ -10,6 +10,10 @@ extends Control
 @export var build_tag: String = ""            # optional "a", "b", etc.
 
 # --- Nodes (typed, robust via %UniqueName) ---
+
+@onready var title_label: Label   = %TitleLabel
+@onready var version_label: Label = %VersionLabel
+
 @onready var profiles_list: ItemList   = %ProfilesList
 @onready var new_name: LineEdit        = %NewName
 @onready var create_btn: Button        = %CreateBtn
@@ -23,11 +27,9 @@ extends Control
 @onready var refresh_library_btn: Button   = %RefreshLibraryBtn
 @onready var exit_btn: Button              = %ExitBtn
 
+@onready var mine_only_cb: CheckBox    = %MineOnly
 @onready var library_list: ItemList    = %LibraryList
 @onready var play_selected_btn: Button = %PlaySelectedBtn
-
-@onready var title_label: Label   = %TitleLabel
-@onready var version_label: Label = %VersionLabel
 
 # --- Local state (typed) ---
 var _library_items: Array = []  # Array<Dictionary> each entry mirrors manifest item
@@ -45,6 +47,7 @@ func _ready() -> void:
 	build_btn.pressed.connect(_on_build_pressed)
 	refresh_library_btn.pressed.connect(_on_refresh_library_pressed)
 	exit_btn.pressed.connect(_on_exit_pressed)
+	mine_only_cb.toggled.connect(func(_pressed): _refresh_library())
 	library_list.item_activated.connect(_on_library_item_activated)
 	play_selected_btn.pressed.connect(_on_play_selected_pressed)
 	
@@ -166,36 +169,116 @@ func _on_profiles_item_activated(_index: int) -> void:
 # -----------------------------
 # Library (Published manifest)
 # -----------------------------
+#func _refresh_library() -> void:
+	#library_list.clear()
+	#_library_items.clear()
+	#if not FileAccess.file_exists(_manifest_path):
+		#return
+	#var f: FileAccess = FileAccess.open(_manifest_path, FileAccess.READ)
+	#if f == null:
+		#return
+	#var txt: String = f.get_as_text()
+	#f.close()
+	#var parsed_v: Variant = JSON.parse_string(txt)
+	#if typeof(parsed_v) != TYPE_DICTIONARY:
+		#return
+	#var manifest: Dictionary = parsed_v as Dictionary
+	#var arr_v: Variant = manifest.get("items", [])
+	#if typeof(arr_v) != TYPE_ARRAY:
+		#return
+	#var arr: Array = arr_v as Array
+	#
+	## Show newest first (optional, simple stable reverse)
+	#var current_id: String = ""
+	#if has_node("/root/ProfileManager"):
+		#var pm: Node = get_node("/root/ProfileManager")
+		#var id_v: Variant = pm.call("get_current_profile_id")
+		#current_id = String(id_v)
+	#
+	#for i in range(arr.size() - 1, -1, -1):
+		#var it_v: Variant = arr[i]
+		#if typeof(it_v) == TYPE_DICTIONARY:
+			#var it: Dictionary = it_v as Dictionary
+			#
+			## ---- Mine only filter ----
+			#if mine_only_cb.button_pressed and current_id != "":
+				#var owner_id: String = String(it.get("profile_id", ""))
+				#if owner_id != current_id:
+					#continue
+			## --------------------------
+			#
+			#_library_items.append(it)
+			#var title: String = String(it.get("title", "Untitled"))
+			#var path: String = String(it.get("path", ""))
+			#var when: String = String(it.get("published_at", ""))
+			#var row_text: String = title + "   —   " + when + "\n" + path
+			#var row: int = library_list.add_item(row_text)
+			#library_list.set_item_metadata(row, path)
 func _refresh_library() -> void:
 	library_list.clear()
 	_library_items.clear()
+	
+	# Bail early if there’s no manifest yet.
 	if not FileAccess.file_exists(_manifest_path):
 		return
+	
 	var f: FileAccess = FileAccess.open(_manifest_path, FileAccess.READ)
 	if f == null:
 		return
 	var txt: String = f.get_as_text()
 	f.close()
+	
 	var parsed_v: Variant = JSON.parse_string(txt)
 	if typeof(parsed_v) != TYPE_DICTIONARY:
 		return
 	var manifest: Dictionary = parsed_v as Dictionary
+	
 	var arr_v: Variant = manifest.get("items", [])
 	if typeof(arr_v) != TYPE_ARRAY:
 		return
 	var arr: Array = arr_v as Array
-	# Show newest first (optional, simple stable reverse)
+	
+	# --- Optional: “Mine only” filter needs the current profile id ---
+	var current_id: String = ""
+	if has_node("/root/ProfileManager"):
+		var pm: Node = get_node("/root/ProfileManager")
+		var id_v: Variant = pm.call("get_current_profile_id")
+		current_id = String(id_v)
+	
+	# Show newest first (simple stable reverse)
 	for i in range(arr.size() - 1, -1, -1):
 		var it_v: Variant = arr[i]
 		if typeof(it_v) == TYPE_DICTIONARY:
 			var it: Dictionary = it_v as Dictionary
+			
+			# ---- Mine only filter (skip entries that aren’t mine) ----
+			if mine_only_cb.button_pressed and current_id != "":
+				var owner_id: String = String(it.get("profile_id", ""))
+				if owner_id != current_id:
+					continue
+			# ----------------------------------------------------------
+			
 			_library_items.append(it)
+			
 			var title: String = String(it.get("title", "Untitled"))
 			var path: String = String(it.get("path", ""))
 			var when: String = String(it.get("published_at", ""))
-			var row_text: String = title + "   —   " + when + "\n" + path
+			
+			# --- NEW: version pulled from manifest entry (safe if missing) ---
+			var ver: String = String(it.get("game_version", ""))
+			# -----------------------------------------------------------------
+			
+			# Build the row text. Only append version if present to avoid noise
+			# on older manifests that don’t have game_version yet.
+			var row_text: String = title + "   —   " + when
+			if ver != "":
+				row_text += "   —   v " + ver
+			row_text += "\n" + path
+			
 			var row: int = library_list.add_item(row_text)
 			library_list.set_item_metadata(row, path)
+
+
 
 func _on_refresh_library_pressed() -> void:
 	_refresh_library()

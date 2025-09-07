@@ -70,6 +70,7 @@ class ValidationResult:
 @onready var playtest_btn: Button = %PlaytestBtn
 @onready var publish_btn: Button = %PublishBtn
 @onready var hub_btn: Button = %HubBtn
+@onready var title_edit: LineEdit = %TitleEdit
 @onready var validation_chip: Label = %ValidationChip
 @onready var load_dialog: FileDialog = $UI/TopBar/LoadDialog
 @onready var _q: CoilQuery = CoilQueryScript.new()
@@ -610,6 +611,34 @@ func _on_load_pressed() -> void:
 		load_dialog.popup_centered()
 
 ## Load a selected coil JSON and apply it to layers
+#func _on_load_file_selected(path: String) -> void:
+	#var f := FileAccess.open(path, FileAccess.READ)
+	#if f == null:
+		#_show_status("Load failed (" + str(FileAccess.get_open_error()) + ").")
+		#return
+	#var txt: String = f.get_as_text()
+	#f.close()
+	#var parsed_v: Variant = JSON.parse_string(txt)
+	#if typeof(parsed_v) != TYPE_DICTIONARY:
+		#_show_status("Load failed: JSON malformed.")
+		#return
+	#var data: Dictionary = parsed_v as Dictionary
+	#var meta_v: Variant = data.get("meta", {})
+	#if typeof(meta_v) == TYPE_DICTIONARY:
+		#var meta: Dictionary = meta_v
+		#var creator_id: String = String(meta.get("creator_profile_id", ""))
+		#var cur_id: String = _current_profile_id()
+		#if creator_id != "" and cur_id != "" and creator_id != cur_id:
+			#_show_status("⚠ Loaded coil from another profile.")
+	#CoilIO.apply_coil(data, base_layer, walls_layer, hazard_layer, marker_layer)
+	#_recalc_biomass()
+	#_show_status("Loaded: " + path)
+	#_refresh_validation_state()  # don't touch disk; just reflect truth in UI
+	## Remember last_opened_coil_path on current profile
+	#if has_node("/root/ProfileManager"):
+		#var pm3: Node = get_node("/root/ProfileManager")
+		#if pm3.has_method("set_current_last_opened_coil"):
+			#pm3.call("set_current_last_opened_coil", path)
 func _on_load_file_selected(path: String) -> void:
 	var f := FileAccess.open(path, FileAccess.READ)
 	if f == null:
@@ -621,7 +650,10 @@ func _on_load_file_selected(path: String) -> void:
 	if typeof(parsed_v) != TYPE_DICTIONARY:
 		_show_status("Load failed: JSON malformed.")
 		return
+
 	var data: Dictionary = parsed_v as Dictionary
+
+	# Warn if coil belongs to another profile
 	var meta_v: Variant = data.get("meta", {})
 	if typeof(meta_v) == TYPE_DICTIONARY:
 		var meta: Dictionary = meta_v
@@ -629,10 +661,16 @@ func _on_load_file_selected(path: String) -> void:
 		var cur_id: String = _current_profile_id()
 		if creator_id != "" and cur_id != "" and creator_id != cur_id:
 			_show_status("⚠ Loaded coil from another profile.")
+		# Populate TitleEdit if present
+		if is_instance_valid(title_edit):
+			var t_v: Variant = meta.get("title", "")
+			if typeof(t_v) == TYPE_STRING:
+				title_edit.text = String(t_v)
+
 	CoilIO.apply_coil(data, base_layer, walls_layer, hazard_layer, marker_layer)
 	_recalc_biomass()
 	_show_status("Loaded: " + path)
-	_refresh_validation_state()  # don't touch disk; just reflect truth in UI
+	_refresh_validation_state()
 	# Remember last_opened_coil_path on current profile
 	if has_node("/root/ProfileManager"):
 		var pm3: Node = get_node("/root/ProfileManager")
@@ -691,7 +729,9 @@ func _capture_coil() -> Dictionary:
 		"validated": validation_result.ok,
 		"validation": validation_payload,
 		"creator_profile_id": _current_profile_id(),
-		"creator_profile_name": _current_profile_name()
+		"creator_profile_name": _current_profile_name(),
+		"title": _current_title(),
+		"game_version": _game_version_string()
 	},
 	"layers": {
 		"base":   CoilIO.serialize_layer(base_layer),
@@ -917,13 +957,25 @@ func _update_publish_manifest(pub_dir: String, pub_path: String, data: Dictionar
 				profile_id = String(pid_v)
 		
 	# Build the manifest entry (use explicit ints/strings for strict typing)
+	#var entry: Dictionary = {
+		#"path": pub_path,
+		#"title": "Untitled",  # TODO: wire a title field later
+		#"published_at": _iso_timestamp(),
+		#"biomass_used": int(meta.get("biomass_used", _biomass_used)),
+		#"biomass_cap": int(meta.get("biomass_cap", biomass_cap)),
+		#"profile_id": profile_id
+	#}
+	var title_from_meta: String = String(meta.get("title", "Untitled"))
+	var coil_version: String = String(meta.get("game_version", ""))
+
 	var entry: Dictionary = {
 		"path": pub_path,
-		"title": "Untitled",  # TODO: wire a title field later
+		"title": title_from_meta,
 		"published_at": _iso_timestamp(),
 		"biomass_used": int(meta.get("biomass_used", _biomass_used)),
 		"biomass_cap": int(meta.get("biomass_cap", biomass_cap)),
-		"profile_id": profile_id
+		"profile_id": profile_id,
+		"game_version": coil_version              # ← NEW
 	}
 	
 	# Get current items as a typed Array (via Variant)
@@ -1014,6 +1066,25 @@ func _current_profile_name() -> String:
 			if typeof(v) == TYPE_DICTIONARY:
 				return String((v as Dictionary).get("display_name", ""))
 	return ""
+
+func _current_title() -> String:
+	if is_instance_valid(title_edit):
+		var t := title_edit.text.strip_edges()
+		if t != "":
+			return t
+	return "Untitled"
+
+func _game_version_string() -> String:
+	if has_node("/root/BuildInfo"):
+		var b: Node = get_node("/root/BuildInfo")
+		if b.has_method("version_string"):
+			return String(b.call("version_string"))
+	# Fallback to ProjectSettings if you ever set it there
+	if ProjectSettings.has_setting("application/config/version"):
+		var v: Variant = ProjectSettings.get_setting("application/config/version")
+		if typeof(v) == TYPE_STRING:
+			return String(v)
+	return "0.0.0"
 
 func _on_hub_pressed() -> void:
 	# Optional: autosave a snapshot before leaving (comment out if you don’t want it)

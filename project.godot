@@ -22,6 +22,7 @@ Grid="*res://System/grid.gd"
 GameFlags="*res://System/game_flags.gd"
 CoilSession="*res://System/autoload/CoilSession.tscn"
 ProfileManager="*res://System/profile_manager.gd"
+BuildInfo="*res://System/build_info.gd"
 
 [display]
 
