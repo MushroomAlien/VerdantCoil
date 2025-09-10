@@ -168,51 +168,6 @@ func _on_profiles_item_activated(_index: int) -> void:
 # -----------------------------
 # Library (Published manifest)
 # -----------------------------
-#func _refresh_library() -> void:
-	#library_list.clear()
-	#_library_items.clear()
-	#if not FileAccess.file_exists(_manifest_path):
-		#return
-	#var f: FileAccess = FileAccess.open(_manifest_path, FileAccess.READ)
-	#if f == null:
-		#return
-	#var txt: String = f.get_as_text()
-	#f.close()
-	#var parsed_v: Variant = JSON.parse_string(txt)
-	#if typeof(parsed_v) != TYPE_DICTIONARY:
-		#return
-	#var manifest: Dictionary = parsed_v as Dictionary
-	#var arr_v: Variant = manifest.get("items", [])
-	#if typeof(arr_v) != TYPE_ARRAY:
-		#return
-	#var arr: Array = arr_v as Array
-	#
-	## Show newest first (optional, simple stable reverse)
-	#var current_id: String = ""
-	#if has_node("/root/ProfileManager"):
-		#var pm: Node = get_node("/root/ProfileManager")
-		#var id_v: Variant = pm.call("get_current_profile_id")
-		#current_id = String(id_v)
-	#
-	#for i in range(arr.size() - 1, -1, -1):
-		#var it_v: Variant = arr[i]
-		#if typeof(it_v) == TYPE_DICTIONARY:
-			#var it: Dictionary = it_v as Dictionary
-			#
-			## ---- Mine only filter ----
-			#if mine_only_cb.button_pressed and current_id != "":
-				#var owner_id: String = String(it.get("profile_id", ""))
-				#if owner_id != current_id:
-					#continue
-			## --------------------------
-			#
-			#_library_items.append(it)
-			#var title: String = String(it.get("title", "Untitled"))
-			#var path: String = String(it.get("path", ""))
-			#var when: String = String(it.get("published_at", ""))
-			#var row_text: String = title + "   —   " + when + "\n" + path
-			#var row: int = library_list.add_item(row_text)
-			#library_list.set_item_metadata(row, path)
 func _refresh_library() -> void:
 	library_list.clear()
 	_library_items.clear()
