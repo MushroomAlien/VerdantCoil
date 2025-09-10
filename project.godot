@@ -23,6 +23,8 @@ GameFlags="*res://System/game_flags.gd"
 CoilSession="*res://System/autoload/CoilSession.tscn"
 ProfileManager="*res://System/profile_manager.gd"
 BuildInfo="*res://System/build_info.gd"
+HealthSystem="*res://System/health_system.gd"
+UpgradeState="*res://System/autoload/upgrade_state.gd"
 
 [display]
 
