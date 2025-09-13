@@ -215,3 +215,4 @@ text = "Play Selected
 "
 
 [node name="SceneTreePrinter" parent="." instance=ExtResource("1_6og3p")]
+printing_on = false

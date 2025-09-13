@@ -1,3 +1,4 @@
+## game_flags.gd
 # Global developer flags and toggle logic (Godot 4.4.1)
 extends Node
 
@@ -23,3 +24,5 @@ func toggle_dev_mode() -> void:
 	dev_mode_enabled = !dev_mode_enabled
 	emit_signal("dev_mode_changed", dev_mode_enabled)
 	print("Dev Mode:", dev_mode_enabled)
+
+## end game_flags.gd

@@ -729,7 +729,9 @@ func _capture_coil() -> Dictionary:
 	
 	return {
 	"meta": {
-		"schema_version": COIL_SCHEMA_VERSION,
+		"schema_version": COIL_SCHEMA_VERSION,       # existing
+		"coil_schema_version": 2,                    # NEW (explicit coil schema version)
+		"id": _new_coil_id(),                        # NEW (stable-ish id for this saved coil)
 		"biomass_cap": biomass_cap,
 		"biomass_used": _biomass_used,
 		"tileset": tileset_path,
@@ -738,7 +740,9 @@ func _capture_coil() -> Dictionary:
 		"creator_profile_id": _current_profile_id(),
 		"creator_profile_name": _current_profile_name(),
 		"title": _current_title(),
-		"game_version": _game_version_string()
+		"game_version": _game_version_string(),
+		"notes": "",                                 # NEW (placeholder)
+		"visual_theme": ""                           # NEW (placeholder)
 	},
 	"layers": {
 		"base":   CoilIO.serialize_layer(base_layer),
@@ -954,6 +958,12 @@ func _update_publish_manifest(_pub_dir: String, pub_path: String, data: Dictiona
 	if typeof(meta_v) == TYPE_DICTIONARY:
 		meta = meta_v as Dictionary
 	
+	var coil_id: String = ""
+	if meta.has("id"):
+		var id_v: Variant = meta.get("id")
+		if typeof(id_v) == TYPE_STRING:
+			coil_id = String(id_v)
+	
 	# Determine profile_id, safe default ""
 	var profile_id: String = ""
 	if has_node("/root/ProfileManager"):
@@ -982,7 +992,11 @@ func _update_publish_manifest(_pub_dir: String, pub_path: String, data: Dictiona
 		"biomass_used": int(meta.get("biomass_used", _biomass_used)),
 		"biomass_cap": int(meta.get("biomass_cap", biomass_cap)),
 		"profile_id": profile_id,
-		"game_version": coil_version              # ← NEW
+		"game_version": coil_version,
+		"id": coil_id,                 # NEW
+		"checksum": "",                # NEW (placeholder)
+		"thumbnail_path": "",          # NEW (placeholder)
+		"visibility": "local"          # NEW (local vs cloud later)
 	}
 	
 	# Get current items as a typed Array (via Variant)
@@ -1108,5 +1122,34 @@ func _on_hub_pressed() -> void:
 		get_node("/root/CoilSession").call("return_to_heartroot")
 	else:
 		get_tree().change_scene_to_file("res://Scenes/Heartroot/Heartroot.tscn")
+
+# Returns a stable-ish id string for a coil (UTC timestamp + msec).
+# Format: yyyymmdd_hhmmss_msec (same family as ProfileManager ids).
+func _new_coil_id() -> String:
+	var dt: Dictionary = Time.get_datetime_dict_from_system(true)  # UTC
+	var yy: int = int(dt["year"])
+	var mm: int = int(dt["month"])
+	var dd: int = int(dt["day"])
+	var hh: int = int(dt["hour"])
+	var mi: int = int(dt["minute"])
+	var ss: int = int(dt["second"])
+	var msec: int = Time.get_ticks_msec() % 1000
+
+	var id_str: String = str(yy)
+	id_str += _pad2(mm)
+	id_str += _pad2(dd)
+	id_str += "_"
+	id_str += _pad2(hh)
+	id_str += _pad2(mi)
+	id_str += _pad2(ss)
+	id_str += "_"
+	id_str += str(msec)
+	return id_str
+
+# Utility used by _new_coil_id()
+func _pad2(n: int) -> String:
+	if n < 10:
+		return "0" + str(n)
+	return str(n)
 
 ## end builder_mode.gd

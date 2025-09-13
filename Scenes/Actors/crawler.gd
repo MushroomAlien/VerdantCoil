@@ -31,6 +31,12 @@ func _ready() -> void:
 	var camera: Camera2D = get_node("Camera2D")
 	if camera:
 		camera.make_current()
+	
+	# Listen for global death to stop movement immediately
+	if has_node("/root/HealthSystem"):
+		var hs := get_node("/root/HealthSystem")
+		if hs.has_signal("died"):
+			hs.connect("died", Callable(self, "_on_global_death"))
 
 func _get_tile_data(layer: TileMapLayer, coords: Vector2i) -> TileData:
 	if layer.get_cell_source_id(coords) == -1:
@@ -149,20 +155,31 @@ func _on_arrived_at(tile: Vector2i) -> void:
 	# Hazards layer effects
 	var hazard_td := _get_tile_data(hazard_layer, tile)
 	if hazard_td != null:
+		# Read the hazard string safely
 		var hazard := _get_str(hazard_td, "hazard", "")
+		
 		if hazard == "acid":
+			# 1) Read base damage from tile metadata
 			var dmg := _get_int(hazard_td, "damage_per_step", 0)
+			
+			# 2) If Hardened Skin is ON, reduce damage by 1 (not below 0)
 			var upgrades = get_node_or_null("UpgradeController")
-			# Simple mitigation: Hardened Skin reduces 1 (never below 0)
-			if upgrades != null and upgrades.has_upgrade(upgrades.Upgrade.HARDENED_SKIN):
-				dmg = max(0, dmg - 1)
-			if dmg > 0:
-				print("Acid damage: ", dmg)
-				# TODO: hook into health system when added
+			var hardened_on := false
+			if upgrades != null:
+				hardened_on = upgrades.has_upgrade(upgrades.Upgrade.HARDENED_SKIN)
+			if hardened_on:
+				dmg = dmg - 1
+				if dmg < 0:
+					dmg = 0
+			
+			# 3) Apply damage to the global HealthSystem (autoload)
+			if dmg > 0 and has_node("/root/HealthSystem"):
+				var hs := get_node("/root/HealthSystem")
+				hs.call("apply_damage", dmg, "acid")
+		
 		elif hazard == "sticky":
 			var slow_ticks := _get_int(hazard_td, "slow_ticks", 0)
 			if slow_ticks > 0:
-				# Easiest MVP: eat N inputs after this move
 				_consume_future_inputs(slow_ticks)
 	
 	# Dissolve digestible wall on entry if Acid Sac is active
@@ -208,5 +225,10 @@ func _is_digest_wall(td: TileData) -> bool:
 	# Fallback: string kind
 	var kind := _get_str(td, "wall_kind", "")
 	return kind == "DIGEST" or kind == "DIGESTIBLE"
+
+func _on_global_death() -> void:
+	# Disable new inputs and movement
+	_is_moving = true
+	_skip_inputs = 999999  # large number so accidental inputs are effectively ignored
 
 ## end crawler.gd

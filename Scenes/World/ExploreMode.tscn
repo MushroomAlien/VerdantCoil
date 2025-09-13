@@ -1,9 +1,11 @@
-[gd_scene load_steps=5 format=4 uid="uid://igr13b3t33pe"]
+[gd_scene load_steps=7 format=4 uid="uid://igr13b3t33pe"]
 
 [ext_resource type="Script" uid="uid://brhe1gqri6osw" path="res://Scenes/World/explore_mode.gd" id="1_sdi1h"]
 [ext_resource type="TileSet" uid="uid://0dggvm2m4qyl" path="res://Assets/Resources/flesh_tile.tres" id="1_u2iet"]
 [ext_resource type="Texture2D" uid="uid://b3fh4r72u2qo" path="res://Assets/PatternedAI-free-image-1754232821017 720.png" id="2_s0ewa"]
 [ext_resource type="PackedScene" uid="uid://c15uxbq7w6irk" path="res://Scenes/UI/UpgradeBar.tscn" id="4_6tugw"]
+[ext_resource type="PackedScene" uid="uid://khw225w867t3" path="res://System/debug/scene_tree_printer.tscn" id="5_6rfcl"]
+[ext_resource type="PackedScene" uid="uid://dkns0rgsomqsf" path="res://Scenes/UI/HealthHUD.tscn" id="5_bb7uf"]
 
 [node name="ExploreMode" type="Node2D" node_paths=PackedStringArray("base_layer", "walls_layer", "hazard_layer", "marker_layer")]
 script = ExtResource("1_sdi1h")
@@ -55,10 +57,26 @@ use_parent_material = true
 tile_map_data = PackedByteArray("AAAMABMAAAANAAgAAAAMAAQAAAAOAAgAAAA=")
 tile_set = ExtResource("1_u2iet")
 
-[node name="CanvasLayer" type="CanvasLayer" parent="."]
+[node name="HUD" type="CanvasLayer" parent="."]
 
-[node name="UpgradeDebugLabel" type="Label" parent="CanvasLayer"]
+[node name="SafeArea" type="MarginContainer" parent="HUD"]
 offset_right = 40.0
-offset_bottom = 23.0
+offset_bottom = 40.0
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 16
 
-[node name="UpgradeBar" parent="CanvasLayer" instance=ExtResource("4_6tugw")]
+[node name="TopHUD" type="HBoxContainer" parent="HUD/SafeArea"]
+layout_mode = 2
+
+[node name="HealthHud" parent="HUD/SafeArea/TopHUD" instance=ExtResource("5_bb7uf")]
+
+[node name="Spacer" type="Control" parent="HUD/SafeArea/TopHUD"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="UpgradeBar" parent="HUD/SafeArea/TopHUD" instance=ExtResource("4_6tugw")]
+layout_mode = 2
+
+[node name="SceneTreePrinter" parent="." instance=ExtResource("5_6rfcl")]

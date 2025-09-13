@@ -275,3 +275,4 @@ focus_mode = 0
 text = "Ignore Biomass Limit"
 
 [node name="SceneTreePrinter" parent="." instance=ExtResource("4_11ljt")]
+printing_on = false
