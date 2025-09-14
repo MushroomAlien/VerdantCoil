@@ -974,14 +974,6 @@ func _update_publish_manifest(_pub_dir: String, pub_path: String, data: Dictiona
 				profile_id = String(pid_v)
 		
 	# Build the manifest entry (use explicit ints/strings for strict typing)
-	#var entry: Dictionary = {
-		#"path": pub_path,
-		#"title": "Untitled",  # TODO: wire a title field later
-		#"published_at": _iso_timestamp(),
-		#"biomass_used": int(meta.get("biomass_used", _biomass_used)),
-		#"biomass_cap": int(meta.get("biomass_cap", biomass_cap)),
-		#"profile_id": profile_id
-	#}
 	var title_from_meta: String = String(meta.get("title", "Untitled"))
 	var coil_version: String = String(meta.get("game_version", ""))
 
