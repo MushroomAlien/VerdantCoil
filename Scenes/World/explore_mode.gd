@@ -50,6 +50,12 @@ func _ready() -> void:
 	crawler.position = GridUtil.to_world(spawn_tile)  # your util converts map→world
 	add_child(crawler)
 	
+	var row_path: String = "HUD/SafeArea/BottomCenter/UpgradeRow"
+	var row: Node = get_node_or_null(row_path)
+	if row != null and row.has_method("set_controller"):
+		var controller: Node = crawler.get_node_or_null("UpgradeController")
+		row.call("set_controller", controller)
+	
 	# --- NEW: mirror global UpgradeState into the Crawler's UpgradeController once ---
 	_apply_upgrade_state_to_crawler(crawler)
 

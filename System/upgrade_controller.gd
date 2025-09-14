@@ -19,6 +19,9 @@ var _hardened_skin: bool = false
 var _acid_sac: bool = false
 var _ghost_trail: bool = false
 
+func _ready() -> void:
+	add_to_group("upgrade_controller")
+
 # --- Public Methods ---
 
 # Check if a given upgrade is active

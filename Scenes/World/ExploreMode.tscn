@@ -1,11 +1,28 @@
-[gd_scene load_steps=7 format=4 uid="uid://igr13b3t33pe"]
+[gd_scene load_steps=12 format=4 uid="uid://igr13b3t33pe"]
 
 [ext_resource type="Script" uid="uid://brhe1gqri6osw" path="res://Scenes/World/explore_mode.gd" id="1_sdi1h"]
 [ext_resource type="TileSet" uid="uid://0dggvm2m4qyl" path="res://Assets/Resources/flesh_tile.tres" id="1_u2iet"]
 [ext_resource type="Texture2D" uid="uid://b3fh4r72u2qo" path="res://Assets/PatternedAI-free-image-1754232821017 720.png" id="2_s0ewa"]
-[ext_resource type="PackedScene" uid="uid://c15uxbq7w6irk" path="res://Scenes/UI/UpgradeBar.tscn" id="4_6tugw"]
+[ext_resource type="Script" uid="uid://68y4cqtbmfp1" path="res://Scenes/UI/hearts_row.gd" id="4_bb7uf"]
 [ext_resource type="PackedScene" uid="uid://khw225w867t3" path="res://System/debug/scene_tree_printer.tscn" id="5_6rfcl"]
-[ext_resource type="PackedScene" uid="uid://dkns0rgsomqsf" path="res://Scenes/UI/HealthHUD.tscn" id="5_bb7uf"]
+[ext_resource type="Texture2D" uid="uid://c4eqrqt63s4vg" path="res://Assets/roguelikeSheet_transparent_32x32.png" id="5_cwjdx"]
+[ext_resource type="Script" uid="uid://c8sv784btijjm" path="res://Scenes/UI/upgrade_row.gd" id="6_cwjdx"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_uw1bd"]
+atlas = ExtResource("5_cwjdx")
+region = Rect2(1632, 170, 32, 32)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_8p348"]
+atlas = ExtResource("5_cwjdx")
+region = Rect2(1768, 1020, 32, 32)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_0bwi2"]
+atlas = ExtResource("5_cwjdx")
+region = Rect2(1700, 1020, 32, 32)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_b8ya5"]
+atlas = ExtResource("5_cwjdx")
+region = Rect2(1836, 1020, 32, 32)
 
 [node name="ExploreMode" type="Node2D" node_paths=PackedStringArray("base_layer", "walls_layer", "hazard_layer", "marker_layer")]
 script = ExtResource("1_sdi1h")
@@ -60,23 +77,75 @@ tile_set = ExtResource("1_u2iet")
 [node name="HUD" type="CanvasLayer" parent="."]
 
 [node name="SafeArea" type="MarginContainer" parent="HUD"]
-offset_right = 40.0
-offset_bottom = 40.0
-theme_override_constants/margin_left = 16
-theme_override_constants/margin_top = 16
-theme_override_constants/margin_right = 16
-theme_override_constants/margin_bottom = 16
-
-[node name="TopHUD" type="HBoxContainer" parent="HUD/SafeArea"]
-layout_mode = 2
-
-[node name="HealthHud" parent="HUD/SafeArea/TopHUD" instance=ExtResource("5_bb7uf")]
-
-[node name="Spacer" type="Control" parent="HUD/SafeArea/TopHUD"]
-layout_mode = 2
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
 size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 8
 
-[node name="UpgradeBar" parent="HUD/SafeArea/TopHUD" instance=ExtResource("4_6tugw")]
+[node name="HeartsRow" type="HBoxContainer" parent="HUD/SafeArea"]
 layout_mode = 2
+size_flags_horizontal = 0
+size_flags_vertical = 0
+theme_override_constants/separation = 0
+script = ExtResource("4_bb7uf")
+
+[node name="Heart 1" type="TextureRect" parent="HUD/SafeArea/HeartsRow"]
+layout_mode = 2
+texture = SubResource("AtlasTexture_uw1bd")
+stretch_mode = 5
+
+[node name="Heart 2" type="TextureRect" parent="HUD/SafeArea/HeartsRow"]
+layout_mode = 2
+texture = SubResource("AtlasTexture_uw1bd")
+stretch_mode = 5
+
+[node name="Heart 3" type="TextureRect" parent="HUD/SafeArea/HeartsRow"]
+layout_mode = 2
+texture = SubResource("AtlasTexture_uw1bd")
+stretch_mode = 5
+
+[node name="BottomCenter" type="MarginContainer" parent="HUD/SafeArea"]
+layout_mode = 2
+size_flags_vertical = 8
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 8
+
+[node name="UpgradeRow" type="HBoxContainer" parent="HUD/SafeArea/BottomCenter"]
+layout_mode = 2
+alignment = 1
+script = ExtResource("6_cwjdx")
+hardened_icon_path = NodePath("HardenedSkinIcon")
+acid_icon_path = NodePath("AcidSacIcon")
+ghost_icon_path = NodePath("GhostTrailIcon")
+
+[node name="HardenedSkinIcon" type="TextureRect" parent="HUD/SafeArea/BottomCenter/UpgradeRow"]
+custom_minimum_size = Vector2(48, 48)
+layout_mode = 2
+tooltip_text = "Harden Skin"
+texture = SubResource("AtlasTexture_8p348")
+stretch_mode = 5
+
+[node name="AcidSacIcon" type="TextureRect" parent="HUD/SafeArea/BottomCenter/UpgradeRow"]
+custom_minimum_size = Vector2(48, 48)
+layout_mode = 2
+tooltip_text = "Acid Sac"
+texture = SubResource("AtlasTexture_0bwi2")
+stretch_mode = 5
+
+[node name="GhostTrailIcon" type="TextureRect" parent="HUD/SafeArea/BottomCenter/UpgradeRow"]
+custom_minimum_size = Vector2(48, 48)
+layout_mode = 2
+tooltip_text = "Ghost Trail"
+texture = SubResource("AtlasTexture_b8ya5")
+stretch_mode = 5
 
 [node name="SceneTreePrinter" parent="." instance=ExtResource("5_6rfcl")]
