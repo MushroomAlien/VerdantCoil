@@ -21,13 +21,25 @@ func _ready() -> void:
 # Public API: populate from current profile (Track 5 will implement real storage).
 # For Track 1, we set explicit defaults and emit a signal so listeners can react.
 func load_active_loadout() -> void:
+	# Populate from the ProfileManager's desired_loadout (if present).
 	var use_hardened: bool = false
 	var use_acid: bool = false
 	var use_ghost: bool = false
-
-	# Later: pull booleans from ProfileManager's active profile.
-	# For now: defaults remain false.
-
+	
+	if has_node("/root/ProfileManager"):
+		var pm: Node = get_node("/root/ProfileManager")
+		if pm.has_method("get_desired_loadout"):
+			var dl_v: Variant = pm.call("get_desired_loadout")
+			if typeof(dl_v) == TYPE_DICTIONARY:
+				var dl: Dictionary = dl_v as Dictionary
+				if dl.has("HARDENED_SKIN"):
+					use_hardened = bool(dl["HARDENED_SKIN"])
+				if dl.has("ACID_SAC"):
+					use_acid = bool(dl["ACID_SAC"])
+				if dl.has("GHOST_TRAIL"):
+					use_ghost = bool(dl["GHOST_TRAIL"])
+	
+	# Apply and notify
 	_hardened_skin = use_hardened
 	_acid_sac = use_acid
 	_ghost_trail = use_ghost

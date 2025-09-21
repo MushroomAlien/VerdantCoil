@@ -6,7 +6,16 @@ extends Node
 
 signal profile_list_changed
 signal current_profile_changed(profile_id: String)
+# --- Signals for UI to subscribe to (resource counters + upgrades panel) ---
+signal resources_changed(nutrient: int, sporeprint: int)
+signal upgrades_changed()
 
+# --- Whitelist of known upgrade keys so we can validate input everywhere ---
+const UPGRADE_KEYS: Array[String] = [
+	"HARDENED_SKIN",
+	"ACID_SAC",
+	"GHOST_TRAIL"
+]
 const DIR_PROFILES: String = "user://Profiles"
 const PATH_MANIFEST: String = "user://Profiles/manifest.json"
 
@@ -74,8 +83,24 @@ func create_profile(display_name: String) -> String:
 	return new_id
 
 func _create_profile_file(display_name: String) -> String:
+	# Create a brand-new profile JSON with defaulted, explicit fields.
 	var id: String = _new_id()
 	var now: String = _iso_timestamp()
+
+	# --- Default resources (Phase 1.6 economy) ---
+	var default_nutrient: int = 0
+	var default_sporeprint: int = 0
+
+	# --- Default upgrade ownership (none owned at start) ---
+	var default_owned: Dictionary = {}
+	for key in UPGRADE_KEYS:
+		default_owned[key] = false
+
+	# --- Default desired loadout (nothing active until owned + toggled) ---
+	var default_loadout: Dictionary = {}
+	for key in UPGRADE_KEYS:
+		default_loadout[key] = false
+	
 	var data: Dictionary = {
 		"id": id,
 		"display_name": display_name,
@@ -83,10 +108,82 @@ func _create_profile_file(display_name: String) -> String:
 		"last_opened_coil_path": "",
 		"version": 1,
 		"created_at": now,
-		"last_used_at": now
+		"last_used_at": now,
+		# Economy + upgrades
+		"nutrient": default_nutrient,
+		"sporeprint": default_sporeprint,
+		"owned_upgrades": default_owned,
+		"desired_loadout": default_loadout
 	}
+	
 	_save_profile_file(id, data)
 	return id
+
+# --- Ensure a profile Dictionary has all new Phase 1.6 fields and valid shapes. ---
+func _ensure_profile_defaults_shape(p: Dictionary) -> Dictionary:
+	# Defensive clone so we do not mutate caller's reference accidentally.
+	var out: Dictionary = p.duplicate(true)
+
+	# Resources
+	if not out.has("nutrient"):
+		out["nutrient"] = 0
+	if typeof(out["nutrient"]) != TYPE_INT:
+		out["nutrient"] = int(out["nutrient"])
+
+	if not out.has("sporeprint"):
+		out["sporeprint"] = 0
+	if typeof(out["sporeprint"]) != TYPE_INT:
+		out["sporeprint"] = int(out["sporeprint"])
+
+	# Ownership dictionary
+	if not out.has("owned_upgrades"):
+		out["owned_upgrades"] = {}
+	if typeof(out["owned_upgrades"]) != TYPE_DICTIONARY:
+		out["owned_upgrades"] = {}
+
+	# Ensure all known keys exist and are boolean
+	for key in UPGRADE_KEYS:
+		var has_key: bool = out["owned_upgrades"].has(key)
+		if not has_key:
+			out["owned_upgrades"][key] = false
+		else:
+			var v: Variant = out["owned_upgrades"][key]
+			out["owned_upgrades"][key] = bool(v)
+
+	# Desired-loadout dictionary
+	if not out.has("desired_loadout"):
+		out["desired_loadout"] = {}
+	if typeof(out["desired_loadout"]) != TYPE_DICTIONARY:
+		out["desired_loadout"] = {}
+
+	# Ensure all known keys exist and are boolean
+	for key in UPGRADE_KEYS:
+		var has_key2: bool = out["desired_loadout"].has(key)
+		if not has_key2:
+			out["desired_loadout"][key] = false
+		else:
+			var v2: Variant = out["desired_loadout"][key]
+			out["desired_loadout"][key] = bool(v2)
+
+	return out
+
+# --- Validate a proposed loadout against ownership and known keys. ---
+func _sanitize_desired_loadout(proposed: Dictionary, owned: Dictionary) -> Dictionary:
+	var clean: Dictionary = {}
+	for key in UPGRADE_KEYS:
+		# Only known keys; value must be boolean; cannot activate if not owned.
+		var wants_active: bool = false
+		if proposed.has(key):
+			wants_active = bool(proposed[key])
+		var is_owned: bool = false
+		if owned.has(key):
+			is_owned = bool(owned[key])
+		# Rule: cannot set active if not owned.
+		if is_owned:
+			clean[key] = wants_active
+		else:
+			clean[key] = false
+	return clean
 
 func rename_profile(id: String, new_name: String) -> void:
 	if id == "":
@@ -197,20 +294,32 @@ func _profile_path(id: String) -> String:
 	return DIR_PROFILES + "/profile_" + id + ".json"
 
 func _load_profile_file(id: String) -> Dictionary:
+	# Load, then ensure new fields exist (migration), and resave if anything changed.
 	if id == "":
 		return {}
 	var path: String = _profile_path(id)
 	if not FileAccess.file_exists(path):
 		return {}
+	
 	var f: FileAccess = FileAccess.open(path, FileAccess.READ)
 	if f == null:
 		return {}
 	var txt: String = f.get_as_text()
 	f.close()
+	
 	var parsed_v: Variant = JSON.parse_string(txt)
 	if typeof(parsed_v) != TYPE_DICTIONARY:
 		return {}
-	return parsed_v as Dictionary
+	
+	var raw: Dictionary = parsed_v as Dictionary
+	var shaped: Dictionary = _ensure_profile_defaults_shape(raw)
+	
+	# If migration added/changed fields, persist immediately for stability.
+	var needs_save: bool = (JSON.stringify(raw) != JSON.stringify(shaped))
+	if needs_save:
+		_save_profile_file(id, shaped)
+	
+	return shaped
 
 func _save_profile_file(id: String, data: Dictionary) -> void:
 	var path: String = _profile_path(id)
@@ -347,5 +456,105 @@ func _dedupe_manifest() -> void:
 				seen[id] = true
 				clean.append(d)
 	_manifest["items"] = clean
+
+# --- Public getters for Hub/UI ---
+
+func get_resources() -> Dictionary:
+	# Returns current profile's nutrient and sporeprint in a small dictionary.
+	var id: String = get_current_profile_id()
+	if id == "":
+		return {"nutrient": 0, "sporeprint": 0}
+	var p: Dictionary = _load_profile_file(id)
+	var out: Dictionary = {
+		"nutrient": int(p.get("nutrient", 0)),
+		"sporeprint": int(p.get("sporeprint", 0))
+	}
+	return out
+
+func get_owned_upgrades() -> Dictionary:
+	# Returns a shallow copy to avoid external mutation.
+	var id: String = get_current_profile_id()
+	if id == "":
+		return {}
+	var p: Dictionary = _load_profile_file(id)
+	var owned: Dictionary = p.get("owned_upgrades", {})
+	return owned.duplicate(true)
+
+func get_desired_loadout() -> Dictionary:
+	# Returns a shallow copy to avoid external mutation.
+	var id: String = get_current_profile_id()
+	if id == "":
+		return {}
+	var p: Dictionary = _load_profile_file(id)
+	var loadout: Dictionary = p.get("desired_loadout", {})
+	return loadout.duplicate(true)
+
+func buy_upgrade(key: String, cost: int) -> bool:
+	# Attempts to purchase an upgrade with Nutrient.
+	# Returns true on success, false on failure (insufficient funds, invalid key, or already owned).
+	var id: String = get_current_profile_id()
+	if id == "":
+		return false
+	
+	# Validate key
+	var is_known: bool = UPGRADE_KEYS.has(key)
+	if not is_known:
+		push_error("ProfileManager.buy_upgrade: unknown key " + key)
+		return false
+	
+	# Load and enforce defaults
+	var p: Dictionary = _load_profile_file(id)
+	var nutrient: int = int(p.get("nutrient", 0))
+	var owned: Dictionary = p.get("owned_upgrades", {})
+	var already_owned: bool = false
+	if owned.has(key):
+		already_owned = bool(owned[key])
+	
+	# Fail if already owned
+	if already_owned:
+		return false
+	
+	# Check cost
+	if cost < 0:
+		cost = 0
+	var can_afford: bool = nutrient >= cost
+	if not can_afford:
+		return false
+	
+	# Deduct and set owned
+	nutrient = nutrient - cost
+	owned[key] = true
+	p["nutrient"] = nutrient
+	p["owned_upgrades"] = owned
+	
+	# Optionally: do not auto-toggle active; UI will set desired_loadout explicitly later.
+	
+	# Persist and notify
+	_save_profile_file(id, p)
+	_touch_manifest_last_used(id)
+	_save_manifest()
+	
+	# Emit signals so Hub pills and cards can refresh
+	emit_signal("resources_changed", nutrient, int(p.get("sporeprint", 0)))
+	emit_signal("upgrades_changed")
+	return true
+
+func set_desired_loadout(loadout: Dictionary) -> void:
+	# Saves the player's desired run-active upgrades.
+	# Enforces: only known keys, booleans, and cannot set active if not owned.
+	var id: String = get_current_profile_id()
+	if id == "":
+		return
+	
+	var p: Dictionary = _load_profile_file(id)
+	var owned: Dictionary = p.get("owned_upgrades", {})
+	var clean: Dictionary = _sanitize_desired_loadout(loadout, owned)
+	
+	p["desired_loadout"] = clean
+	_save_profile_file(id, p)
+	_touch_manifest_last_used(id)
+	_save_manifest()
+	
+	emit_signal("upgrades_changed")
 
 ## end res://System/profile_manager.gd

@@ -1,4 +1,4 @@
-[gd_scene load_steps=12 format=4 uid="uid://igr13b3t33pe"]
+[gd_scene load_steps=15 format=4 uid="uid://igr13b3t33pe"]
 
 [ext_resource type="Script" uid="uid://brhe1gqri6osw" path="res://Scenes/World/explore_mode.gd" id="1_sdi1h"]
 [ext_resource type="TileSet" uid="uid://0dggvm2m4qyl" path="res://Assets/Resources/flesh_tile.tres" id="1_u2iet"]
@@ -7,10 +7,19 @@
 [ext_resource type="PackedScene" uid="uid://khw225w867t3" path="res://System/debug/scene_tree_printer.tscn" id="5_6rfcl"]
 [ext_resource type="Texture2D" uid="uid://c4eqrqt63s4vg" path="res://Assets/roguelikeSheet_transparent_32x32.png" id="5_cwjdx"]
 [ext_resource type="Script" uid="uid://c8sv784btijjm" path="res://Scenes/UI/upgrade_row.gd" id="6_cwjdx"]
+[ext_resource type="Script" uid="uid://55pijkd5ikda" path="res://Scenes/UI/resource_counters.gd" id="6_uw1bd"]
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_uw1bd"]
 atlas = ExtResource("5_cwjdx")
 region = Rect2(1632, 170, 32, 32)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_cwjdx"]
+atlas = ExtResource("5_cwjdx")
+region = Rect2(1394, 782, 32, 32)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_ib548"]
+atlas = ExtResource("5_cwjdx")
+region = Rect2(1428, 782, 32, 32)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_8p348"]
 atlas = ExtResource("5_cwjdx")
@@ -110,6 +119,56 @@ stretch_mode = 5
 layout_mode = 2
 texture = SubResource("AtlasTexture_uw1bd")
 stretch_mode = 5
+
+[node name="TopRight" type="MarginContainer" parent="HUD/SafeArea"]
+layout_mode = 2
+size_flags_horizontal = 8
+size_flags_vertical = 0
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 12
+
+[node name="ResourceCounters" type="HBoxContainer" parent="HUD/SafeArea/TopRight"]
+layout_mode = 2
+size_flags_horizontal = 4
+size_flags_vertical = 4
+theme_override_constants/separation = 8
+script = ExtResource("6_uw1bd")
+nutrient_label_path = NodePath("NutrientPill/NutrientRow/NLabel")
+sporeprint_label_path = NodePath("SporeprintPill/SporeRow/SLabel")
+nutrient_pill_path = NodePath("NutrientPill")
+sporeprint_pill_path = NodePath("SporeprintPill")
+
+[node name="NutrientPill" type="PanelContainer" parent="HUD/SafeArea/TopRight/ResourceCounters"]
+layout_mode = 2
+
+[node name="NutrientRow" type="HBoxContainer" parent="HUD/SafeArea/TopRight/ResourceCounters/NutrientPill"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="NIcon" type="TextureRect" parent="HUD/SafeArea/TopRight/ResourceCounters/NutrientPill/NutrientRow"]
+layout_mode = 2
+texture = SubResource("AtlasTexture_cwjdx")
+stretch_mode = 3
+
+[node name="NLabel" type="Label" parent="HUD/SafeArea/TopRight/ResourceCounters/NutrientPill/NutrientRow"]
+layout_mode = 2
+text = "0"
+
+[node name="SporeprintPill" type="PanelContainer" parent="HUD/SafeArea/TopRight/ResourceCounters"]
+layout_mode = 2
+
+[node name="SporeRow" type="HBoxContainer" parent="HUD/SafeArea/TopRight/ResourceCounters/SporeprintPill"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="SIcon" type="TextureRect" parent="HUD/SafeArea/TopRight/ResourceCounters/SporeprintPill/SporeRow"]
+layout_mode = 2
+texture = SubResource("AtlasTexture_ib548")
+stretch_mode = 3
+
+[node name="SLabel" type="Label" parent="HUD/SafeArea/TopRight/ResourceCounters/SporeprintPill/SporeRow"]
+layout_mode = 2
+text = "0"
 
 [node name="BottomCenter" type="MarginContainer" parent="HUD/SafeArea"]
 layout_mode = 2

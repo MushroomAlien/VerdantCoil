@@ -36,7 +36,6 @@ var _library_items: Array = []  # Array<Dictionary> each entry mirrors manifest 
 var _manifest_path: String = "user://Published/manifest.json"
 
 func _ready() -> void:
-
 	# Wire UI signals
 	create_btn.pressed.connect(_on_create_pressed)
 	rename_btn.pressed.connect(_on_rename_pressed)

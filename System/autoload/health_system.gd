@@ -34,7 +34,10 @@ func reset(max_health: int) -> void:
 
 # Public API: apply damage. Source is a string label for future analytics ("acid", "enemy", etc.).
 # Damage cannot be negative. Health is clamped to [0, max].
-func apply_damage(amount: int, source: String = "") -> void:
+func apply_damage(amount: int, _source: String = "") -> void:
+	# The _source parameter is intentionally unused for now.
+	# We keep it so callers can pass context (e.g., "acid", "spike") for future VFX/SFX.
+	# Current logic only cares about 'amount'.
 	if amount < 0:
 		amount = 0
 	if _is_dead:
