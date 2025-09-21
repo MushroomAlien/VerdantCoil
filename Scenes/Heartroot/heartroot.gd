@@ -250,7 +250,7 @@ func _play_coil_at_path(path: String) -> void:
 	var coil: Dictionary = parsed_v as Dictionary
 	if has_node("/root/CoilSession"):
 		var cs: Node = get_node("/root/CoilSession")
-		cs.call("start_playtest", coil, "hub")
+		cs.call("start_coil", coil, "hub")
 
 func _on_library_item_activated(index: int) -> void:
 	var meta_v: Variant = library_list.get_item_metadata(index)

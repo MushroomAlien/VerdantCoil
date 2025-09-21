@@ -27,7 +27,7 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_3ld42")
-version_patch = 65
+version_patch = 66
 build_tag = "a"
 
 [node name="UI" type="CanvasLayer" parent="."]

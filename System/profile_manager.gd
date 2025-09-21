@@ -557,4 +557,52 @@ func set_desired_loadout(loadout: Dictionary) -> void:
 	
 	emit_signal("upgrades_changed")
 
+# --- Public: resource helpers (centralize mutations + emit) ---
+
+func add_nutrient(delta: int) -> void:
+	# Increments Nutrient by delta (clamped ≥ 0). Emits resources_changed.
+	if delta == 0:
+		return
+	var id: String = get_current_profile_id()
+	if id == "":
+		return
+	var p: Dictionary = _load_profile_file(id)
+	var nutrient: int = int(p.get("nutrient", 0))
+	var sporeprint: int = int(p.get("sporeprint", 0))
+	
+	# Clamp to avoid negative totals
+	nutrient = nutrient + delta
+	if nutrient < 0:
+		nutrient = 0
+	
+	p["nutrient"] = nutrient
+	_save_profile_file(id, p)
+	_touch_manifest_last_used(id)
+	_save_manifest()
+	
+	emit_signal("resources_changed", nutrient, sporeprint)
+
+func add_sporeprint(delta: int) -> void:
+	# Increments Sporeprint by delta (clamped ≥ 0). Emits resources_changed.
+	if delta == 0:
+		return
+	var id: String = get_current_profile_id()
+	if id == "":
+		return
+	var p: Dictionary = _load_profile_file(id)
+	var nutrient: int = int(p.get("nutrient", 0))
+	var sporeprint: int = int(p.get("sporeprint", 0))
+	
+	sporeprint = sporeprint + delta
+	if sporeprint < 0:
+		sporeprint = 0
+	
+	p["sporeprint"] = sporeprint
+	_save_profile_file(id, p)
+	_touch_manifest_last_used(id)
+	_save_manifest()
+	
+	emit_signal("resources_changed", nutrient, sporeprint)
+
+
 ## end res://System/profile_manager.gd

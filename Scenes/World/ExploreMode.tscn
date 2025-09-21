@@ -1,4 +1,4 @@
-[gd_scene load_steps=15 format=4 uid="uid://igr13b3t33pe"]
+[gd_scene load_steps=17 format=4 uid="uid://igr13b3t33pe"]
 
 [ext_resource type="Script" uid="uid://brhe1gqri6osw" path="res://Scenes/World/explore_mode.gd" id="1_sdi1h"]
 [ext_resource type="TileSet" uid="uid://0dggvm2m4qyl" path="res://Assets/Resources/flesh_tile.tres" id="1_u2iet"]
@@ -8,6 +8,7 @@
 [ext_resource type="Texture2D" uid="uid://c4eqrqt63s4vg" path="res://Assets/roguelikeSheet_transparent_32x32.png" id="5_cwjdx"]
 [ext_resource type="Script" uid="uid://c8sv784btijjm" path="res://Scenes/UI/upgrade_row.gd" id="6_cwjdx"]
 [ext_resource type="Script" uid="uid://55pijkd5ikda" path="res://Scenes/UI/resource_counters.gd" id="6_uw1bd"]
+[ext_resource type="Script" uid="uid://b34eqlkehqj3x" path="res://Scenes/UI/lose_overlay.gd" id="8_8p348"]
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_uw1bd"]
 atlas = ExtResource("5_cwjdx")
@@ -32,6 +33,20 @@ region = Rect2(1700, 1020, 32, 32)
 [sub_resource type="AtlasTexture" id="AtlasTexture_b8ya5"]
 atlas = ExtResource("5_cwjdx")
 region = Rect2(1836, 1020, 32, 32)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_0bwi2"]
+content_margin_left = 12.0
+content_margin_top = 12.0
+content_margin_right = 12.0
+content_margin_bottom = 12.0
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
 
 [node name="ExploreMode" type="Node2D" node_paths=PackedStringArray("base_layer", "walls_layer", "hazard_layer", "marker_layer")]
 script = ExtResource("1_sdi1h")
@@ -206,5 +221,62 @@ layout_mode = 2
 tooltip_text = "Ghost Trail"
 texture = SubResource("AtlasTexture_b8ya5")
 stretch_mode = 5
+
+[node name="LoseOverlay" type="Control" parent="HUD/SafeArea"]
+visible = false
+layout_mode = 2
+script = ExtResource("8_8p348")
+retry_button_path = NodePath("Dialog/DialogCol/ButtonsRow/RetryBtn")
+exit_button_path = NodePath("Dialog/DialogCol/ButtonsRow/ExitBtn")
+dimmer_path = NodePath("Dimmer")
+dialog_path = NodePath("Dialog")
+
+[node name="Dimmer" type="ColorRect" parent="HUD/SafeArea/LoseOverlay"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0.501961)
+
+[node name="Dialog" type="PanelContainer" parent="HUD/SafeArea/LoseOverlay"]
+custom_minimum_size = Vector2(280, 140)
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -20.0
+offset_top = -20.0
+offset_right = 20.0
+offset_bottom = 20.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_0bwi2")
+
+[node name="DialogCol" type="VBoxContainer" parent="HUD/SafeArea/LoseOverlay/Dialog"]
+layout_mode = 2
+theme_override_constants/separation = 16
+alignment = 1
+
+[node name="TitleLabel" type="Label" parent="HUD/SafeArea/LoseOverlay/Dialog/DialogCol"]
+layout_mode = 2
+text = "You died"
+horizontal_alignment = 1
+
+[node name="ButtonsRow" type="HBoxContainer" parent="HUD/SafeArea/LoseOverlay/Dialog/DialogCol"]
+layout_mode = 2
+theme_override_constants/separation = 16
+alignment = 1
+
+[node name="RetryBtn" type="Button" parent="HUD/SafeArea/LoseOverlay/Dialog/DialogCol/ButtonsRow"]
+layout_mode = 2
+text = "Retry"
+
+[node name="ExitBtn" type="Button" parent="HUD/SafeArea/LoseOverlay/Dialog/DialogCol/ButtonsRow"]
+layout_mode = 2
+text = "Return"
 
 [node name="SceneTreePrinter" parent="." instance=ExtResource("5_6rfcl")]

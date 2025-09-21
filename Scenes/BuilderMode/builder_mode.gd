@@ -299,7 +299,7 @@ func _paint_at(coords: Vector2i) -> void:
 ## Remove tiles at the cell across relevant layers
 func _erase_at(coords: Vector2i) -> void:
 	# Simple MVP: erase Hazards/Walls/Markers at this cell; keep Base Flesh intact.
-	for layer_node in [marker_layer, hazard_layer, walls_layer]:
+	for layer_node in [base_layer, marker_layer, hazard_layer, walls_layer]:
 		if layer_node:
 			layer_node.erase_cell(coords)
 			
@@ -869,7 +869,7 @@ func _on_playtest_pressed() -> void:
 	if allow_over and _biomass_used > biomass_cap:
 		_show_status("Dev bypass: biomass over cap (%d/%d), playtesting anyway." % [_biomass_used, biomass_cap])
 	
-	print("BuilderMode: start_playtest request → biomass ", _biomass_used, "/", biomass_cap, ", allow_over=", allow_over)
+	print("BuilderMode: start_coil request → biomass ", _biomass_used, "/", biomass_cap, ", allow_over=", allow_over)
 	var result := _run_validation(allow_over)
 	if not result.ok:
 		_show_validation_dialog(result)
@@ -881,7 +881,7 @@ func _on_playtest_pressed() -> void:
 	# Hand off to Explore via CoilSession
 	var data: Dictionary = _capture_coil()
 	if has_node("/root/CoilSession"):
-		get_node("/root/CoilSession").call("start_playtest", data, "builder")
+		get_node("/root/CoilSession").call("start_coil", data, "builder")
 	else:
 		_show_status("Playtest: CoilSession autoload missing.")
 

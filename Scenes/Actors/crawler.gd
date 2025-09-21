@@ -208,7 +208,7 @@ func _win_and_return() -> void:
 	_is_moving = true
 	print("🏆 Reached Heartroot — WIN!")
 	if has_node("/root/CoilSession"):
-		get_node("/root/CoilSession").call("end_playtest")
+		get_node("/root/CoilSession").call("end_coil")
 	else:
 		get_tree().change_scene_to_file("res://Scenes/BuilderMode/BuilderMode.tscn")
 
