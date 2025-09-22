@@ -46,41 +46,93 @@ func _get_tile_data(layer: TileMapLayer, coords: Vector2i) -> TileData:
 # --- Safe metadata readers (string/int/bool) ---
 func _get_str(td: TileData, key: String, default_val: String = "") -> String:
 	# Returns key as String if present & typed; otherwise default_val
-	var v = td.get_custom_data(key)
+	var v: Variant = td.get_custom_data(key)
 	return (v as String) if (v is String) else default_val
 
 func _get_int(td: TileData, key: String, default_val: int = 0) -> int:
 	# Returns key as int if present & typed; otherwise default_val
-	var v = td.get_custom_data(key)
+	var v: Variant = td.get_custom_data(key)
 	return (v as int) if (typeof(v) == TYPE_INT) else default_val
 
 func _get_bool(td: TileData, key: String, default_val: bool = false) -> bool:
 	# Returns key as bool if present & typed; otherwise default_val
-	var v = td.get_custom_data(key)
+	var v: Variant = td.get_custom_data(key)
 	return (v as bool) if (v is bool) else default_val
 
+#func _unhandled_input(event: InputEvent) -> void:
+	## Toggle upgrades for testing
+	## --- DEV CHEATS (guarded) ---
+	## Only allow cheat hotkeys if GameFlags says cheats are enabled.
+	#var cheats_on: bool = false
+	#if has_node("/root/GameFlags"):
+		#var gf: Node = get_node("/root/GameFlags")
+		## Convert explicitly to bool so we never infer Variant.
+		#cheats_on = bool(gf.get("cheats_enabled"))
+	#
+	#if not cheats_on:
+		#return  # No cheats in this build → bail out before reading dev toggles
+		#
+	## From here down, dev hotkeys are safe to activate:
+	## if event.is_action_pressed("toggle_upgrade_1"): controller.enable_hardened_skin(...)
+	## elif event.is_action_pressed("toggle_upgrade_2"): controller.enable_acid_sac(...)
+	## elif event.is_action_pressed("toggle_upgrade_3"): controller.enable_ghost_trail(...)
+	#var upgrade_controller: Node = get_node_or_null("UpgradeController")
+	#if event.is_action_pressed("toggle_upgrade_1") and upgrade_controller:
+		#upgrade_controller.toggle_upgrade(upgrade_controller.Upgrade.HARDENED_SKIN)
+	#elif event.is_action_pressed("toggle_upgrade_2") and upgrade_controller:
+		#upgrade_controller.toggle_upgrade(upgrade_controller.Upgrade.ACID_SAC)
+	#elif event.is_action_pressed("toggle_upgrade_3") and upgrade_controller:
+		#upgrade_controller.toggle_upgrade(upgrade_controller.Upgrade.GHOST_TRAIL)
+		#
+	## --- SLOW/SKIP GUARD (must run BEFORE any movement handling) ---
+	## If Sticky applied N slow "ticks", we ignore the next N movement inputs.
+	## We run this check here so the keypress is consumed BEFORE we even read directions.
+	#if _skip_inputs > 0:
+		#_skip_inputs -= 1
+		#return
+		#
+	## Block new input while the tween is running
+	#if _is_moving:
+		#return
+		#
+	## Directional input via InputMap
+	#if event.is_action_pressed("move_up"):
+		#_move_direction = Vector2.UP
+	#elif event.is_action_pressed("move_down"):
+		#_move_direction = Vector2.DOWN
+	#elif event.is_action_pressed("move_left"):
+		#_move_direction = Vector2.LEFT
+	#elif event.is_action_pressed("move_right"):
+		#_move_direction = Vector2.RIGHT
+	#else:
+		#return
+	#_start_move()
 func _unhandled_input(event: InputEvent) -> void:
-	# Toggle upgrades for testing
-	var upgrade_controller = get_node_or_null("UpgradeController")
-	if event.is_action_pressed("toggle_upgrade_1") and upgrade_controller:
-		upgrade_controller.toggle_upgrade(upgrade_controller.Upgrade.HARDENED_SKIN)
-	elif event.is_action_pressed("toggle_upgrade_2") and upgrade_controller:
-		upgrade_controller.toggle_upgrade(upgrade_controller.Upgrade.ACID_SAC)
-	elif event.is_action_pressed("toggle_upgrade_3") and upgrade_controller:
-		upgrade_controller.toggle_upgrade(upgrade_controller.Upgrade.GHOST_TRAIL)
-		
-	# --- SLOW/SKIP GUARD (must run BEFORE any movement handling) ---
-	# If Sticky applied N slow "ticks", we ignore the next N movement inputs.
-	# We run this check here so the keypress is consumed BEFORE we even read directions.
+	# --- DEV CHEATS: only the toggle hotkeys are gated ---
+	var cheats_on: bool = false
+	if has_node("/root/GameFlags"):
+		var gf: Node = get_node("/root/GameFlags")
+		cheats_on = bool(gf.get("cheats_enabled"))
+
+	if cheats_on:
+		var upgrade_controller: Node = get_node_or_null("UpgradeController")
+		if event.is_action_pressed("toggle_upgrade_1") and upgrade_controller:
+			upgrade_controller.toggle_upgrade(upgrade_controller.Upgrade.HARDENED_SKIN)
+		elif event.is_action_pressed("toggle_upgrade_2") and upgrade_controller:
+			upgrade_controller.toggle_upgrade(upgrade_controller.Upgrade.ACID_SAC)
+		elif event.is_action_pressed("toggle_upgrade_3") and upgrade_controller:
+			upgrade_controller.toggle_upgrade(upgrade_controller.Upgrade.GHOST_TRAIL)
+
+	# --- SLOW/SKIP GUARD (always runs) ---
 	if _skip_inputs > 0:
 		_skip_inputs -= 1
 		return
-		
-	# Block new input while the tween is running
+
+	# --- BLOCK WHILE MOVING (always runs) ---
 	if _is_moving:
 		return
-		
-	# Directional input via InputMap
+
+	# --- MOVEMENT INPUT (always runs) ---
 	if event.is_action_pressed("move_up"):
 		_move_direction = Vector2.UP
 	elif event.is_action_pressed("move_down"):
@@ -103,8 +155,8 @@ func _start_move() -> void:
 		return
 	
 	# 1) Where are we trying to go?
-	var current_tile := GridUtil.to_tile_coords(position)
-	var next_tile := current_tile + Vector2i(_move_direction)
+	var current_tile: Vector2i = GridUtil.to_tile_coords(position)
+	var next_tile: Vector2i = current_tile + Vector2i(_move_direction)
 	
 	# 2) Bounds check (use Base as the canonical footprint)
 	var base_used: Rect2i = base_layer.get_used_rect()
@@ -143,8 +195,8 @@ func _start_move() -> void:
 			return
 	
 	# 5) All checks passed → move
-	var target_pos := GridUtil.to_world(next_tile)
-	var tween := create_tween()
+	var target_pos: Vector2 = GridUtil.to_world(next_tile)
+	var tween: Tween = create_tween()
 	tween.tween_property(self, "position", target_pos, 1.0 / move_speed)
 	# When we arrive, resolve tile effects, then re-enable input
 	tween.finished.connect(func():
