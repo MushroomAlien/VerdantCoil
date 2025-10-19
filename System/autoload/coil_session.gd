@@ -24,19 +24,6 @@ func start_coil(coil: Dictionary, origin: String = "hub") -> void:
 
 	get_tree().change_scene_to_file(explore_scene_path)
 
-#func end_coil() -> void:
-	## called by Explore when the run ends (win/exit)
-	#if has_node("/root/ProfileManager") and (_origin == "hub"):
-		#var pm: Node = get_node("/root/ProfileManager")
-		#if pm.has_method("add_nutrient"):
-			#var REWARD_PER_COIL: int = 1  # keep simple for 1.6(b)
-			#print("Added ", REWARD_PER_COIL, " nutrient on win!")
-			#pm.call("add_nutrient", REWARD_PER_COIL)
-	#if _origin == "builder":
-		#return_to_builder()
-	#else:
-		#return_to_heartroot()
-
 func end_coil(success: bool = false) -> void:
 	# Only award on SUCCESSFUL completion from Hub-origin runs.
 	if success and has_node("/root/ProfileManager") and (_origin == "hub"):
@@ -50,7 +37,6 @@ func end_coil(success: bool = false) -> void:
 		return_to_builder()
 	else:
 		return_to_heartroot()
-
 
 # Keep older call sites working (Explore/LoseOverlay/Heartroot).
 func start_playtest(coil: Dictionary, origin: String = "hub") -> void:
