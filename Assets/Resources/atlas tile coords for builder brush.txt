@@ -1,15 +1,15 @@
 Flesh
-    centre	(8,16)
+	centre	(8,16)
 Solid Wall
-    centre	(8,10)
+	centre	(8,10)
 Digest Wall
-    centre	(8,22)
+	centre	(8,22)
 Acid Pool
-    centre	(3,16)
+	centre	(3,16)
 Sticky Pool
-    centre	(3,22)
+	centre	(3,22)
 Spawn
-    centre	(13,8)
+	centre	(13,8)
 Heartrtoot
-    centre	(14,8)
+	centre	(14,8)
 Eraser
