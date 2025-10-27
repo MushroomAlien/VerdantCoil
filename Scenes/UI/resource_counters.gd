@@ -119,4 +119,12 @@ func _on_resources_changed(nutrient: int, sporeprint: int) -> void:
 func _on_profile_changed(_id: String) -> void:
 	_refresh_from_profile()
 
+func _exit_tree() -> void:
+	if has_node("/root/ProfileManager"):
+		var pm := get_node("/root/ProfileManager")
+		if pm.is_connected("resources_changed", Callable(self, "_on_resources_changed")):
+			pm.disconnect("resources_changed", Callable(self, "_on_resources_changed"))
+		if pm.is_connected("current_profile_changed", Callable(self, "_on_profile_changed")):
+			pm.disconnect("current_profile_changed", Callable(self, "_on_profile_changed"))
+
 ## end res://Scenes/UI/resource_counters.gd

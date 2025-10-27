@@ -1,7 +1,9 @@
-[gd_scene load_steps=4 format=3 uid="uid://cx4ggbvpn0ri6"]
+[gd_scene load_steps=8 format=3 uid="uid://cx4ggbvpn0ri6"]
 
 [ext_resource type="Script" uid="uid://djodedx8i3l5l" path="res://Scenes/Heartroot/heartroot.gd" id="1_3ld42"]
 [ext_resource type="PackedScene" uid="uid://khw225w867t3" path="res://System/debug/scene_tree_printer.tscn" id="1_6og3p"]
+[ext_resource type="Script" uid="uid://55pijkd5ikda" path="res://Scenes/UI/resource_counters.gd" id="2_uh4yy"]
+[ext_resource type="Texture2D" uid="uid://c4eqrqt63s4vg" path="res://Assets/roguelikeSheet_transparent_32x32.png" id="3_0tek3"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_3ld42"]
 content_margin_left = 12.0
@@ -18,6 +20,14 @@ corner_radius_top_left = 10
 corner_radius_top_right = 10
 corner_radius_bottom_right = 10
 corner_radius_bottom_left = 10
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_5slm5"]
+atlas = ExtResource("3_0tek3")
+region = Rect2(1394, 782, 32, 32)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_i5w08"]
+atlas = ExtResource("3_0tek3")
+region = Rect2(1428, 782, 32, 32)
 
 [node name="Heartroot" type="Control"]
 layout_mode = 3
@@ -94,6 +104,47 @@ layout_mode = 2
 [node name="Label" type="Label" parent="UI/SafeArea/RootCol/MainRow/ProfilePanel/ProfileCol"]
 layout_mode = 2
 text = "Profiles"
+
+[node name="ResourceBar" type="HBoxContainer" parent="UI/SafeArea/RootCol/MainRow/ProfilePanel/ProfileCol"]
+layout_mode = 2
+script = ExtResource("2_uh4yy")
+nutrient_label_path = NodePath("NutrientPill/NutrientRow/NLabel")
+sporeprint_label_path = NodePath("SporePill/SporeRow/SLabel")
+nutrient_pill_path = NodePath("NutrientPill/NutrientRow/NIcon")
+sporeprint_pill_path = NodePath("SporePill/SporeRow/SIcon")
+
+[node name="ResourceLabel" type="Label" parent="UI/SafeArea/RootCol/MainRow/ProfilePanel/ProfileCol/ResourceBar"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Resources:"
+
+[node name="NutrientPill" type="PanelContainer" parent="UI/SafeArea/RootCol/MainRow/ProfilePanel/ProfileCol/ResourceBar"]
+layout_mode = 2
+
+[node name="NutrientRow" type="HBoxContainer" parent="UI/SafeArea/RootCol/MainRow/ProfilePanel/ProfileCol/ResourceBar/NutrientPill"]
+layout_mode = 2
+
+[node name="NIcon" type="TextureRect" parent="UI/SafeArea/RootCol/MainRow/ProfilePanel/ProfileCol/ResourceBar/NutrientPill/NutrientRow"]
+layout_mode = 2
+texture = SubResource("AtlasTexture_5slm5")
+
+[node name="NLabel" type="Label" parent="UI/SafeArea/RootCol/MainRow/ProfilePanel/ProfileCol/ResourceBar/NutrientPill/NutrientRow"]
+layout_mode = 2
+text = "0"
+
+[node name="SporePill" type="PanelContainer" parent="UI/SafeArea/RootCol/MainRow/ProfilePanel/ProfileCol/ResourceBar"]
+layout_mode = 2
+
+[node name="SporeRow" type="HBoxContainer" parent="UI/SafeArea/RootCol/MainRow/ProfilePanel/ProfileCol/ResourceBar/SporePill"]
+layout_mode = 2
+
+[node name="SIcon" type="TextureRect" parent="UI/SafeArea/RootCol/MainRow/ProfilePanel/ProfileCol/ResourceBar/SporePill/SporeRow"]
+layout_mode = 2
+texture = SubResource("AtlasTexture_i5w08")
+
+[node name="SLabel" type="Label" parent="UI/SafeArea/RootCol/MainRow/ProfilePanel/ProfileCol/ResourceBar/SporePill/SporeRow"]
+layout_mode = 2
+text = "0"
 
 [node name="ProfilesList" type="ItemList" parent="UI/SafeArea/RootCol/MainRow/ProfilePanel/ProfileCol"]
 unique_name_in_owner = true
@@ -189,8 +240,7 @@ layout_mode = 2
 
 [node name="Label" type="Label" parent="UI/SafeArea/RootCol/MainRow/LibraryPanel/LibraryCol"]
 layout_mode = 2
-text = "Published Levels
-"
+text = "Published Levels"
 
 [node name="MineOnly" type="CheckBox" parent="UI/SafeArea/RootCol/MainRow/LibraryPanel/LibraryCol"]
 unique_name_in_owner = true
@@ -215,4 +265,3 @@ text = "Play Selected
 "
 
 [node name="SceneTreePrinter" parent="." instance=ExtResource("1_6og3p")]
-printing_on = false
