@@ -1113,7 +1113,7 @@ func _on_hub_pressed() -> void:
 	if has_node("/root/CoilSession"):
 		get_node("/root/CoilSession").call("return_to_heartroot")
 	else:
-		get_tree().change_scene_to_file("res://Scenes/Heartroot/Heartroot.tscn")
+		get_tree().change_scene_to_file("res://Scenes/Heartroot/heartroot.tscn")
 
 # Returns a stable-ish id string for a coil (UTC timestamp + msec).
 # Format: yyyymmdd_hhmmss_msec (same family as ProfileManager ids).

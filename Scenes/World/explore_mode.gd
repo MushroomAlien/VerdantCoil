@@ -10,12 +10,31 @@ const CRAWLER_SCENE: PackedScene = preload("res://Scenes/Actors/Crawler.tscn")
 @export var marker_layer: TileMapLayer
 
 func _ready() -> void:
-	# 1) If Builder handed us a coil via the Autoload, rebuild the map now.
+	## 1) If Builder handed us a coil via the Autoload, rebuild the map now.
+	#if has_node("/root/CoilSession"):
+		#var cs: Node = get_node("/root/CoilSession")
+		#var data_v: Variant = cs.get("pending_coil")
+		#if typeof(data_v) == TYPE_DICTIONARY:
+			#var data: Dictionary = data_v as Dictionary
+			#_load_from_coil(data)  # fills base/walls/hazard/marker
+# 1) If Builder handed us a coil via the Autoload, rebuild the map now.
+	#    Use consume_pending_coil() so we TAKE the snapshot and CLEAR it in the session.
 	if has_node("/root/CoilSession"):
 		var cs: Node = get_node("/root/CoilSession")
-		var data_v: Variant = cs.get("pending_coil")
-		if typeof(data_v) == TYPE_DICTIONARY:
-			var data: Dictionary = data_v as Dictionary
+		var data: Dictionary = {}
+
+		# Preferred: explicit API that deep-dupes and clears the stored snapshot
+		if cs.has_method("consume_pending_coil"):
+			var v: Variant = cs.call("consume_pending_coil")
+			if typeof(v) == TYPE_DICTIONARY:
+				data = v as Dictionary
+		else:
+			# Fallback for older builds: read the raw property once, then clear it.
+			var raw_v: Variant = cs.get("pending_coil")
+			if typeof(raw_v) == TYPE_DICTIONARY:
+				data = (raw_v as Dictionary).duplicate(true)  # defensive copy
+				cs.set("pending_coil", {})                    # clear to avoid leaks
+		if not data.is_empty():
 			_load_from_coil(data)  # fills base/walls/hazard/marker
 
 	# --- NEW: initialize global systems for this run ---
