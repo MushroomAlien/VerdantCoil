@@ -52,7 +52,9 @@ func _on_died() -> void:
 func _on_retry_pressed() -> void:
 	# Reload the current Explore scene. Coil data is still in CoilSession.pending_coil.
 	# This restarts the run cleanly without awarding anything.
-	get_tree().reload_current_scene()
+	#get_tree().reload_current_scene()
+	if has_node("/root/CoilSession"):
+		get_node("/root/CoilSession").call("retry_last_coil")
 
 func _on_exit_pressed() -> void:
 	# Explicitly end the coil as a LOSS (no nutrient, no success flags).
@@ -62,7 +64,6 @@ func _on_exit_pressed() -> void:
 
 	# Fallback if CoilSession is unavailable.
 	get_tree().change_scene_to_file("res://Scenes/Heartroot/heartroot.tscn")
-
 
 # --- Visual helpers ---
 

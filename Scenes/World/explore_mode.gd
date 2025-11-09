@@ -10,14 +10,7 @@ const CRAWLER_SCENE: PackedScene = preload("res://Scenes/Actors/Crawler.tscn")
 @export var marker_layer: TileMapLayer
 
 func _ready() -> void:
-	## 1) If Builder handed us a coil via the Autoload, rebuild the map now.
-	#if has_node("/root/CoilSession"):
-		#var cs: Node = get_node("/root/CoilSession")
-		#var data_v: Variant = cs.get("pending_coil")
-		#if typeof(data_v) == TYPE_DICTIONARY:
-			#var data: Dictionary = data_v as Dictionary
-			#_load_from_coil(data)  # fills base/walls/hazard/marker
-# 1) If Builder handed us a coil via the Autoload, rebuild the map now.
+	# 1) If Builder handed us a coil via the Autoload, rebuild the map now.
 	#    Use consume_pending_coil() so we TAKE the snapshot and CLEAR it in the session.
 	if has_node("/root/CoilSession"):
 		var cs: Node = get_node("/root/CoilSession")
@@ -47,16 +40,6 @@ func _ready() -> void:
 		var hs: Node = get_node("/root/HealthSystem")
 		if hs.has_method("reset"):
 			hs.call("reset", 3)  # Track-1 baseline: 3 HP
-
-	# If running in dev mode and you want to force a test loadout, you can do this:
-	if has_node("/root/GameFlags") and has_node("/root/UpgradeState"):
-		var gf: Node = get_node("/root/GameFlags")
-		var us2: Node = get_node("/root/UpgradeState")
-		# Example: force Hardened Skin ON for quick testing (set back to false when done)
-		# Only run this inside dev mode.
-		if bool(gf.get("dev_mode_enabled")):
-			if us2.has_method("set_runtime_overrides"):
-				us2.call("set_runtime_overrides", true, false, false)
 
 	# 2) Spawn the crawler at the Spawn marker (or fallback)
 	var crawler: Area2D = CRAWLER_SCENE.instantiate()

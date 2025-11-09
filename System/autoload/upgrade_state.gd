@@ -18,31 +18,13 @@ func _ready() -> void:
 	# when Explore starts a run.
 	pass
 
-# Public API: populate from current profile (Track 5 will implement real storage).
-# For Track 1, we set explicit defaults and emit a signal so listeners can react.
+# For Phase 1.6:
+# - Every run starts with ALL upgrades OFF.
+# - We ignore any "desired_loadout" stored in profiles for now.
 func load_active_loadout() -> void:
-	# Populate from the ProfileManager's desired_loadout (if present).
-	var use_hardened: bool = false
-	var use_acid: bool = false
-	var use_ghost: bool = false
-
-	if has_node("/root/ProfileManager"):
-		var pm: Node = get_node("/root/ProfileManager")
-		if pm.has_method("get_desired_loadout"):
-			var dl_v: Variant = pm.call("get_desired_loadout")
-			if typeof(dl_v) == TYPE_DICTIONARY:
-				var dl: Dictionary = dl_v as Dictionary
-				if dl.has("HARDENED_SKIN"):
-					use_hardened = bool(dl["HARDENED_SKIN"])
-				if dl.has("ACID_SAC"):
-					use_acid = bool(dl["ACID_SAC"])
-				if dl.has("GHOST_TRAIL"):
-					use_ghost = bool(dl["GHOST_TRAIL"])
-
-	# Apply and notify
-	_hardened_skin = use_hardened
-	_acid_sac = use_acid
-	_ghost_trail = use_ghost
+	_hardened_skin = false
+	_acid_sac = false
+	_ghost_trail = false
 	emit_signal("loadout_changed")
 
 # Public getters (explicit).

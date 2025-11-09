@@ -9,11 +9,13 @@ extends Node
 
 var pending_coil: Dictionary = {}  # the last coil handed off from Builder
 var _origin: String = "hub"   # "builder" or "hub"
+var _last_run_coil: Dictionary = {}
 
-### Start ExploreMode with an explicit snapshot (Builder hands it in)
+## Start ExploreMode with an explicit snapshot (Builder hands it in)
 func start_coil(coil: Dictionary, origin: String = "hub") -> void:
 	pending_coil = coil
 	_origin = origin
+	_last_run_coil = coil.duplicate(true)  # keep a clean copy for retry
 
 	# Check if the coil that was loaded has the correct meta data
 	var meta := coil.get("meta", {}) as Dictionary
@@ -37,6 +39,14 @@ func end_coil(success: bool = false) -> void:
 		return_to_builder()
 	else:
 		return_to_heartroot()
+
+func retry_last_coil() -> void:
+	if _last_run_coil.is_empty():
+		push_error("CoilSession.retry_last_coil: no previous coil to retry.")
+		return
+	# Queue a fresh copy, so Explore can consume it again
+	pending_coil = _last_run_coil.duplicate(true)
+	get_tree().change_scene_to_file(explore_scene_path)
 
 # Keep older call sites working (Explore/LoseOverlay/Heartroot).
 func start_playtest(coil: Dictionary, origin: String = "hub") -> void:
