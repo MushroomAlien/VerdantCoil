@@ -85,6 +85,8 @@ var _last_preview_cell: Vector2i = Vector2i(999999, 999999)
 var _palette_buttons: Array[TextureButton] = []
 var _biomass_used: int = 0
 var _last_validation_ok: bool = false
+var undo_stack: Array = []
+var redo_stack: Array = []
 
 ## --- UI wiring & Lifecycle --------------------------------------------------------
 
@@ -169,14 +171,6 @@ func _ready() -> void:
 	if ignore_biomass_limit:
 		ignore_biomass_limit.tooltip_text = "Dev only: bypass biomass cap when Playtesting."
 
-	## Subscribe to ProfileManager signals (safe if autoload missing)
-	#if has_node("/root/ProfileManager"):
-		#var pm: Node = get_node("/root/ProfileManager")
-		#if pm.has_signal("profile_list_changed"):
-			#pm.connect("profile_list_changed", Callable(self, "_refresh_profile_ui"))
-		#if pm.has_signal("current_profile_changed"):
-			#pm.connect("current_profile_changed", Callable(self, "_on_current_profile_changed"))
-
 	# ---- restore coil if returning from Playtest ----
 	_restore_pending_coil_if_any()
 	# keep numbers fresh after applying
@@ -187,6 +181,93 @@ func _ready() -> void:
 ## Refresh the preview each frame
 func _process(_delta: float) -> void:
 	_update_preview()
+
+## Undo/Redo system
+# Each undo/redo "command" will be stored as a Dictionary.
+# For now we only support "paint" commands affecting a single cell.
+# Later we can extend this to erase and multi-cell strokes.
+#
+# Example shape:
+# {
+#     "kind": "paint",
+#     "coords": Vector2i(x, y),
+#     "layer_name": "Base", # or whatever your TileMap layer node is called
+#     "before": { "source_id": int, "atlas_coords": Vector2i },
+#     "after":  { "source_id": int, "atlas_coords": Vector2i },
+# }
+#
+# undo_stack: Array[Dictionary]
+# redo_stack: Array[Dictionary]
+
+func _get_tile_state(layer: TileMapLayer, coords: Vector2i) -> Dictionary:
+	# In Godot 4 TileMapLayer, we don't specify a layer index
+	var source_id := layer.get_cell_source_id(coords)
+	if source_id == -1:
+		# Represent empty cells with a special marker.
+		return {
+			"is_empty": true,
+			"source_id": -1,
+			"atlas_coords": Vector2i.ZERO,
+		}
+
+	var atlas_coords := layer.get_cell_atlas_coords(coords)
+	return {
+		"is_empty": false,
+		"source_id": source_id,
+		"atlas_coords": atlas_coords,
+	}
+
+# Record a single-cell paint command into the undo stack.
+func _record_paint_command(coords: Vector2i, layer: TileMapLayer, before_state: Dictionary, after_state: Dictionary) -> void:
+	var cmd: Dictionary = {
+		"kind": "paint",
+		"coords": coords,
+		"layer_name": layer.name, # we store the layer name so we can look it up later
+		"before": before_state,
+		"after": after_state,
+	}
+
+	undo_stack.append(cmd)
+	redo_stack.clear()
+
+# Very simple debug undo: only supports "paint" commands right now.
+func _debug_undo_last_command() -> void:
+	if undo_stack.is_empty():
+		return  # nothing to undo
+
+	# Take the last command.
+	var cmd: Dictionary = undo_stack.pop_back()
+
+	# Currently we only support paint commands.
+	if cmd.get("kind") != "paint":
+		return  # ignore unknown commands for now
+
+	# Find the layer we painted on.
+	var layer_name: String = cmd.get("layer_name", "")
+	var layer: TileMap = get_node_or_null(layer_name)
+	if layer == null:
+		push_error("Undo: could not find TileMap layer '%s'" % layer_name)
+		return
+
+	var coords: Vector2i = cmd.get("coords", Vector2i.ZERO)
+	var before_state: Dictionary = cmd.get("before", {})
+
+	# Apply the "before" tile state back to the map.
+	if before_state.get("is_empty", true):
+		# Empty tile -> clear the cell.
+		layer.set_cell(0, coords, -1, Vector2i.ZERO)
+	else:
+		# Restore previous tile details.
+		var src_id: int = before_state.get("source_id", -1)
+		var atlas_coords: Vector2i = before_state.get("atlas_coords", Vector2i.ZERO)
+		layer.set_cell(0, coords, src_id, atlas_coords)
+
+	# Optional: push this command to redo_stack so we can redo later.
+	redo_stack.append(cmd)
+
+	# Recalculate biomass so UI stays correct.
+	if has_method("_recalc_biomass"):
+		_recalc_biomass()
 
 ## Handle mouse input for painting and erasing
 func _unhandled_input(event: InputEvent) -> void:
@@ -213,6 +294,11 @@ func _unhandled_input(event: InputEvent) -> void:
 				_paint_at(coords)
 			elif _is_erasing_right:
 				_erase_at(coords)
+
+	# Debug: undo last paint command when the debug action is pressed.----------
+	if event.is_action_pressed("builder_undo_debug"):
+		_debug_undo_last_command()
+		return
 
 ## Toggle visibility for dev-only badge
 func _on_dev_mode_changed(enabled: bool) -> void:
@@ -259,6 +345,53 @@ func _current_brush() -> BrushEntry:
 
 ## --- Painting / Erasing --------------------------------------------------------
 
+### Place a tile using the selected brush after validation
+#func _paint_at(coords: Vector2i) -> void:
+	#var b: BrushEntry = _current_brush()
+	#if b == null:
+		#_show_status("⚠️ No brush selected.")
+		#return
+	#
+	## ERASER: just erase and return
+	#if b.rule_profile == "ERASER":
+		#_erase_at(coords)
+		#return
+	#
+	## Validate according to rule profile (see functions below)
+	#if not _validate_placement(b, coords):
+		#return
+	#
+	## Place the tile (BASE/WALL/POOL/MARKER)
+	#if b.source_id < 0:
+		#_show_status("⚠️ Source ID not set for brush: " + b.display_name)
+		#return
+	#
+	#var layer := _layer_for(b.target_layer)
+	#if layer == null:
+		#_show_status("⚠️ Unknown target layer: " + str(b.target_layer))
+		#return
+	#
+	## Place the tile
+	#layer.set_cell(coords, b.source_id, b.atlas_coords)
+	#
+	## If we just placed a marker, enforce singletons (Spawn and Heartroot)
+	#if layer == marker_layer:
+		#_enforce_single_spawn_at(coords)
+		#_enforce_single_heartroot_at(coords)
+	#
+	## Recalc biomass after successful placement
+	#_recalc_biomass()
+
+## Remove tiles at the cell across relevant layers
+func _erase_at(coords: Vector2i) -> void:
+	# Simple MVP: erase Hazards/Walls/Markers at this cell; keep Base Flesh intact.
+	for layer_node in [base_layer, marker_layer, hazard_layer, walls_layer]:
+		if layer_node:
+			layer_node.erase_cell(coords)
+
+	# Recalc biomass after successful placement
+	_recalc_biomass()
+
 ## Place a tile using the selected brush after validation
 func _paint_at(coords: Vector2i) -> void:
 	var b: BrushEntry = _current_brush()
@@ -285,6 +418,9 @@ func _paint_at(coords: Vector2i) -> void:
 		_show_status("⚠️ Unknown target layer: " + str(b.target_layer))
 		return
 
+	# --- NEW: capture the "before" state for undo ---
+	var before_state := _get_tile_state(layer, coords)
+
 	# Place the tile
 	layer.set_cell(coords, b.source_id, b.atlas_coords)
 
@@ -295,16 +431,14 @@ func _paint_at(coords: Vector2i) -> void:
 
 	# Recalc biomass after successful placement
 	_recalc_biomass()
+	# --- NEW: capture the "after" state and record the command ---
 
-## Remove tiles at the cell across relevant layers
-func _erase_at(coords: Vector2i) -> void:
-	# Simple MVP: erase Hazards/Walls/Markers at this cell; keep Base Flesh intact.
-	for layer_node in [base_layer, marker_layer, hazard_layer, walls_layer]:
-		if layer_node:
-			layer_node.erase_cell(coords)
+	var after_state := _get_tile_state(layer, coords)
+	# If nothing actually changed (e.g. painting same tile on top), don't record undo noise.
+	if before_state == after_state:
+		return
 
-	# Recalc biomass after successful placement
-	_recalc_biomass()
+	_record_paint_command(coords, layer, before_state, after_state)
 
 ## Emit a friendly inline status and return false (used by placement validators).
 func _reject_or_false(msg: String, report: bool) -> bool:
