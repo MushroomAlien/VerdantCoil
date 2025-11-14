@@ -1,0 +1,77 @@
+Here’s the concise 1.4 progress log.
+
+# 1.4 Progress Log — Refactor & Dev UX
+
+## Summary
+
+Refactored Builder into “UI + painting + handoff,” extracted IO/Query/Validator modules, made Dev controls self-contained, and polished the playtest round-trip via `CoilSession`. Baseline flows (Save/Load, Validate, Playtest→Win→Return) remain intact. We intentionally deferred long-form docs; inline comments are current.
+
+## Work completed (by chunk)
+
+* **Chunk 0 — Prep & safety**
+
+  * Verified baseline: build → validate → playtest → win → return → map restored.
+  * Branch created and baseline committed.
+
+* **Chunk 1 — Extract Save/Load**
+
+  * Added `System/coil_io.gd`; `builder_mode.gd` now uses `CoilIO.serialize_layer(...)` and `CoilIO.apply_coil(...)`.
+  * Removed local serialization helpers; autosave unchanged.
+
+* **Chunk 2 — Extract tile queries**
+
+  * Added `System/coil_query.gd`; painting rules now call `CoilQuery` via `_q` instance.
+  * Removed local `_has_base/_has_wall/_hazard_kind_at/...`.
+
+* **Chunk 3 — Extract validation & pathfinding**
+
+  * Added `System/coil_validator.gd`; `_run_validation(...)` delegates to it and adapts to `ValidationResult`.
+  * Builder no longer contains BFS/path rules.
+
+* **Chunk 4 — Slim BuilderMode**
+
+  * Reorganized sections: UI wiring, selection/painting/erasing, preview, biomass label, playtest handoff.
+  * `_capture_coil()` uses only `CoilIO` and live layer refs.
+
+* **Chunk 5 — Dev controls self-contained**
+
+  * New `UI/dev_controls.gd` anchors under TopBar using container properties.
+  * Subscribes to `/root/GameFlags.dev_mode_changed`; shows/hides panel.
+  * Mirrors `IgnoreBiomassLimit` into `GameFlags` meta for persistence.
+  * Removed all manual layout code from Builder (no `position` math, no `_relayout_dev_controls`).
+
+* **Chunk 6 — Autosave & CoilSession polish**
+
+  * `CoilSession.gd`: added `consume_pending_coil()`, added trace logs, kept `start_playtest(...)` and `return_to_builder()`.
+  * Builder: `_restore_pending_coil_if_any()` consumes and applies snapshot, logs restore.
+  * ExploreMode: logs on coil load; spawn still resolved from markers.
+
+* **Chunk 7 — API surface & naming tidy**
+
+  * Removed unused `@onready` refs related to old dev layout.
+  * Exports kept minimal and designer-oriented.
+  * Comments updated to reflect “strict unless dev bypass” biomass behavior.
+  * We **did not** keep an unused `ignore_biomass_limit_changed` signal; no linter warnings.
+
+## Acceptance results
+
+* Toggling Dev Mode shows/hides the entire dev panel; no UI “nudging”.
+* Over-cap with Dev + IgnoreBiomassLimit set → Playtest allowed; logs note bypass.
+* Playtest → Win → return restores the exact pre-playtest map.
+* Save/Load and autosave work; load restores biomass numbers and UI label.
+* No unused variable/function warnings in the current scripts.
+
+## Notes & decisions
+
+* Persistence for “Ignore Biomass” uses `GameFlags` **meta**; Builder also falls back to the checkbox if meta is absent.
+* Short doc comments exist; full docs to be done later (post-1.4).
+* Grid utilities centralized in `System/grid.gd`; Explore and Crawler use it consistently.
+
+## Known follow-ups (tracked for later)
+
+* Deeper docs/README (module ownership + quick test checklist).
+* Optional signal for `ignore_biomass_limit_changed` if we ever need live cross-scene listeners.
+
+## Next (1.5 kick-off)
+
+* Proceed with 1.5 features you’ve started; 1.4 codebase is stable and clean for extension.

@@ -1,0 +1,60 @@
+✅ Summary of Phase 1.3 Implementation
+🗺️ 1. TileMap Expansion (Multi-Layer System)
+
+Introduced four distinct tile layers in TileMap:
+
+LAYER_BASE – walkable Flesh floor.
+
+LAYER_WALLS – blocking or digestible walls.
+
+LAYER_HAZARDS – overlays like Acid and Sticky.
+
+LAYER_MARKERS – Spawn and Heartroot goal markers.
+
+Each layer now carries custom metadata (walkable, digestible, hazard type, etc.).
+
+🧩 2. Crawler Movement Validation
+
+crawler.gd updated to check layer-specific metadata before moving:
+
+Must stand on walkable Flesh.
+
+Walls block unless digestible + Acid Sac upgrade.
+
+Map bounds enforced via get_used_rect().
+
+Movement still uses tweened, one-tile-per-press motion.
+
+🧪 3. Hazard Handling (Tile Interactions)
+
+Acid Tiles → Apply damage per step, reduced by Hardened Skin upgrade.
+
+Sticky Tiles → Consume N future inputs (crawler skips moves).
+
+Safe fallback defaults added (no crash if metadata missing or wrong type).
+
+🎯 4. Goal Marker Detection
+
+Heartroot tiles trigger win condition printout.
+
+First milestone for implementing end-of-level logic.
+
+🛠️ 5. Code Refactoring & Safety
+
+Added helper functions _get_str, _get_int, _get_bool to safely read metadata.
+
+Reduced repeated get_custom_data() boilerplate.
+
+Improved debug output clarity (blocked reasons, hazard effects).
+
+✅ Phase 1.3 is complete
+
+You now have:
+
+A functional tilemap-based crawler system with layered tiles.
+
+Hazard and upgrade interactions tied into movement.
+
+Goal detection in place.
+
+Code that’s cleaner, safer, and easier to extend for future features.

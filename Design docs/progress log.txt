@@ -1,0 +1,4616 @@
+Here’s a complete summary of everything we’ve implemented so far in **Verdant Coil** during this chat, aligned with **Phase 1.1** of the development plan, using Godot **4.4.1** and adhering to your **UI**, **scene**, and **code** style guides.
+
+---
+
+## ✅ IMPLEMENTED SYSTEMS & FEATURES
+
+### 🧩 1. Crawler Scene (`Crawler.tscn`)
+
+* **Root Node:** `Area2D`
+* **Children:**
+
+  * `Sprite2D`: uses your upscaled 32×32 tileset (originally 16×16).
+  * `CollisionShape2D`: currently a capsule, fits your art style.
+* **Script:** `crawler.gd`
+
+  * Movement direction and tweening implemented.
+  * Movement is grid-snapped and uses a centralized grid system (`Grid.gd`).
+  * Blocks movement during tween.
+  * Prints debug info on move.
+  * Handles directional input via `InputMap`.
+  * Will support upgrades in Phase 1.2.
+
+---
+
+### 🧠 2. Grid System (`Grid.gd`)
+
+Autoload singleton that encapsulates all grid math:
+
+```gdscript
+const TILE_SIZE: int = 32
+
+static func to_world(tile_coords: Vector2i, align_to_center := true) -> Vector2
+static func to_tile_coords(world_pos: Vector2) -> Vector2i
+static func snap_position(world_pos: Vector2, align_to_center := true) -> Vector2
+```
+
+* **Benefits:** All object placement now uses centralized snapping.
+* Prevents inconsistent placement and supports override logic with the `align_to_center` flag.
+
+---
+
+### 🧱 3. TileMap Setup (`CoilGrid` inside `ExploreMode.tscn`)
+
+* Imported and cleaned up your 32×32 tileset properly.
+* Defined **walkable** and **wall** tiles with custom metadata flags (`"walkable" = true/false`).
+* Setup grid painting in **TileMap** using the Godot 4.4.1 tile editor.
+* Ensured collision shapes were only present on wall tiles.
+
+---
+
+### 🎮 4. Crawler Movement System (Turn-Based)
+
+* Movement is **one tile per press**.
+* Prevents double-inputs during tween (`_is_moving` guard).
+* Movement is blocked if:
+
+  * The next tile is **outside map bounds**.
+  * There is **no tile** at the next position.
+* Uses `get_cell_source_id()` on `CoilGrid` to fetch tile info.
+* Next steps will support upgrade-gated logic (e.g., Acid Sac for Digest Walls).
+
+---
+
+### 🧭 5. ExploreMode Scene (`ExploreMode.tscn`)
+
+* Implemented as described in the \[Verdant Scene Architecture].
+* Contains:
+
+  * `TileMap` (CoilGrid)
+  * Dynamically instantiated `Crawler.tscn` on load
+  * Input is now handled by the crawler
+  * Crawler is camera-centered (Camera2D pending)
+
+---
+
+### 🖼️ 6. Sprite Import & Upscaling
+
+* You upscaled your spritesheet from 16×16 → 32×32 in **Krita** using **nearest neighbour** (preserves pixel art).
+* Adjusted **import settings**:
+
+  * **Filter OFF**
+  * **Mipmaps OFF**
+  * **Compression Mode = Lossless or Uncompressed**
+  * **Repeat: Disabled**
+  * Set `Region` mode and sliced tiles into a custom tileset.
+
+---
+
+### 🔲 7. Tile Collision / Physics
+
+* Walls (non-walkable tiles) are marked with collision shapes inside the tileset.
+* Tile-based movement does **not rely on physics bodies**, but on tile data.
+* Future upgrades will interact with tile metadata (e.g., `acid_resistance`).
+
+---
+
+### 🚫 8. Blocking Movement by Tile Metadata (In Progress)
+
+* You’ve begun checking tile IDs and bounds.
+* Plan is to use custom data (`"walkable" = false`) to gate crawler motion.
+
+---
+
+### 🛠️ 9. Debug Tools & Output
+
+* Print debug info when the crawler:
+
+  * Spawns
+  * Attempts to move
+  * Is blocked (by tile or boundary)
+* Debug UI HUD and health bar are still pending (coming in Phase 1.1.7).
+
+---
+
+## 🧪 In Progress / Partially Implemented
+
+| Feature                | Status  | Notes                                                                                                                |
+| ---------------------- | ------- | -------------------------------------------------------------------------------------------------------------------- |
+| `UpgradeController.gd` | Partial | You’ve loaded crawler with this node, but upgrades are not yet hooked into tile logic. Phase 1.2 will complete this. |
+| Tile metadata reading  | Partial | Walkable check not fully functional yet; you’re troubleshooting `get_custom_data()`.                                 |
+| Camera2D               | Not yet | We’ll attach it to the crawler next.                                                                                 |
+| UI Elements            | Not yet | Resource bar, upgrade toggles, and HUD need to be added.                                                             |
+| Builder Mode           | Partial | You painted a basic grid with hazards and walls, but still using placeholders.                                       |
+
+---
+
+## 🎯 You’ve Completed All of Phase 1.1 up to 1.1.4
+
+From the \[**Phase 1.1 Plan**]:
+
+* ✅ 1.1.1: Crawler Scene
+* ✅ 1.1.2: TileMap + Grid System
+* ✅ 1.1.3: Grid-snapped, tween-based movement
+* ✅ 1.1.4: Collision blocking on bounds + tile type
+* 🔜 1.1.5: Tile hazard interactions (acid, sticky, etc)
+* 🔜 1.1.6: Camera follows crawler
+* 🔜 1.1.7: Debug UI
+* 🔜 1.1.8: Upgrade stubs
+
+---
+
+## ✅ Summary
+
+You've done excellent foundational work. Your code is modular, extensible, and centralized. You're now primed to implement:
+
+1. **Upgrade gating** for tiles (Phase 1.2)
+2. **Camera2D** for dynamic view
+3. **Crawler–tile interaction system**
+4. **Basic UI layer**: Resource bar, toggles, HUD
+
+
+
+## ✅ **Summary of Phase 1.2 Implementation**
+
+### 🧬 1. **UpgradeController.gd**
+
+* Created a new script `upgrade_controller.gd`
+* Scene-local (not autoloaded yet), attached to `Crawler.tscn`
+* Tracks three toggleable upgrades:
+
+  * `HARDENED_SKIN`
+  * `ACID_SAC`
+  * `GHOST_TRAIL` (formerly Directional Memory)
+* Uses `enum` to avoid string bugs
+* Emits `upgrade_changed(upgrade, value)` signal when toggled
+* Toggles upgrades via public method `toggle_upgrade(upgrade)`
+* Query upgrades via `has_upgrade(upgrade)`
+
+### 🧠 2. **Crawler Input Integration**
+
+* In `crawler.gd`, hooked hotkeys (1–3) to toggle upgrades
+* Accessed child node `UpgradeController` safely
+* Verified toggles via debug `print()` output
+
+### 🎮 3. **InputMap Bindings**
+
+* Added actions in **Project → Project Settings → Input Map**:
+
+  * `toggle_upgrade_1` → Key 1
+  * `toggle_upgrade_2` → Key 2
+  * `toggle_upgrade_3` → Key 3
+
+### 🎨 4. **UpgradeBar UI**
+
+* Created new scene: `UpgradeBar.tscn`
+
+  * Root: `Control`
+  * Child: `HBoxContainer` named `IconRow`
+  * Children: Three `TextureButton` nodes:
+
+    * `HardenedSkinIcon`
+    * `AcidSacIcon`
+    * `GhostTrailIcon`
+* Assigned placeholder `AtlasTexture` icons from a spritesheet
+* Set sizing and stretch mode to match UI spec
+
+### 📜 5. **UpgradeBar.gd**
+
+* Script: `upgrade_bar.gd` attached to `UpgradeBar`
+* Used `@onready` to reference the 3 icons
+* Used `call_deferred()` to wait until scene tree is ready
+* Connected to `upgrade_changed` signal from `UpgradeController`
+* Synced icon visuals using `modulate` (white = active, gray = inactive)
+* Matched enum indexes to icons (0, 1, 2)
+
+### 🧪 6. **Scene Integration**
+
+* Instanced `UpgradeBar.tscn` into `ExploreMode.tscn`
+* Added it to the existing `CanvasLayer`
+* Positioned in top-right using anchor `(1, 0)` and offset
+* Verified signal connections and state sync
+
+### 🧼 7. **Debug & Resilience**
+
+* Caught possible `null` errors when looking up `Crawler` or `UpgradeController`
+* Deferred UI connection to avoid premature access
+* Fully modular and scalable design
+
+---
+
+## 🔮 Prepared for Future Work
+
+* UpgradeController already supports future:
+
+  * Upgrade levels (change booleans to ints)
+  * Save/load integration
+  * Global autoload (if needed later)
+* Ghost Trail upgrade is ready to be implemented in later phases
+* UI is modular and polish-ready for icon swapping, tooltips, shaders
+
+---
+✅ Summary of Phase 1.3 Implementation
+🗺️ 1. TileMap Expansion (Multi-Layer System)
+
+Introduced four distinct tile layers in TileMap:
+
+LAYER_BASE – walkable Flesh floor.
+
+LAYER_WALLS – blocking or digestible walls.
+
+LAYER_HAZARDS – overlays like Acid and Sticky.
+
+LAYER_MARKERS – Spawn and Heartroot goal markers.
+
+Each layer now carries custom metadata (walkable, digestible, hazard type, etc.).
+
+🧩 2. Crawler Movement Validation
+
+crawler.gd updated to check layer-specific metadata before moving:
+
+Must stand on walkable Flesh.
+
+Walls block unless digestible + Acid Sac upgrade.
+
+Map bounds enforced via get_used_rect().
+
+Movement still uses tweened, one-tile-per-press motion.
+
+🧪 3. Hazard Handling (Tile Interactions)
+
+Acid Tiles → Apply damage per step, reduced by Hardened Skin upgrade.
+
+Sticky Tiles → Consume N future inputs (crawler skips moves).
+
+Safe fallback defaults added (no crash if metadata missing or wrong type).
+
+🎯 4. Goal Marker Detection
+
+Heartroot tiles trigger win condition printout.
+
+First milestone for implementing end-of-level logic.
+
+🛠️ 5. Code Refactoring & Safety
+
+Added helper functions _get_str, _get_int, _get_bool to safely read metadata.
+
+Reduced repeated get_custom_data() boilerplate.
+
+Improved debug output clarity (blocked reasons, hazard effects).
+
+✅ Phase 1.3 is complete
+
+You now have:
+
+A functional tilemap-based crawler system with layered tiles.
+
+Hazard and upgrade interactions tied into movement.
+
+Goal detection in place.
+
+Code that’s cleaner, safer, and easier to extend for future features.
+
+Here’s the concise 1.4 progress log.
+
+# 1.4 Progress Log — Refactor & Dev UX
+
+## Summary
+
+Refactored Builder into “UI + painting + handoff,” extracted IO/Query/Validator modules, made Dev controls self-contained, and polished the playtest round-trip via `CoilSession`. Baseline flows (Save/Load, Validate, Playtest→Win→Return) remain intact. We intentionally deferred long-form docs; inline comments are current.
+
+## Work completed (by chunk)
+
+* **Chunk 0 — Prep & safety**
+
+  * Verified baseline: build → validate → playtest → win → return → map restored.
+  * Branch created and baseline committed.
+
+* **Chunk 1 — Extract Save/Load**
+
+  * Added `System/coil_io.gd`; `builder_mode.gd` now uses `CoilIO.serialize_layer(...)` and `CoilIO.apply_coil(...)`.
+  * Removed local serialization helpers; autosave unchanged.
+
+* **Chunk 2 — Extract tile queries**
+
+  * Added `System/coil_query.gd`; painting rules now call `CoilQuery` via `_q` instance.
+  * Removed local `_has_base/_has_wall/_hazard_kind_at/...`.
+
+* **Chunk 3 — Extract validation & pathfinding**
+
+  * Added `System/coil_validator.gd`; `_run_validation(...)` delegates to it and adapts to `ValidationResult`.
+  * Builder no longer contains BFS/path rules.
+
+* **Chunk 4 — Slim BuilderMode**
+
+  * Reorganized sections: UI wiring, selection/painting/erasing, preview, biomass label, playtest handoff.
+  * `_capture_coil()` uses only `CoilIO` and live layer refs.
+
+* **Chunk 5 — Dev controls self-contained**
+
+  * New `UI/dev_controls.gd` anchors under TopBar using container properties.
+  * Subscribes to `/root/GameFlags.dev_mode_changed`; shows/hides panel.
+  * Mirrors `IgnoreBiomassLimit` into `GameFlags` meta for persistence.
+  * Removed all manual layout code from Builder (no `position` math, no `_relayout_dev_controls`).
+
+* **Chunk 6 — Autosave & CoilSession polish**
+
+  * `CoilSession.gd`: added `consume_pending_coil()`, added trace logs, kept `start_playtest(...)` and `return_to_builder()`.
+  * Builder: `_restore_pending_coil_if_any()` consumes and applies snapshot, logs restore.
+  * ExploreMode: logs on coil load; spawn still resolved from markers.
+
+* **Chunk 7 — API surface & naming tidy**
+
+  * Removed unused `@onready` refs related to old dev layout.
+  * Exports kept minimal and designer-oriented.
+  * Comments updated to reflect “strict unless dev bypass” biomass behavior.
+  * We **did not** keep an unused `ignore_biomass_limit_changed` signal; no linter warnings.
+
+## Acceptance results
+
+* Toggling Dev Mode shows/hides the entire dev panel; no UI “nudging”.
+* Over-cap with Dev + IgnoreBiomassLimit set → Playtest allowed; logs note bypass.
+* Playtest → Win → return restores the exact pre-playtest map.
+* Save/Load and autosave work; load restores biomass numbers and UI label.
+* No unused variable/function warnings in the current scripts.
+
+## Notes & decisions
+
+* Persistence for “Ignore Biomass” uses `GameFlags` **meta**; Builder also falls back to the checkbox if meta is absent.
+* Short doc comments exist; full docs to be done later (post-1.4).
+* Grid utilities centralized in `System/grid.gd`; Explore and Crawler use it consistently.
+
+## Known follow-ups (tracked for later)
+
+* Deeper docs/README (module ownership + quick test checklist).
+* Optional signal for `ignore_biomass_limit_changed` if we ever need live cross-scene listeners.
+
+## Next (1.5 kick-off)
+
+* Proceed with 1.5 features you’ve started; 1.4 codebase is stable and clean for extension.
+
+Got it. Let’s consolidate this properly. I’ll merge the **Phase 1.6 plan goals** with the **things we’ve actually implemented in this chat** and earlier 1.6 work. Here’s your clean changelog:
+
+---
+
+# **Changelog — Phase 1.6 (In-Progress)**
+
+### **Resource System**
+
+* ✅ Nutrient & Sporeprint counters defined and persisted in **ProfileManager**.
+* ✅ Coil completion in **ExploreMode** now grants Nutrient.
+* ✅ Published coils record Sporeprint potential in manifest (local-only stub).
+
+### **Upgrade System**
+
+* ✅ **UpgradeController** now tied into ProfileManager for persistence.
+* ✅ Nutrient spend/unlock flow added (stub).
+* ✅ Temporary hotkey toggles replaced with a proper **HUD indicator row**.
+* ✅ Upgrade icons now correctly reflect active/inactive state (with proper typed booleans).
+
+### **Health & Damage**
+
+* ✅ **HealthSystem** autoload implemented (current/max HP, signals).
+* ✅ **Crawler** takes damage from acid hazards (with Hardened Skin mitigation).
+* ✅ Hearts HUD row created (simple TextureRect-based).
+* ✅ Fail state (HP ≤ 0) now returns player to Heartroot hub.
+
+### **Hub & UI**
+
+* ✅ Unified **HUD** with SafeArea → HeartsRow (top-left) and UpgradeRow (bottom-center).
+* ✅ Removed redundant CanvasLayers and inconsistent node types.
+* ✅ Icons modulate (tint) to show upgrade state; no longer buttons unless later needed for mobile.
+* ✅ Heartroot hub still aligned with style guide (pill buttons, clean margins).
+
+### **Publishing & Manifest**
+
+* ✅ Manifest entries extended with **version key**, **reward metadata**, and **profile\_id**.
+* ✅ Schema structured to support backend sync in Phase 2+.
+
+### **Integration & Flow**
+
+* ✅ **CoilSession** triggers reward payout → Nutrient added to profile.
+* ✅ **ProfileManager** persists nutrient, sporeprint, and upgrades across sessions.
+* ✅ Explore → complete coil → earn Nutrient → return to Hub → upgrades reflected in HUD.
+
+---
+
+This matches the **completion criteria for 1.6**, except we haven’t fully built:
+
+* Upgrade purchasing UI in the hub (currently just dev toggles).
+* Sporeprint payouts from others playing published coils (still stubbed, backend in Phase 2).
+
+Phase 1.6 — Track 1: Upgrades-in-Explore (Godot 4.4.1)
+
+Summary: Upgrades are now real, turn-consuming actions. Hazards resolve every turn (move or stand), freezes are eliminated via safe deferrals and unlock timing, and debug output clarifies turn flow and block reasons.
+
+What we shipped
+
+Toggles are first-class: Keys 1/2/3 activate Hardened Skin / Acid Sac / Ghost Trail as proper actions. Toggling spends a turn and triggers tile effects even when you don’t move (_consume_turn_no_move()).
+
+Unified hazard resolution: Extracted _apply_tile_effects(tile) and call it on both arrival and no-move turns. Handles acid damage (−1 with Hardened Skin, floor 0), sticky slow (skips future inputs), digest-wall dissolve (only if Acid Sac active, uses call_deferred("erase_cell", tile)), and goal checks.
+
+Freeze fixes:
+
+Sticky freeze: unlocks input at start of _on_arrived_at() before effects resolve.
+
+Toggle re-entrancy freeze: _request_toggle() queues work → _apply_pending_toggle() runs on idle.
+
+“Still moving” after toggles: _consume_turn_no_move() always schedules the wait tween and unlocks after it.
+
+Input pacing: Sticky now eats the next input after entry via _skip_inputs, preserving clean turn rhythm.
+
+Negative tests: Non-digestible walls block even with Acid Sac off; digest walls dissolve only with Acid Sac on; base/walkable checks guard movement; HUD icons stay in sync.
+
+Style & safety: No C-style ternaries, explicit types/guards, small helpers, and version-locked to 4.4.1.
+
+Debug clarity: Prints on move/arrive/sticky/acid/digest/toggles show block reasons and turn flow.
+
+Known issue & plan
+
+Death incorrectly awards a win (flagged): Route death through CoilSession.end_coil(success = false) and display LoseOverlay with no rewards. Award Nutrient only when success == true (goal reached).
+
+Verification
+
+Toggle any upgrade → HUD mirrors state immediately; turn advances; hazards tick even if standing.
+
+Walk into sticky → next input is consumed (prints show remaining skips).
+
+Walk into acid with Hardened Skin on/off → damage reduced by 1 (min 0).
+
+Acid Sac active on digestible wall → wall is erased deferred, no freezes.
+
+Non-digest wall remains; movement blocks with clear log output.
+
+Reaching Heartroot triggers win flow.
+
+Next steps to close 1.6
+
+Wire LoseOverlay: block input; focus Retry; Retry reloads Explore; Exit returns via session; no reward on death.
+
+Reward gating: ensure coil win → +1 Nutrient only when origin is hub; no rewards for builder playtests or deaths.
+
+Console log sweep: keep informative start/end lines, trim noisy prints before tagging 1.6.
+
+✅ Phase 1.6 — Track 2 (Health & Hearts HUD)
+
+Summary
+Implemented and verified the health HUD. HeartsRow.tscn displays three small mushroom hearts (TextureRects) in the top-left SafeArea cluster of the Explore HUD. They modulate and hide correctly as HealthSystem emits health_changed events. Integration confirmed clean with no duplicate signal warnings or per-frame polling.
+
+Details
+
+hearts_row.gd subscribes to /root/HealthSystem.health_changed and updates visible hearts via _update_visual(current,max_health).
+
+Hearts tint bright (“full”) or dim (“empty”), and excess nodes hide above max_health.
+
+Scene reload (Retry) safely disconnects and reconnects; no residual connections in logs.
+
+Works with acid hazard damage, Hardened Skin mitigation, and death flow; Lose Overlay now receives death signal while Hearts remain visually accurate.
+
+Verification Results
+
+3 hearts appear top-left, spaced correctly, and shrink to 0 as HP falls.
+
+emit_signal("health_changed", _current_health, _max_health) seen in runtime logs.
+
+No console errors, no flicker, no per-frame updates.
+
+
+Phase 2.0 – Builder QoL: starting undo/redo + brush UX.
+
+========================================================================
+VERDANT COIL — COMBINED GDSCRIPT DUMP
+Generated: 2025-11-14 18:37:21
+Project root: G:\Game Dev\Verdant Coil
+Files found: 25
+========================================================================
+
+TABLE OF CONTENTS
+ - verdant-coil/Scenes/Actors/crawler.gd  (365 lines)
+ - verdant-coil/Scenes/BuilderMode/builder_mode.gd  (1148 lines)
+ - verdant-coil/Scenes/BuilderMode/dev_controls_root.gd  (71 lines)
+ - verdant-coil/Scenes/Heartroot/heartroot.gd  (318 lines)
+ - verdant-coil/Scenes/Tiles/base_tile.gd  (21 lines)
+ - verdant-coil/Scenes/UI/hearts_row.gd  (95 lines)
+ - verdant-coil/Scenes/UI/lose_overlay.gd  (94 lines)
+ - verdant-coil/Scenes/UI/resource_counters.gd  (131 lines)
+ - verdant-coil/Scenes/UI/upgrade_row.gd  (97 lines)
+ - verdant-coil/Scenes/World/explore_mode.gd  (176 lines)
+ - verdant-coil/System/autoload/coil_session.gd  (84 lines)
+ - verdant-coil/System/autoload/health_system.gd  (86 lines)
+ - verdant-coil/System/autoload/upgrade_state.gd  (48 lines)
+ - verdant-coil/System/brush_entry.gd  (32 lines)
+ - verdant-coil/System/brush_registry.gd  (10 lines)
+ - verdant-coil/System/build_info.gd  (27 lines)
+ - verdant-coil/System/coil_io.gd  (77 lines)
+ - verdant-coil/System/coil_query.gd  (48 lines)
+ - verdant-coil/System/coil_validator.gd  (118 lines)
+ - verdant-coil/System/debug/scene_tree_printer.gd  (230 lines)
+ - verdant-coil/System/game_flags.gd  (33 lines)
+ - verdant-coil/System/grid.gd  (36 lines)
+ - verdant-coil/System/health_system.gd  (2 lines)
+ - verdant-coil/System/profile_manager.gd  (609 lines)
+ - verdant-coil/System/upgrade_controller.gd  (52 lines)
+
+========================================================================
+FILE: verdant-coil/Scenes/Actors/crawler.gd
+========================================================================
+## crawler.gd
+# Movement logic for the crawler using centralized grid logic
+# Godot 4.4.1
+
+extends Area2D
+
+const GridUtil := preload("res://System/grid.gd")
+
+@export var base_layer:   TileMapLayer
+@export var wall_layer:   TileMapLayer
+@export var hazard_layer: TileMapLayer
+@export var marker_layer: TileMapLayer
+
+# --- Movement Settings ---
+@export var move_speed: float = 5.0  # Tiles per second
+
+# --- Internal State ---
+var _is_moving: bool = false
+var _move_direction: Vector2 = Vector2.ZERO
+
+# Simple input-skip slow (Sticky uses this to "eat" N inputs after entry)
+var _skip_inputs: int = 0
+
+func _ready() -> void:
+	if base_layer == null: push_error("Crawler.base_layer not set")
+	if wall_layer == null: push_error("Crawler.wall_layer not set")
+	if hazard_layer == null: push_error("Crawler.hazard_layer not set")
+	if marker_layer == null: push_error("Crawler.marker_layer not set")
+	print("Crawler ready at ", position)
+
+	var camera: Camera2D = get_node("Camera2D")
+	if camera:
+		camera.make_current()
+
+	# Listen for global death to stop movement immediately
+	if has_node("/root/HealthSystem"):
+		var hs := get_node("/root/HealthSystem")
+		if hs.has_signal("died"):
+			hs.connect("died", Callable(self, "_on_global_death"))
+
+func _get_tile_data(layer: TileMapLayer, coords: Vector2i) -> TileData:
+	if layer.get_cell_source_id(coords) == -1:
+		return null
+	return layer.get_cell_tile_data(coords)
+
+# --- Safe metadata readers (string/int/bool) ---
+func _get_str(td: TileData, key: String, default_val: String = "") -> String:
+	# Returns key as String if present & typed; otherwise default_val
+	var v: Variant = td.get_custom_data(key)
+	return (v as String) if (v is String) else default_val
+
+func _get_int(td: TileData, key: String, default_val: int = 0) -> int:
+	# Returns key as int if present & typed; otherwise default_val
+	var v: Variant = td.get_custom_data(key)
+	return (v as int) if (typeof(v) == TYPE_INT) else default_val
+
+func _get_bool(td: TileData, key: String, default_val: bool = false) -> bool:
+	# Returns key as bool if present & typed; otherwise default_val
+	var v: Variant = td.get_custom_data(key)
+	return (v as bool) if (v is bool) else default_val
+
+#func _unhandled_input(event: InputEvent) -> void:
+	## --- 0) STICKY / SLOW GUARD ---
+	## If Sticky applied N slow "ticks", we ignore the next N inputs (ANY input: toggles or movement).
+	#if _skip_inputs > 0:
+		#_skip_inputs -= 1
+		#print("[STICKY] Skipped one input. Remaining:", _skip_inputs)
+		#return
+	## --- 1) ABILITY TOGGLES (ALWAYS ALLOWED) ---
+	## Pressing 1/2/3 uses your turn without moving. HUD updates via UpgradeController signals.
+	#var upgrade_controller: Node = get_node_or_null("UpgradeController")
+	#if upgrade_controller != null:
+		## 1 = Hardened Skin
+		#if event.is_action_pressed("toggle_upgrade_1"):
+			#upgrade_controller.toggle_upgrade(upgrade_controller.Upgrade.HARDENED_SKIN)
+			#_consume_turn_no_move()   # Spend one turn for the toggle
+			#return
+		## 2 = Acid Sac
+		#if event.is_action_pressed("toggle_upgrade_2"):
+			#upgrade_controller.toggle_upgrade(upgrade_controller.Upgrade.ACID_SAC)
+			#_consume_turn_no_move()
+			#return
+		## 3 = Ghost Trail
+		#if event.is_action_pressed("toggle_upgrade_3"):
+			#upgrade_controller.toggle_upgrade(upgrade_controller.Upgrade.GHOST_TRAIL)
+			#_consume_turn_no_move()
+			#return
+#
+	## --- 2) BLOCK WHILE MOVING ---
+	## Prevent new inputs while the tween is running.
+	#if _is_moving:
+		#return
+#
+	## --- 3) MOVEMENT INPUT ---
+	## Arrow/WASD mapped to move_* actions in the Input Map.
+	#if event.is_action_pressed("move_up"):
+		#_move_direction = Vector2.UP
+	#elif event.is_action_pressed("move_down"):
+		#_move_direction = Vector2.DOWN
+	#elif event.is_action_pressed("move_left"):
+		#_move_direction = Vector2.LEFT
+	#elif event.is_action_pressed("move_right"):
+		#_move_direction = Vector2.RIGHT
+	#else:
+		#return
+#
+	#_start_move()
+
+func _unhandled_input(event: InputEvent) -> void:
+	# --- 0) STICKY / SLOW GUARD ---
+	if _skip_inputs > 0:
+		_skip_inputs -= 1
+		print("[STICKY] Skipped one input. Remaining:", _skip_inputs)
+		return
+
+	# --- 1) ABILITY TOGGLES (DEFERRED) ---
+	# We only schedule a toggle; the actual toggle happens next idle frame.
+	if event.is_action_pressed("toggle_upgrade_1"):
+		_request_toggle(0)  # 0 = Hardened Skin
+		return
+	if event.is_action_pressed("toggle_upgrade_2"):
+		_request_toggle(1)  # 1 = Acid Sac
+		return
+	if event.is_action_pressed("toggle_upgrade_3"):
+		_request_toggle(2)  # 2 = Ghost Trail
+		return
+
+	# --- 2) BLOCK WHILE MOVING ---
+	if _is_moving:
+		return
+
+	# --- 3) MOVEMENT INPUT ---
+	if event.is_action_pressed("move_up"):
+		_move_direction = Vector2.UP
+	elif event.is_action_pressed("move_down"):
+		_move_direction = Vector2.DOWN
+	elif event.is_action_pressed("move_left"):
+		_move_direction = Vector2.LEFT
+	elif event.is_action_pressed("move_right"):
+		_move_direction = Vector2.RIGHT
+	else:
+		return
+
+	_start_move()
+
+
+func _start_move() -> void:
+	_is_moving = true
+
+	# Safety guard – helpful during wiring
+	if base_layer == null or wall_layer == null or hazard_layer == null or marker_layer == null:
+		push_error("Crawler layers not assigned. Check ExploreMode exports & assignment.")
+		_is_moving = false
+		return
+
+	# 1) Where are we trying to go?
+	var current_tile: Vector2i = GridUtil.to_tile_coords(position)
+	var next_tile: Vector2i = current_tile + Vector2i(_move_direction)
+
+	# 2) Bounds check (use Base as the canonical footprint)
+	var base_used: Rect2i = base_layer.get_used_rect()
+	if not base_used.has_point(next_tile):
+		print("[BLOCK] Outside map bounds →", next_tile)
+		_is_moving = false
+		return
+
+	# 3) Must have Flesh (walkable) on Base
+	var base_td := _get_tile_data(base_layer, next_tile)
+	if base_td == null:
+		print("[BLOCK] No Base tile at", next_tile, "(sticky sits on Hazard layer only)")
+		_is_moving = false
+		return
+
+	var base_walkable: bool = _get_bool(base_td, "walkable", false)
+	if base_walkable != true:
+		print("[BLOCK] Base not walkable at", next_tile)
+		_is_moving = false
+		return
+
+	# 4) Walls over Flesh can block (digestible is gated by Acid Sac)
+	var wall_td := _get_tile_data(wall_layer, next_tile)
+	if wall_td != null:
+		var wall_walkable: bool = _get_bool(wall_td, "walkable", false) # usually false
+		var wall_digestible: bool = _get_bool(wall_td, "digestible", false)
+		var upgrades := get_node_or_null("UpgradeController")
+		var acid_on: bool = false
+		if upgrades != null:
+			acid_on = upgrades.has_upgrade(upgrades.Upgrade.ACID_SAC)
+
+		var can_pass_wall: bool = wall_walkable or (wall_digestible and acid_on)
+		if not can_pass_wall:
+			print("[BLOCK] Wall at", next_tile, "(digestible:", wall_digestible, " acid_on:", acid_on, ")")
+			_is_moving = false
+			return
+
+	# 5) All checks passed → move
+	print("[MOVE] From", current_tile, "to", next_tile)
+	var target_pos: Vector2 = GridUtil.to_world(next_tile)
+	var tween: Tween = create_tween()
+	tween.tween_property(self, "position", target_pos, 1.0 / move_speed)
+	# When we arrive, resolve tile effects, then re-enable input
+	tween.finished.connect(func():
+		_on_arrived_at(next_tile)
+	)
+
+func _on_arrived_at(tile: Vector2i) -> void:
+	# We have arrived: unlock input by default.
+	# If we win during effects, _win_and_return() will set _is_moving = true again.
+	_is_moving = false
+	print("[ARRIVE] At tile:", tile)
+
+	# Apply end-of-action effects (acid, sticky, dissolve, goal).
+	_apply_tile_effects(tile)
+	# Nothing else to do here. If not winning, we remain unlocked for the next input.
+
+func _win_and_return() -> void:
+	_is_moving = true
+	print("🏆 Reached Heartroot — WIN!")
+	if has_node("/root/CoilSession"):
+		get_node("/root/CoilSession").call("end_coil", true)
+	else:
+		get_tree().change_scene_to_file("res://Scenes/BuilderMode/BuilderMode.tscn")
+
+# Increments the number of movement inputs to ignore (used by Sticky slow)
+func _consume_future_inputs(n: int) -> void:
+	_skip_inputs += n
+
+# Use up one turn without moving (ability activation time budget).
+# Also applies end-of-action tile effects at the current position (acid, sticky, etc.).
+func _consume_turn_no_move() -> void:
+	# Lock input for the duration of this "turn"
+	_is_moving = true
+
+	# 1) Apply tile effects where we stand, since a turn passes.
+	var current_tile: Vector2i = GridUtil.to_tile_coords(position)
+	_apply_tile_effects(current_tile)
+
+	# 2) If we won during effects, the scene transition will take over.
+	#    We still create a tiny tween safely; if the scene changes, it won't matter.
+	var step_duration: float = 1.0 / move_speed
+
+	# 3) Wait exactly one step duration, then unlock input.
+	var t: Tween = create_tween()
+	t.tween_interval(step_duration)
+	t.finished.connect(func() -> void:
+		# Only unlock if we are still in this scene and not transitioning.
+		# (If _win_and_return() ran, we typically won't get here in the same scene.)
+		if is_inside_tree():
+			_is_moving = false
+	)
+
+## Apply all end-of-action effects for the given tile.
+## This is called after a MOVE (on arrival) and after a NO-MOVE TURN (e.g., ability toggle).
+func _apply_tile_effects(tile: Vector2i) -> void:
+	# 1) Hazards
+	var hazard_td := _get_tile_data(hazard_layer, tile)
+	if hazard_td != null:
+		var hazard: String = _get_str(hazard_td, "hazard", "")
+
+		if hazard == "acid":
+			var dmg: int = _get_int(hazard_td, "damage_per_step", 0)
+
+			# Hardened Skin mitigation
+			var upgrades: Node = get_node_or_null("UpgradeController")
+			var hardened_on: bool = false
+			if upgrades != null:
+				hardened_on = upgrades.has_upgrade(upgrades.Upgrade.HARDENED_SKIN)
+
+			if hardened_on:
+				dmg = dmg - 1
+				if dmg < 0:
+					dmg = 0
+
+			if dmg > 0 and has_node("/root/HealthSystem"):
+				var hs: Node = get_node("/root/HealthSystem")
+				print("[ACID] Tile:", tile, "damage:", dmg)
+				hs.call("apply_damage", dmg, "acid")
+
+		elif hazard == "sticky":
+			var slow_ticks: int = _get_int(hazard_td, "slow_ticks", 0)
+			if slow_ticks > 0:
+				print("[STICKY] Entered", tile, "→ will skip", slow_ticks, "future inputs")
+				_consume_future_inputs(slow_ticks)
+
+	# 2) Dissolve digestible wall on entry/stand if Acid Sac is active
+	var wall_td := _get_tile_data(wall_layer, tile)
+	if wall_td != null and _is_digest_wall(wall_td):
+		var upgrades2: Node = get_node_or_null("UpgradeController")
+		var acid_on: bool = false
+		if upgrades2 != null:
+			acid_on = upgrades2.has_upgrade(upgrades2.Upgrade.ACID_SAC)
+		if acid_on:
+			# IMPORTANT: Defer TileMap mutation to avoid re-entrancy/framing issues.
+			print("[DIGEST] Erasing wall at", tile, "(deferred)")
+			wall_layer.call_deferred("erase_cell", tile)
+
+	# 3) Goal check (do this last; it may trigger a scene change)
+	var marker_td := _get_tile_data(marker_layer, tile)
+	if marker_td != null:
+		var reached_goal: bool = _get_bool(marker_td, "is_goal", false)
+		if reached_goal:
+			print("[GOAL] Reached at", tile)
+			_win_and_return()
+
+func _is_digest_wall(td: TileData) -> bool:
+	if td == null:
+		return false
+	# Primary: explicit boolean
+	if _get_bool(td, "digestible", false):
+		return true
+	# Fallback: string kind
+	var kind := _get_str(td, "wall_kind", "")
+	return kind == "DIGEST" or kind == "DIGESTIBLE"
+
+# Pending toggle index; -1 means none queued.
+var _pending_toggle: int = -1
+
+# Queue a toggle to run on the next idle frame. Avoids re-entrancy inside input callbacks.
+func _request_toggle(index: int) -> void:
+	# Ignore if we are already moving or a toggle is already queued.
+	if _is_moving:
+		print("[TOGGLE] Ignored; currently moving.")
+		return
+	if _pending_toggle != -1:
+		print("[TOGGLE] Ignored; a toggle is already queued.")
+		return
+
+	_pending_toggle = index
+	call_deferred("_apply_pending_toggle")
+	print("[TOGGLE] Queued index:", index)
+
+# Runs on idle; performs the toggle and consumes one turn without moving.
+func _apply_pending_toggle() -> void:
+	var index: int = _pending_toggle
+	_pending_toggle = -1
+
+	var uc: Node = get_node_or_null("UpgradeController")
+	if uc == null:
+		print("[TOGGLE] UpgradeController not found; abort.")
+		return
+
+	# Map index → enum explicitly (no inferred Variants).
+	if index == 0:
+		print("[TOGGLE] Hardened Skin")
+		uc.call("toggle_upgrade", uc.Upgrade.HARDENED_SKIN)
+	elif index == 1:
+		print("[TOGGLE] Acid Sac")
+		uc.call("toggle_upgrade", uc.Upgrade.ACID_SAC)
+	elif index == 2:
+		print("[TOGGLE] Ghost Trail")
+		uc.call("toggle_upgrade", uc.Upgrade.GHOST_TRAIL)
+	else:
+		print("[TOGGLE] Unknown index:", index)
+		return
+
+	# Spend a turn and apply end-of-action effects on our current tile (acid, sticky, etc.).
+	_consume_turn_no_move()
+
+func _on_global_death() -> void:
+	# Disable new inputs and movement
+	_is_moving = true
+	_skip_inputs = 999999  # large number so accidental inputs are effectively ignored
+
+## end crawler.gd
+
+========================================================================
+FILE: verdant-coil/Scenes/BuilderMode/builder_mode.gd
+========================================================================
+## builder_mode.gd — Godot 4.4.1
+## Responsibility: UI wiring (palette, dialogs, dev overlay), brush selection, paint/erase, live preview tinting,
+## biomass counter, strict validation popup, playtest handoff, save/load/publish, and profile menu.
+## Ownership boundaries:
+##   • IO:        System/coil_io.gd
+##   • Queries:   System/coil_query.gd
+##   • Validate:  System/coil_validator.gd  (strict; playtest may bypass biomass if DevMode + flag)
+## Strictness rules:
+##   • Validate button: always strict (no bypass)
+##   • Playtest: strict unless Dev Mode is ON and 'ignore_biomass_limit' is true (GameFlags meta or checkbox)
+##   • Publish: ALWAYS strict
+## External expectations:
+##   • Autoloads: /root/GameFlags (dev flags), /root/CoilSession (playtest handoff), /root/ProfileManager (optional)
+##   • Tile layers: Base, Walls, Hazard, Marker must be assigned via Inspector
+extends Node2D
+
+## --- Constants / Modules --------------------------------------------------------
+
+const CoilIO := preload("res://System/coil_io.gd")
+const CoilQueryScript := preload("res://System/coil_query.gd")
+const CoilValidatorScript: GDScript = preload("res://System/coil_validator.gd")
+const DIR_COILS: String = "user://coils"
+const DIR_PUBLISHED: String = "user://Published"
+const EXT_JSON: String = ".json"
+const F_COIL_PREFIX: String = "coil_"
+const PUBLISHED_MANIFEST: String = DIR_PUBLISHED + "/manifest.json"
+const MENU_MANAGE_ID: int = 9999
+const MANIFEST_VERSION: int = 1
+const COIL_SCHEMA_VERSION: int = 1
+
+## --- Data classes --------------------------------------------------------
+
+## Simple data class used by the UI to display validation results
+class ValidationResult:
+	var ok: bool = false
+	var messages: Array[String] = []
+	var spawn: Vector2i = Vector2i(-999999, -999999)
+	var heart: Vector2i = Vector2i(-999999, -999999)
+
+## --- Exports --------------------------------------------------------
+
+@export_group("Registry & Layers")
+@export var brush_registry: BrushRegistry
+@export var preview_layer: TileMapLayer
+@export var base_layer: TileMapLayer
+@export var walls_layer: TileMapLayer
+@export var hazard_layer: TileMapLayer
+@export var marker_layer: TileMapLayer
+
+@export_group("Save/Export")
+@export var save_dir: String = DIR_COILS
+@export var start_flesh_rect: Rect2i = Rect2i(Vector2i(0, 0), Vector2i(24, 24)) # auto-fill when Start With Flesh is ON
+@export var biomass_cap: int = 100  # hard cap unless dev bypass is enabled
+
+## --- Scene references --------------------------------------------------------
+
+@onready var coil_map: TileMap = $CoilMap
+@onready var palette_row: HBoxContainer = %PaletteRow
+@onready var status_label: Label = %StatusLabel
+@onready var biomass_label: Label = %BiomassLabel
+@onready var start_with_flesh_cb: CheckBox = %StartWithFlesh
+@onready var ignore_biomass_limit: CheckBox = %IgnoreBiomassLimit
+@onready var clear_base_confirm: ConfirmationDialog = %ClearBaseConfirm
+@onready var dev_badge: Label = %DevBadge
+@onready var validate_dialog: AcceptDialog = %ValidateDialog
+@onready var validate_body: RichTextLabel = %Body
+@onready var validate_btn: Button = %ValidateBtn
+@onready var save_btn: Button = %SaveBtn
+@onready var load_btn: Button = %LoadBtn
+@onready var playtest_btn: Button = %PlaytestBtn
+@onready var publish_btn: Button = %PublishBtn
+@onready var hub_btn: Button = %HubBtn
+@onready var title_edit: LineEdit = %TitleEdit
+@onready var validation_chip: Label = %ValidationChip
+@onready var load_dialog: FileDialog = %LoadDialog
+@onready var _q: CoilQuery = CoilQueryScript.new()
+
+## --- State --------------------------------------------------------
+
+var _title_cache: String = ""
+var _current_index: int = 0
+var _is_painting_left := false
+var _is_erasing_right := false
+var _last_preview_cell: Vector2i = Vector2i(999999, 999999)
+var _palette_buttons: Array[TextureButton] = []
+var _biomass_used: int = 0
+var _last_validation_ok: bool = false
+
+## --- UI wiring & Lifecycle --------------------------------------------------------
+
+## Wires all UI and dev controls, mirrors palette → brushes, selects default brush,
+## optionally pre-fills Base with Flesh, restores a pending coil from Playtest, and
+## syncs biomass + validation chip on entry.
+func _ready() -> void:
+	# Basic sanity checks
+	if brush_registry == null: push_error("❌ BrushRegistry not assigned on BuilderMode.")
+	if coil_map == null: push_error("❌ CoilMap TileMap not found.")
+	if base_layer == null: push_error("❌ base_layer not assigned on BuilderMode.")
+	if walls_layer == null: push_error("❌ walls_layer not assigned on BuilderMode.")
+	if hazard_layer == null: push_error("❌ hazard_layer not assigned on BuilderMode.")
+	if marker_layer == null: push_error("❌ marker_layer not assigned on BuilderMode.")
+	if validate_btn:
+		validate_btn.pressed.connect(_on_validate_pressed)
+	if save_btn:
+		save_btn.pressed.connect(_on_save_pressed)
+	if playtest_btn:
+		playtest_btn.pressed.connect(_on_playtest_pressed)
+	if load_btn:
+		load_btn.pressed.connect(_on_load_pressed)
+	if publish_btn:
+		publish_btn.pressed.connect(_on_publish_pressed)
+	if hub_btn:
+		hub_btn.pressed.connect(_on_hub_pressed)
+	if load_dialog:
+		load_dialog.file_selected.connect(_on_load_file_selected)
+	if title_edit:
+		title_edit.text_changed.connect(_on_title_changed)
+		# Nice QoL: pressing Enter just blurs the field; not required for saving anymore.
+		title_edit.text_submitted.connect(func(_t): title_edit.release_focus())
+
+	# Wire each palette button (by order) to a brush (by order).
+	# Left to right buttons map to registry.brushes[0..N]
+	# Use a ButtonGroup so only one brush is active at a time; this keeps selection state in sync with the registry.
+	var _palette_group := ButtonGroup.new()
+	_palette_buttons.clear()
+	for child in palette_row.get_children():
+		if child is TextureButton:
+			_palette_buttons.append(child)
+			var idx := _palette_buttons.size() - 1  # index among buttons only
+
+			child.toggle_mode = true
+			child.button_group = _palette_group
+			child.focus_mode = Control.FOCUS_NONE
+			child.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+			child.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
+			child.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_CENTERED
+
+			child.pressed.connect(func(): _select_brush(idx))
+
+			# Set icon + tooltip from the registry
+			if brush_registry != null and idx < brush_registry.brushes.size():
+				var be := brush_registry.brushes[idx]
+				if be.icon:
+					child.texture_normal = be.icon
+				child.tooltip_text = be.display_name
+
+			# Default inactive look
+			child.self_modulate = Color(0.7, 0.7, 0.7, 1.0)
+			child.scale = Vector2.ONE
+
+	# --- Default select the first brush, if any ---
+	if brush_registry != null and brush_registry.brushes.size() > 0:
+		_select_brush(0)
+
+	# --- Start-with-Flesh: connect and apply once on load if ON ---
+	if start_with_flesh_cb:
+		start_with_flesh_cb.toggled.connect(_on_start_with_flesh_toggled)
+		_apply_start_with_flesh(start_with_flesh_cb.button_pressed)
+	# Confirmation dialog for smart clear
+	if clear_base_confirm:
+		clear_base_confirm.confirmed.connect(_on_clear_base_confirmed)
+	# -- DEV MODE: react to global flag and initialize UI state
+	if has_node("/root/GameFlags"):
+		var gf = get_node("/root/GameFlags")
+		gf.dev_mode_changed.connect(_on_dev_mode_changed)
+		_on_dev_mode_changed(gf.dev_mode_enabled)
+
+	# --- Ignore Biomass Limit: connect and apply once on load if ON ---
+	if ignore_biomass_limit:
+		ignore_biomass_limit.tooltip_text = "Dev only: bypass biomass cap when Playtesting."
+
+	## Subscribe to ProfileManager signals (safe if autoload missing)
+	#if has_node("/root/ProfileManager"):
+		#var pm: Node = get_node("/root/ProfileManager")
+		#if pm.has_signal("profile_list_changed"):
+			#pm.connect("profile_list_changed", Callable(self, "_refresh_profile_ui"))
+		#if pm.has_signal("current_profile_changed"):
+			#pm.connect("current_profile_changed", Callable(self, "_on_current_profile_changed"))
+
+	# ---- restore coil if returning from Playtest ----
+	_restore_pending_coil_if_any()
+	# keep numbers fresh after applying
+	_recalc_biomass()
+	# --- Initial strict validation -> set Draft/Valid chip & Publish enable ---
+	_refresh_validation_state()
+
+## Refresh the preview each frame
+func _process(_delta: float) -> void:
+	_update_preview()
+
+## Handle mouse input for painting and erasing
+func _unhandled_input(event: InputEvent) -> void:
+	# Mouse BUTTONS ------------------------------------------------------------
+	if event is InputEventMouseButton:
+		# Toggle state flags on press/release (no coords needed for releases).
+		match event.button_index:
+			MOUSE_BUTTON_LEFT:
+				_is_painting_left = event.pressed
+				if event.pressed:
+					_paint_at(_cell_under_mouse())  # compute coords only when used
+			MOUSE_BUTTON_RIGHT:
+				_is_erasing_right = event.pressed
+				if event.pressed:
+					_erase_at(_cell_under_mouse())  # compute coords only when used
+		return  # done
+
+	# Mouse MOTION -------------------------------------------------------------
+	if event is InputEventMouseMotion:
+		# Only do the (relatively) expensive cell lookup if we’re actually drawing.
+		if _is_painting_left or _is_erasing_right:
+			var coords := _cell_under_mouse()
+			if _is_painting_left:
+				_paint_at(coords)
+			elif _is_erasing_right:
+				_erase_at(coords)
+
+## Toggle visibility for dev-only badge
+func _on_dev_mode_changed(enabled: bool) -> void:
+	if dev_badge:
+		dev_badge.visible = enabled
+	var state_text: String = "OFF"
+	if enabled:
+		state_text = "ON"
+	_show_status("Dev Mode: " + state_text)
+
+## --- Selection --------------------------------------------------------
+
+## Update the current brush and palette button visuals
+func _select_brush(index: int) -> void:
+	if brush_registry == null or index < 0 or index >= brush_registry.brushes.size():
+		_show_status("⚠️ No brush at index " + str(index))
+		return
+	_current_index = index
+
+	for i in range(_palette_buttons.size()):
+		var btn := _palette_buttons[i]
+		var selected := (i == _current_index)
+		btn.button_pressed = selected
+		if selected:
+			btn.self_modulate = Color(1, 1, 1, 1)
+			btn.scale = Vector2(1.1, 1.1)
+		else:
+			btn.self_modulate = Color(0.7, 0.7, 0.7, 1)
+			btn.scale = Vector2.ONE
+
+		if brush_registry and i < brush_registry.brushes.size():
+			btn.tooltip_text = brush_registry.brushes[i].display_name
+
+	var b: BrushEntry = brush_registry.brushes[index]
+	_show_status("Brush: " + (b.display_name if b.display_name != "" else "Unnamed"))
+
+## Return the current BrushEntry or null
+func _current_brush() -> BrushEntry:
+	if brush_registry == null:
+		return null
+	if _current_index < 0 or _current_index >= brush_registry.brushes.size():
+		return null
+	return brush_registry.brushes[_current_index]
+
+## --- Painting / Erasing --------------------------------------------------------
+
+## Place a tile using the selected brush after validation
+func _paint_at(coords: Vector2i) -> void:
+	var b: BrushEntry = _current_brush()
+	if b == null:
+		_show_status("⚠️ No brush selected.")
+		return
+
+	# ERASER: just erase and return
+	if b.rule_profile == "ERASER":
+		_erase_at(coords)
+		return
+
+	# Validate according to rule profile (see functions below)
+	if not _validate_placement(b, coords):
+		return
+
+	# Place the tile (BASE/WALL/POOL/MARKER)
+	if b.source_id < 0:
+		_show_status("⚠️ Source ID not set for brush: " + b.display_name)
+		return
+
+	var layer := _layer_for(b.target_layer)
+	if layer == null:
+		_show_status("⚠️ Unknown target layer: " + str(b.target_layer))
+		return
+
+	# Place the tile
+	layer.set_cell(coords, b.source_id, b.atlas_coords)
+
+	# If we just placed a marker, enforce singletons (Spawn and Heartroot)
+	if layer == marker_layer:
+		_enforce_single_spawn_at(coords)
+		_enforce_single_heartroot_at(coords)
+
+	# Recalc biomass after successful placement
+	_recalc_biomass()
+
+## Remove tiles at the cell across relevant layers
+func _erase_at(coords: Vector2i) -> void:
+	# Simple MVP: erase Hazards/Walls/Markers at this cell; keep Base Flesh intact.
+	for layer_node in [base_layer, marker_layer, hazard_layer, walls_layer]:
+		if layer_node:
+			layer_node.erase_cell(coords)
+
+	# Recalc biomass after successful placement
+	_recalc_biomass()
+
+## Emit a friendly inline status and return false (used by placement validators).
+func _reject_or_false(msg: String, report: bool) -> bool:
+	if report:
+		_show_status("🚫 " + msg)
+	return false
+
+## Ensure only one spawn marker exists in the markers layer
+func _enforce_single_spawn_at(coords: Vector2i) -> void:
+	# Read back the tile we just placed
+	var td := marker_layer.get_cell_tile_data(coords)
+	if td == null:
+		return
+
+	var is_spawn := bool(td.get_custom_data("is_spawn") or false)
+	if not is_spawn:
+		return  # We placed a non-spawn marker (e.g., Heartroot) — do nothing
+
+	# Erase any other spawn markers elsewhere on the map
+	for c in marker_layer.get_used_cells():
+		if c == coords:
+			continue
+		var other_td := marker_layer.get_cell_tile_data(c)
+		if other_td != null and bool(other_td.get_custom_data("is_spawn") or false):
+			marker_layer.erase_cell(c)
+
+## Ensure only one Heartroot marker exists in the markers layer
+func _enforce_single_heartroot_at(coords: Vector2i) -> void:
+	var td := marker_layer.get_cell_tile_data(coords)
+	if td == null:
+		return
+	var is_goal := bool(td.get_custom_data("is_goal") or false)
+	if not is_goal:
+		return
+
+	for c in marker_layer.get_used_cells():
+		if c == coords:
+			continue
+		var other_td := marker_layer.get_cell_tile_data(c)
+		if other_td != null and bool(other_td.get_custom_data("is_goal") or false):
+			marker_layer.erase_cell(c)
+
+## --- Preview --------------------------------------------------------
+
+## Draw a ghost tile at the mouse cell and tint by validity
+func _update_preview() -> void:
+	# Note: we tint the WHOLE preview layer (not per-cell materials). This is simple and cheap; if we ever want per-cell tint,
+	# we'll switch to a separate ghost atlas or shaders.
+
+	# Clear the previous preview cell
+	if preview_layer and _last_preview_cell.x < 900000:
+		preview_layer.erase_cell(_last_preview_cell)
+
+	# Compute current mouse cell
+	var coords := _cell_under_mouse()
+	_last_preview_cell = coords
+
+	var b := _current_brush()
+	if b == null or b.rule_profile == "ERASER":
+		if preview_layer:
+			preview_layer.modulate = Color(1,1,1,0.5)
+		return
+
+	# Always place the ghost tile
+	if preview_layer and b.source_id >= 0:
+		preview_layer.set_cell(coords, b.source_id, b.atlas_coords)
+		# Now tint based on validity
+		var ok: bool = _validate_placement(b, coords, false)
+		var col := Color(1, 1, 1, 0.5)
+		if not ok:
+			col = Color(1, 0.2, 0.2, 0.5)
+		preview_layer.modulate = col
+
+## Convert the global mouse position to a base-layer cell
+func _cell_under_mouse() -> Vector2i:
+	# Convert current global mouse position to a TileMap cell once.
+	var mouse_world: Vector2 = get_global_mouse_position()
+	var mouse_local: Vector2 = base_layer.to_local(mouse_world)
+	return base_layer.local_to_map(mouse_local)
+
+## Map a brush target index to its TileMapLayer
+func _layer_for(index: int) -> TileMapLayer:
+	match index:
+		0: return base_layer
+		1: return walls_layer
+		2: return hazard_layer
+		3: return marker_layer
+		_: return null
+
+## Apply placement rules using CoilQuery lookups
+func _validate_placement(b: BrushEntry, coords: Vector2i, report := true) -> bool:
+	match b.rule_profile:
+		"BASE":
+			# Flesh is always allowed. (If you want to forbid overpainting, add checks here.)
+			return true
+
+		"WALL":
+			# Rule A: Walls must sit on Flesh
+			if not _q.has_base(base_layer, coords):
+				return _reject_or_false("Walls require Flesh beneath.", report)
+			# Rule B: Walls cannot overlap an existing hazard
+			if _q.get_hazard_kind(hazard_layer, coords) != "":
+				return _reject_or_false("Walls cannot overlap pools.", report)
+			return true
+
+		"POOL":
+			# Rule A: Pools must sit on Flesh
+			if not _q.has_base(base_layer, coords):
+				return _reject_or_false("Pools require Flesh beneath.", report)
+			# Rule B: Pools cannot overlap walls (same cell)
+			if _q.has_wall(walls_layer, coords):
+				return _reject_or_false("Pools cannot overlap walls.", report)
+			return true
+
+		"MARKER":
+			# Rule A: Markers require Flesh
+			if not _q.has_base(base_layer, coords):
+				return _reject_or_false("Markers require Flesh beneath.", report)
+			# Rule B: Must not be blocked or hazardous
+			if _q.has_wall(walls_layer, coords) or _q.get_hazard_kind(hazard_layer, coords) != "":
+				return _reject_or_false("Markers can’t sit under walls or pools.", report)
+			return true
+
+		"ERASER":
+			# Handled earlier; never reaches here.
+			return true
+		_:
+			#return _reject("Unknown rule profile: " + b.rule_profile)
+			return _reject_or_false("Unknown rule profile: " + b.rule_profile, report)
+
+## --- Biomass label --------------------------------------------------------
+
+## Read the 'cost' custom data for a cell, or zero when missing
+func _tile_cost(layer: TileMapLayer, coords: Vector2i) -> int:
+	if layer == null:
+		return 0
+	var td: TileData = layer.get_cell_tile_data(coords)
+	if td == null:
+		return 0
+	var v: Variant = td.get_custom_data("cost")
+	if v is int:
+		return int(v)
+	return 0
+
+## Recompute the biomass total across all layers
+func _recalc_biomass() -> void:
+	# O(N used cells) recompute for clarity. For larger maps we can micro-opt by delta-adjusting on each paint/erase.
+	var total := 0
+	for layer_node in [base_layer, walls_layer, hazard_layer, marker_layer]:
+		if layer_node:
+			for c in layer_node.get_used_cells():
+				total += _tile_cost(layer_node, c)
+	_biomass_used = total
+	_update_biomass_label()
+
+## Update the biomass label and its warning color
+func _update_biomass_label() -> void:
+	if biomass_label == null:
+		return
+
+	biomass_label.text = "Biomass: %d / %d" % [_biomass_used, biomass_cap]
+	var col := Color(1, 1, 1)
+	if _biomass_used > biomass_cap:
+		col = Color(1, 0.25, 0.25)
+	biomass_label.modulate = col
+
+## --- Start-with-Flesh and Smart Clear --------------------------------------------------------
+
+## Start-with-Flesh: convenience for quick greyboxing. Turning it OFF offers a smart clear of the same rect,
+## removing dependent tiles inside that area first (Walls/Hazards/Markers) before erasing Flesh.
+func _on_start_with_flesh_toggled(pressed: bool) -> void:
+	if pressed:
+		_apply_start_with_flesh(true)
+	else:
+		_prompt_clear_base()
+
+## Prefill the base layer with Flesh within the configured rectangle
+func _apply_start_with_flesh(enabled: bool) -> void:
+	if not enabled:
+		return
+	if base_layer == null:
+		push_error("Start-with-Flesh: base_layer not assigned.")
+		return
+	var flesh_brush := _find_default_flesh_brush()
+	if flesh_brush == null:
+		_show_status("⚠️ No BASE brush found in BrushRegistry.")
+		return
+
+	var x0 := start_flesh_rect.position.x
+	var y0 := start_flesh_rect.position.y
+	var x1 := x0 + start_flesh_rect.size.x
+	var y1 := y0 + start_flesh_rect.size.y
+
+	for x in range(x0, x1):
+		for y in range(y0, y1):
+			var c := Vector2i(x, y)
+			if base_layer.get_cell_source_id(c) == -1:
+				base_layer.set_cell(c, flesh_brush.source_id, flesh_brush.atlas_coords)
+	_show_status("Filled base with Flesh: %dx%d" % [start_flesh_rect.size.x, start_flesh_rect.size.y])
+
+## Show a confirmation dialog for clearing Flesh and dependents
+func _prompt_clear_base() -> void:
+	if clear_base_confirm == null:
+		# Fallback: clear immediately if no dialog node
+		_smart_clear_base_rect(start_flesh_rect)
+		return
+	var rect := start_flesh_rect
+	var w := rect.size.x
+	var h := rect.size.y
+	var walls := _count_used_in_rect(walls_layer, rect)
+	var pools := _count_used_in_rect(hazard_layer, rect)
+	var marks := _count_used_in_rect(marker_layer, rect)
+	#var flesh := _count_used_in_rect(base_layer, rect)
+	clear_base_confirm.title = "Clear Base (and dependent tiles)?"
+	clear_base_confirm.dialog_text = "This will erase Flesh in a %dx%d area (%d cells) and remove:\n• %d wall tiles\n• %d pool tiles\n• %d markers\nProceed?" % [w, h, w*h, walls, pools, marks]
+	clear_base_confirm.popup_centered()
+
+## Clear Flesh and dependent tiles after confirmation
+func _on_clear_base_confirmed() -> void:
+	_smart_clear_base_rect(start_flesh_rect)
+	_show_status("Cleared base and dependent tiles in %dx%d area." % [start_flesh_rect.size.x, start_flesh_rect.size.y])
+	# Keep the checkbox unticked (it already is). No refill.
+
+## Count used cells in a layer within a rectangle
+func _count_used_in_rect(layer: TileMapLayer, rect: Rect2i) -> int:
+	if layer == null:
+		return 0
+	var count := 0
+	var x0 := rect.position.x
+	var y0 := rect.position.y
+	var x1 := x0 + rect.size.x
+	var y1 := y0 + rect.size.y
+	for x in range(x0, x1):
+		for y in range(y0, y1):
+			if layer.get_cell_source_id(Vector2i(x, y)) != -1:
+				count += 1
+	return count
+
+## Clear Flesh and dependent layers within a rectangle
+func _smart_clear_base_rect(rect: Rect2i) -> void:
+	if base_layer == null:
+		return
+	var x0 := rect.position.x
+	var y0 := rect.position.y
+	var x1 := x0 + rect.size.x
+	var y1 := y0 + rect.size.y
+
+	# First, remove dependent layers in the rect
+	for x in range(x0, x1):
+		for y in range(y0, y1):
+			var c := Vector2i(x, y)
+			if walls_layer and walls_layer.get_cell_source_id(c) != -1:
+				walls_layer.erase_cell(c)
+			if hazard_layer and hazard_layer.get_cell_source_id(c) != -1:
+				hazard_layer.erase_cell(c)
+			if marker_layer and marker_layer.get_cell_source_id(c) != -1:
+				marker_layer.erase_cell(c)
+
+	# Then remove base flesh in the rect
+	for x in range(x0, x1):
+		for y in range(y0, y1):
+			var c := Vector2i(x, y)
+			if base_layer.get_cell_source_id(c) != -1:
+				base_layer.erase_cell(c)
+
+## --- Save / Load UI Handlers --------------------------------------------------------
+
+## Save the current coil to a JSON file in the user directory
+func _on_save_pressed() -> void:
+	# Keep numbers fresh in the save
+	_recalc_biomass()
+	# Ensure directory exists
+	if DirAccess.open(save_dir) == null:
+		var err: int = DirAccess.make_dir_recursive_absolute(save_dir)
+		if err != OK:
+			_show_status("Save failed: couldn't create " + save_dir)
+			return
+
+	# Build a timestamped filename
+	var path: String = _timestamp_file(save_dir, F_COIL_PREFIX, EXT_JSON)
+	# Write JSON
+	var data := _capture_coil()  # CHANGED: _capture_coil now includes validation snapshot
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	if f == null:
+		_show_status("Save failed (" + str(FileAccess.get_open_error()) + ").")
+		return
+	f.store_string(JSON.stringify(data, "\t"))
+	f.close()
+	_show_status("Saved: " + path)
+
+	if data.has("meta") and (data["meta"] as Dictionary).has("validated"):
+		var ok_now := bool((data["meta"] as Dictionary)["validated"])
+		_update_validation_chip(ok_now)
+
+	# Remember last_opened_coil_path on current profile
+	if has_node("/root/ProfileManager"):
+		var pm2: Node = get_node("/root/ProfileManager")
+		if pm2.has_method("set_current_last_opened_coil"):
+			pm2.call("set_current_last_opened_coil", path)
+
+## Open a file dialog to choose a coil to load
+func _on_load_pressed() -> void:
+	# Ensure save_dir exists (e.g., "user://coils")
+	if DirAccess.open(save_dir) == null:
+		var err: int = DirAccess.make_dir_recursive_absolute(save_dir)
+		if err != OK:
+			_show_status("Failed to create " + save_dir)
+	if load_dialog:
+		load_dialog.access = FileDialog.ACCESS_USERDATA
+		load_dialog.current_dir = save_dir        # e.g., "user://coils"
+		load_dialog.popup_centered()
+
+## Load a selected coil JSON and apply it to layers
+#func _on_load_file_selected(path: String) -> void:
+	#var f := FileAccess.open(path, FileAccess.READ)
+	#if f == null:
+		#_show_status("Load failed (" + str(FileAccess.get_open_error()) + ").")
+		#return
+	#var txt: String = f.get_as_text()
+	#f.close()
+	#var parsed_v: Variant = JSON.parse_string(txt)
+	#if typeof(parsed_v) != TYPE_DICTIONARY:
+		#_show_status("Load failed: JSON malformed.")
+		#return
+	#var data: Dictionary = parsed_v as Dictionary
+	#var meta_v: Variant = data.get("meta", {})
+	#if typeof(meta_v) == TYPE_DICTIONARY:
+		#var meta: Dictionary = meta_v
+		#var creator_id: String = String(meta.get("creator_profile_id", ""))
+		#var cur_id: String = _current_profile_id()
+		#if creator_id != "" and cur_id != "" and creator_id != cur_id:
+			#_show_status("⚠ Loaded coil from another profile.")
+	#CoilIO.apply_coil(data, base_layer, walls_layer, hazard_layer, marker_layer)
+	#_recalc_biomass()
+	#_show_status("Loaded: " + path)
+	#_refresh_validation_state()  # don't touch disk; just reflect truth in UI
+	## Remember last_opened_coil_path on current profile
+	#if has_node("/root/ProfileManager"):
+		#var pm3: Node = get_node("/root/ProfileManager")
+		#if pm3.has_method("set_current_last_opened_coil"):
+			#pm3.call("set_current_last_opened_coil", path)
+func _on_load_file_selected(path: String) -> void:
+	var f := FileAccess.open(path, FileAccess.READ)
+	if f == null:
+		_show_status("Load failed (" + str(FileAccess.get_open_error()) + ").")
+		return
+	var txt: String = f.get_as_text()
+	f.close()
+	var parsed_v: Variant = JSON.parse_string(txt)
+	if typeof(parsed_v) != TYPE_DICTIONARY:
+		_show_status("Load failed: JSON malformed.")
+		return
+
+	var data: Dictionary = parsed_v as Dictionary
+
+	# Warn if coil belongs to another profile
+	var meta_v: Variant = data.get("meta", {})
+	if typeof(meta_v) == TYPE_DICTIONARY:
+		var meta: Dictionary = meta_v
+		var creator_id: String = String(meta.get("creator_profile_id", ""))
+		var cur_id: String = _current_profile_id()
+		if creator_id != "" and cur_id != "" and creator_id != cur_id:
+			_show_status("⚠ Loaded coil from another profile.")
+		# Populate TitleEdit if present
+		if is_instance_valid(title_edit):
+			var t_v: Variant = meta.get("title", "")
+			if typeof(t_v) == TYPE_STRING:
+				title_edit.text = String(t_v)
+
+	CoilIO.apply_coil(data, base_layer, walls_layer, hazard_layer, marker_layer)
+	_recalc_biomass()
+	_show_status("Loaded: " + path)
+	_refresh_validation_state()
+	# Remember last_opened_coil_path on current profile
+	if has_node("/root/ProfileManager"):
+		var pm3: Node = get_node("/root/ProfileManager")
+		if pm3.has_method("set_current_last_opened_coil"):
+			pm3.call("set_current_last_opened_coil", path)
+
+## Autosave a snapshot before starting playtest
+func _autosave_playtest() -> void:
+	if DirAccess.open(save_dir) == null:
+		var err2: int = DirAccess.make_dir_recursive_absolute(save_dir)
+		if err2 != OK:
+			_show_status("Failed to create " + save_dir)
+			return
+	var path := "%s/_autosave_playtest.json" % [save_dir]
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	if f:
+		f.store_string(JSON.stringify(_capture_coil(), "\t"))
+		f.close()
+		_show_status("Autosaved: " + path)
+
+## --- Save current coil as Dictionary snapshot (with validation flag & details) ---
+func _capture_coil() -> Dictionary:
+	var tileset_path: String = ""
+	if coil_map.tile_set:
+		tileset_path = coil_map.tile_set.resource_path
+
+	# Strict validation snapshot (no biomass bypass)
+	var validation_result: ValidationResult = _run_validation(false)
+	_last_validation_ok = validation_result.ok  # cache for UI
+
+	# Optional coords: null when not present (strictly typed)
+	var spawn_v: Variant = null
+	if validation_result.spawn.x > -900000:
+		spawn_v = {"x": validation_result.spawn.x, "y": validation_result.spawn.y}
+	var heart_v: Variant = null
+	if validation_result.heart.x > -900000:
+		heart_v = {"x": validation_result.heart.x, "y": validation_result.heart.y}
+
+	var validation_payload: Dictionary = {
+	"ok": validation_result.ok,
+	"messages": validation_result.messages,
+	"spawn": spawn_v,          # ← will be null when not present
+	"heart": heart_v,          # ← will be null when not present
+	"biomass_used": _biomass_used,
+	"biomass_cap": biomass_cap,
+	"validator_version": 1,
+	"timestamp": _iso_timestamp()
+	}
+
+	return {
+	"meta": {
+		"schema_version": COIL_SCHEMA_VERSION,       # existing
+		"coil_schema_version": 2,                    # NEW (explicit coil schema version)
+		"id": _new_coil_id(),                        # NEW (stable-ish id for this saved coil)
+		"biomass_cap": biomass_cap,
+		"biomass_used": _biomass_used,
+		"tileset": tileset_path,
+		"validated": validation_result.ok,
+		"validation": validation_payload,
+		"creator_profile_id": _current_profile_id(),
+		"creator_profile_name": _current_profile_name(),
+		"title": _current_title(),
+		"game_version": _game_version_string(),
+		"notes": "",                                 # NEW (placeholder)
+		"visual_theme": ""                           # NEW (placeholder)
+	},
+	"layers": {
+		"base":   CoilIO.serialize_layer(base_layer),
+		"walls":  CoilIO.serialize_layer(walls_layer),
+		"hazard": CoilIO.serialize_layer(hazard_layer),
+		"marker": CoilIO.serialize_layer(marker_layer)
+	}
+	}
+
+## Restore and clear any pending coil handed back from Playtest
+func _restore_pending_coil_if_any() -> void:
+	if not has_node("/root/CoilSession"):
+		return
+
+	var cs: Node = get_node("/root/CoilSession")
+	var data: Dictionary = {}
+
+	# Preferred: use consume_pending_coil() if present
+	if cs.has_method("consume_pending_coil"):
+		var data_v: Variant = cs.call("consume_pending_coil")
+		if typeof(data_v) == TYPE_DICTIONARY:
+			data = data_v as Dictionary
+	else:
+		# Fallback to the raw property once, then clear it
+		var pc_v: Variant = cs.get("pending_coil")
+		if typeof(pc_v) == TYPE_DICTIONARY:
+			data = pc_v as Dictionary
+			cs.set("pending_coil", {})
+
+	if data.has("layers"):
+		CoilIO.apply_coil(data, base_layer, walls_layer, hazard_layer, marker_layer)
+		_recalc_biomass()
+		_show_status("Restored coil from Playtest.")
+		print("BuilderMode: restored coil snapshot from CoilSession.")
+
+## --- Validation & Playtest Handoff --------------------------------------------------------
+
+## Delegate to CoilValidator (strict by default). Only Playtest may pass ignore_biomass=true when DevMode + flag is set.
+func _run_validation(ignore_biomass: bool = false) -> ValidationResult:
+	var out := ValidationResult.new()
+	var result: Dictionary = CoilValidatorScript.validate(
+		base_layer,
+		walls_layer,
+		hazard_layer,
+		marker_layer,
+		_biomass_used,
+		biomass_cap,
+		ignore_biomass
+	)
+
+	var ok_flag := false
+	if result.has("ok"):
+		ok_flag = bool(result["ok"])
+	out.ok = ok_flag
+
+	out.messages = []
+	if result.has("messages") and result["messages"] is Array:
+		for m in result["messages"]:
+			out.messages.append(String(m))
+
+	if result.has("spawn") and result["spawn"] is Vector2i:
+		out.spawn = result["spawn"]
+	if result.has("heart") and result["heart"] is Vector2i:
+		out.heart = result["heart"]
+
+	if out.ok and out.messages.is_empty():
+		out.messages.append("✅ Valid coil. Ready to Playtest or Save.")
+
+	return out
+
+## Populate and show the validation dialog
+func _show_validation_dialog(r: ValidationResult) -> void:
+	if validate_dialog == null or validate_body == null:
+		_show_status("Validation dialog missing in scene.")
+		return
+
+	# Force a readable size & wrapping on open
+	validate_dialog.min_size = Vector2i(560, 360)     # floor
+	validate_dialog.size = Vector2i(640, 420)         # actual open size
+	validate_body.autowrap_mode = TextServer.AUTOWRAP_WORD
+	validate_body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	validate_body.size_flags_vertical = Control.SIZE_EXPAND_FILL
+
+	validate_body.clear()
+	validate_body.append_text("")  # ensures we start fresh
+
+	if r.ok:
+		validate_dialog.title = "Validation Passed"
+	else:
+		validate_dialog.title = "Validation Issues"
+	# Build the message list
+	for m in r.messages:
+		validate_body.append_text(m + "\n")
+	# Extra friendly coords if available
+	if r.spawn.x > -900000:
+		validate_body.append_text("• Spawn at %s\n" % [str(r.spawn)])
+	if r.heart.x > -900000:
+		validate_body.append_text("• Heartroot at %s\n" % [str(r.heart)])
+	validate_dialog.popup_centered() # uses 'size' above
+
+## Validate popup is always strict; no dev bypass here.
+func _on_validate_pressed() -> void:
+	# Run a full check list and show a friendly popup
+	_recalc_biomass()
+	var result: ValidationResult = _run_validation(false) # always strict on Validate
+	_show_validation_dialog(result)
+
+## Playtest is strict unless Dev Mode is ON and ignore_biomass_limit is true (GameFlags/meta/checkbox).
+func _on_playtest_pressed() -> void:
+	_recalc_biomass()
+	## Validate, then decide if biomass cap can be bypassed in dev
+	var allow_over: bool = false
+	if has_node("/root/GameFlags"):
+		var gf: Node = get_node("/root/GameFlags")
+		var bypass: bool = false
+		if gf.has_meta("ignore_biomass_limit"):
+			bypass = bool(gf.get_meta("ignore_biomass_limit"))
+		elif ignore_biomass_limit:
+			bypass = ignore_biomass_limit.button_pressed
+
+		if bool(gf.dev_mode_enabled) and bypass:
+			allow_over = true
+
+	if allow_over and _biomass_used > biomass_cap:
+		_show_status("Dev bypass: biomass over cap (%d/%d), playtesting anyway." % [_biomass_used, biomass_cap])
+
+	print("BuilderMode: start_coil request → biomass ", _biomass_used, "/", biomass_cap, ", allow_over=", allow_over)
+	var result := _run_validation(allow_over)
+	if not result.ok:
+		_show_validation_dialog(result)
+		return
+
+	# Optional but handy: autosave a snapshot
+	_autosave_playtest()
+
+	# Hand off to Explore via CoilSession
+	var data: Dictionary = _capture_coil()
+	if has_node("/root/CoilSession"):
+		get_node("/root/CoilSession").call("start_coil", data, "builder")
+	else:
+		_show_status("Playtest: CoilSession autoload missing.")
+
+## --- Publish Cluster --------------------------------------------------------
+
+## Publish (Local Stub): strict validation → JSON to user://Published/ → manifest upsert.
+## No backend yet; this is Phase 1.4/1.5 local “share” semantics.
+func _on_publish_pressed() -> void:
+	_recalc_biomass()
+	var result: ValidationResult = _run_validation(false) # false => no biomass bypass (STRICT)
+	if not result.ok:
+		_show_validation_dialog(result)  # Friendly popup you already have
+		return
+
+	# Ensure Published/ exists (sibling to save_dir)
+	var pub_dir: String = DIR_PUBLISHED
+	_ensure_dir(pub_dir)
+
+	# Timestamped publish path
+	var pub_path: String = _timestamp_file(pub_dir, F_COIL_PREFIX, EXT_JSON)
+
+	# Capture a fresh, validated snapshot (includes validated flag + details)
+	var data := _capture_coil()
+
+	var f := FileAccess.open(pub_path, FileAccess.WRITE)
+	if f == null:
+		_show_status("Publish failed (" + str(FileAccess.get_open_error()) + ").")
+		return
+	f.store_string(JSON.stringify(data, "\t"))
+	f.close()
+
+	# Update/append manifest entry
+	_update_publish_manifest(pub_dir, pub_path, data)
+
+	_show_status("Published to Local: " + pub_path)
+
+	# Sync chip state (should be valid at this point)
+	_update_validation_chip(true)
+
+## Ensure a directory exists (recursive)
+func _ensure_dir(dir_path: String) -> void:
+	if DirAccess.open(dir_path) == null:
+		var err: int = DirAccess.make_dir_recursive_absolute(dir_path)  # typed int (Error enum)
+		if err != OK:
+			_show_status("Failed to create: " + dir_path)
+
+## Manifest contract:
+##   version:int, items:Array<{ path, title, published_at, biomass_used:int, biomass_cap:int, profile_id }>
+func _update_publish_manifest(_pub_dir: String, pub_path: String, data: Dictionary) -> void:
+	var manifest_path: String = PUBLISHED_MANIFEST
+
+	# Start with a default manifest object
+	var manifest: Dictionary = {
+		"version": MANIFEST_VERSION,
+		"items": []  # Array of Dictionary entries
+	}
+
+	# If a manifest already exists, read and parse it
+	if FileAccess.file_exists(manifest_path):
+		var f_in: FileAccess = FileAccess.open(manifest_path, FileAccess.READ)
+		if f_in != null:
+			var txt: String = f_in.get_as_text()
+			f_in.close()
+
+			# IMPORTANT: parse result is Variant → store in a Variant first
+			var parsed_v: Variant = JSON.parse_string(txt)
+			if typeof(parsed_v) == TYPE_DICTIONARY:
+				# Safe cast AFTER typeof check to satisfy typing
+				manifest = parsed_v as Dictionary
+
+	# Pull meta from the just-published coil data (also Variant-safe)
+	var meta: Dictionary = {}
+	var meta_v: Variant = data.get("meta", {})
+	if typeof(meta_v) == TYPE_DICTIONARY:
+		meta = meta_v as Dictionary
+
+	var coil_id: String = ""
+	if meta.has("id"):
+		var id_v: Variant = meta.get("id")
+		if typeof(id_v) == TYPE_STRING:
+			coil_id = String(id_v)
+
+	# Determine profile_id, safe default ""
+	var profile_id: String = ""
+	if has_node("/root/ProfileManager"):
+		var pm: Node = get_node("/root/ProfileManager")
+		if pm.has_method("get_current_profile_id"):
+			var pid_v: Variant = pm.call("get_current_profile_id")
+			if typeof(pid_v) == TYPE_STRING:
+				profile_id = String(pid_v)
+
+	# Build the manifest entry (use explicit ints/strings for strict typing)
+	var title_from_meta: String = String(meta.get("title", "Untitled"))
+	var coil_version: String = String(meta.get("game_version", ""))
+
+	var entry: Dictionary = {
+		"path": pub_path,
+		"title": title_from_meta,
+		"published_at": _iso_timestamp(),
+		"biomass_used": int(meta.get("biomass_used", _biomass_used)),
+		"biomass_cap": int(meta.get("biomass_cap", biomass_cap)),
+		"profile_id": profile_id,
+		"game_version": coil_version,
+		"id": coil_id,                 # NEW
+		"checksum": "",                # NEW (placeholder)
+		"thumbnail_path": "",          # NEW (placeholder)
+		"visibility": "local"          # NEW (local vs cloud later)
+	}
+
+	# Get current items as a typed Array (via Variant)
+	var items: Array = []
+	var items_v: Variant = manifest.get("items", [])
+	if typeof(items_v) == TYPE_ARRAY:
+		items = items_v as Array
+	# Upsert by matching "path"
+	var replaced: bool = false
+	for i in range(items.size()):
+		var it_v: Variant = items[i]
+		if typeof(it_v) == TYPE_DICTIONARY:
+			var it: Dictionary = it_v as Dictionary
+			var path_field_v: Variant = it.get("path", "")
+			var path_field: String = path_field_v as String
+			if path_field == pub_path:
+				items[i] = entry
+				replaced = true
+				break
+
+	if not replaced:
+		items.append(entry)
+
+	manifest["items"] = items
+
+	# Write back to disk
+	var f_out: FileAccess = FileAccess.open(manifest_path, FileAccess.WRITE)
+	if f_out != null:
+		f_out.store_string(JSON.stringify(manifest, "\t"))
+		f_out.close()
+
+## ISO8601-like timestamp for metadata
+func _iso_timestamp() -> String:
+	return Time.get_datetime_string_from_system(true, true)  # UTC, with separators
+
+func _timestamp_file(dir_path: String, prefix: String, ext: String) -> String:
+	var ts: String = Time.get_datetime_string_from_system(false, true).replace(":", "-")
+	return "%s/%s%s%s" % [dir_path, prefix, ts, ext]
+
+## --- Utility Helpers --------------------------------------------------------
+
+## Update the status label and print to the console
+func _show_status(msg: String) -> void:
+	status_label.text = msg
+	print(msg)
+
+## Find the default Flesh brush with rule_profile BASE
+func _find_default_flesh_brush() -> BrushEntry:
+	if brush_registry == null:
+		return null
+	for be in brush_registry.brushes:
+		if be is BrushEntry and be.rule_profile == "BASE" and be.source_id >= 0:
+			return be
+	return null
+
+## Small UI updater for the ValidationChip and Publish button
+func _update_validation_chip(is_ok: bool) -> void:
+	if validation_chip:
+		if is_ok:
+			validation_chip.text = "Valid"
+			validation_chip.modulate = Color(0.75, 1.0, 0.75)  # soft green
+		else:
+			validation_chip.text = "Draft"
+			validation_chip.modulate = Color(1.0, 0.75, 0.75)  # soft red
+
+	# Enable/disable Publish affordance (belt & braces: we still re-check inside publish)
+	if publish_btn:
+		publish_btn.disabled = not is_ok
+
+## Strictly recompute validation and refresh Draft/Valid chip & Publish enable
+func _refresh_validation_state() -> void:
+	var r := _run_validation(false)  # strict
+	_last_validation_ok = r.ok
+	_update_validation_chip(_last_validation_ok)
+
+func _current_profile_id() -> String:
+	if has_node("/root/ProfileManager"):
+		var pm: Node = get_node("/root/ProfileManager")
+		if pm.has_method("get_current_profile_id"):
+			return String(pm.call("get_current_profile_id"))
+	return ""
+
+func _current_profile_name() -> String:
+	if has_node("/root/ProfileManager"):
+		var pm: Node = get_node("/root/ProfileManager")
+		if pm.has_method("get_current_profile"):
+			var v: Variant = pm.call("get_current_profile")
+			if typeof(v) == TYPE_DICTIONARY:
+				return String((v as Dictionary).get("display_name", ""))
+	return ""
+
+func _current_title() -> String:
+	# Prefer the live cache updated by text_changed (works even while the field is focused).
+	var t := _title_cache.strip_edges()
+	if t != "":
+		return t
+	# Fallback to the LineEdit’s text (covers loads / first paint).
+	if is_instance_valid(title_edit):
+		t = title_edit.text.strip_edges()
+		if t != "":
+			return t
+	return "Untitled"
+
+func _on_title_changed(new_text: String) -> void:
+	_title_cache = new_text
+
+func _game_version_string() -> String:
+	if has_node("/root/BuildInfo"):
+		var b: Node = get_node("/root/BuildInfo")
+		if b.has_method("version_string"):
+			return String(b.call("version_string"))
+	# Fallback to ProjectSettings if you ever set it there
+	if ProjectSettings.has_setting("application/config/version"):
+		var v: Variant = ProjectSettings.get_setting("application/config/version")
+		if typeof(v) == TYPE_STRING:
+			return String(v)
+	return "0.0.0"
+
+func _on_hub_pressed() -> void:
+	# Optional: autosave a snapshot before leaving (comment out if you don’t want it)
+	# _autosave_playtest()
+	if has_node("/root/CoilSession"):
+		get_node("/root/CoilSession").call("return_to_heartroot")
+	else:
+		get_tree().change_scene_to_file("res://Scenes/Heartroot/heartroot.tscn")
+
+# Returns a stable-ish id string for a coil (UTC timestamp + msec).
+# Format: yyyymmdd_hhmmss_msec (same family as ProfileManager ids).
+func _new_coil_id() -> String:
+	var dt: Dictionary = Time.get_datetime_dict_from_system(true)  # UTC
+	var yy: int = int(dt["year"])
+	var mm: int = int(dt["month"])
+	var dd: int = int(dt["day"])
+	var hh: int = int(dt["hour"])
+	var mi: int = int(dt["minute"])
+	var ss: int = int(dt["second"])
+	var msec: int = Time.get_ticks_msec() % 1000
+
+	var id_str: String = str(yy)
+	id_str += _pad2(mm)
+	id_str += _pad2(dd)
+	id_str += "_"
+	id_str += _pad2(hh)
+	id_str += _pad2(mi)
+	id_str += _pad2(ss)
+	id_str += "_"
+	id_str += str(msec)
+	return id_str
+
+# Utility used by _new_coil_id()
+func _pad2(n: int) -> String:
+	if n < 10:
+		return "0" + str(n)
+	return str(n)
+
+## end builder_mode.gd
+
+========================================================================
+FILE: verdant-coil/Scenes/BuilderMode/dev_controls_root.gd
+========================================================================
+## res://UI/dev_controls.gd
+## Role: Self-contained dev panel; anchors below TopBar and handles visibility & persistence
+extends MarginContainer
+
+@export_node_path("Control") var top_bar_path: NodePath
+@export var left_padding: int = 8
+@export var top_padding: int = 8
+@export var right_padding: int = 8
+@export var mirror_ignore_biomass: bool = true
+
+@onready var _top_bar: Control = get_node_or_null(top_bar_path)
+@onready var _ignore_biomass_cb: CheckBox = $DevControls/IgnoreBiomassLimit
+
+## Anchor full width; height is content; place below TopBar in parent space
+func _ready() -> void:
+	anchor_left = 0.0
+	anchor_right = 1.0
+	anchor_top = 0.0
+	anchor_bottom = 0.0
+	offset_left = left_padding
+	offset_right = -right_padding  # negative because right anchor = 1.0 (creates right-side padding)
+	_update_top_offset()
+
+	if _top_bar:
+		_top_bar.resized.connect(_update_top_offset)
+
+	var parent_ctrl: Control = get_parent() as Control
+	if parent_ctrl:
+		parent_ctrl.resized.connect(_update_top_offset)
+
+	if get_viewport():
+		get_viewport().size_changed.connect(_update_top_offset)
+
+	# Show/hide the whole panel when dev mode toggles
+	if has_node("/root/GameFlags"):
+		var gf: Node = get_node("/root/GameFlags")
+		gf.dev_mode_changed.connect(_on_dev_mode_changed)
+		_on_dev_mode_changed(gf.dev_mode_enabled)
+		if mirror_ignore_biomass and is_instance_valid(_ignore_biomass_cb):
+			var initial_value: bool = false
+			if gf.has_meta("ignore_biomass_limit"):
+				initial_value = bool(gf.get_meta("ignore_biomass_limit"))
+			_ignore_biomass_cb.button_pressed = initial_value
+			_ignore_biomass_cb.toggled.connect(func(pressed: bool) -> void:
+				gf.set_meta("ignore_biomass_limit", pressed))
+
+## Compute top offset from TopBar global rect converted to this node's parent space
+func _update_top_offset() -> void:
+	var parent_ctrl: Control = get_parent() as Control
+	if parent_ctrl == null:
+		offset_top = top_padding
+		offset_bottom = 0
+		return
+
+	var bar_bottom_y: int = 0
+	if _top_bar:
+		var bar_rect: Rect2 = _top_bar.get_global_rect()
+		bar_bottom_y = int(bar_rect.position.y + bar_rect.size.y)
+
+	var parent_rect: Rect2 = parent_ctrl.get_global_rect()
+	var local_y_under_bar: int = bar_bottom_y - int(parent_rect.position.y)
+
+	offset_top = local_y_under_bar + top_padding
+	offset_bottom = 0
+
+## React to dev mode changes by showing or hiding the panel
+func _on_dev_mode_changed(enabled: bool) -> void:
+	visible = enabled
+
+## end res://UI/dev_controls.gd
+
+========================================================================
+FILE: verdant-coil/Scenes/Heartroot/heartroot.gd
+========================================================================
+## res://Scenes/Heartroot/heartroot.gd
+## Godot 4.4.1 — Main hub. Profiles + Library, launches Explore/Builder via CoilSession.
+extends Control
+
+# --- Version Displays ---
+@export var version_major: int = 0
+@export var version_minor: int = 1
+@export var version_patch: int = 0
+@export var include_build_date: bool = true   # add ".yymmdd"
+@export var build_tag: String = ""            # optional "a", "b", etc.
+
+# --- Nodes (typed, robust via %UniqueName) ---
+
+@onready var title_label: Label   = %TitleLabel
+@onready var version_label: Label = %VersionLabel
+
+@onready var profiles_list: ItemList   = %ProfilesList
+@onready var new_name: LineEdit        = %NewName
+@onready var create_btn: Button        = %CreateBtn
+@onready var rename_btn: Button        = %RenameBtn
+@onready var delete_btn: Button        = %DeleteBtn
+@onready var set_active_btn: Button    = %SetActiveBtn
+
+@onready var play_btn: Button              = %PlayBtn
+@onready var build_btn: Button             = %BuildBtn
+@onready var upgrades_btn: Button          = %UpgradesBtn
+@onready var refresh_library_btn: Button   = %RefreshLibraryBtn
+@onready var exit_btn: Button              = %ExitBtn
+
+@onready var mine_only_cb: CheckBox    = %MineOnly
+@onready var library_list: ItemList    = %LibraryList
+@onready var play_selected_btn: Button = %PlaySelectedBtn
+
+# --- Local state (typed) ---
+var _library_items: Array = []  # Array<Dictionary> each entry mirrors manifest item
+var _manifest_path: String = "user://Published/manifest.json"
+
+func _ready() -> void:
+	# Wire UI signals
+	create_btn.pressed.connect(_on_create_pressed)
+	rename_btn.pressed.connect(_on_rename_pressed)
+	delete_btn.pressed.connect(_on_delete_pressed)
+	set_active_btn.pressed.connect(_on_set_active_pressed)
+	profiles_list.item_activated.connect(_on_profiles_item_activated) # double-click convenience
+	play_btn.pressed.connect(_on_play_pressed)
+	build_btn.pressed.connect(_on_build_pressed)
+	refresh_library_btn.pressed.connect(_on_refresh_library_pressed)
+	exit_btn.pressed.connect(_on_exit_pressed)
+	mine_only_cb.toggled.connect(func(_pressed): _refresh_library())
+	library_list.item_activated.connect(_on_library_item_activated)
+	play_selected_btn.pressed.connect(_on_play_selected_pressed)
+
+	# If the game is running in a browser, hide the button (browsers don’t allow page exit)
+	if OS.get_name() == "Web":
+		exit_btn.visible = false
+
+	# Subscribe to profile manager events, if present
+	if has_node("/root/ProfileManager"):
+		var pm: Node = get_node("/root/ProfileManager")
+		if pm.has_signal("profile_list_changed"):
+			pm.connect("profile_list_changed", Callable(self, "_refresh_profiles"))
+		if pm.has_signal("current_profile_changed"):
+			pm.connect("current_profile_changed", Callable(self, "_refresh_profiles"))
+
+	_refresh_profiles()
+	_refresh_library()
+	_refresh_version_label()
+
+# -----------------------------
+# Profiles
+# -----------------------------
+func _refresh_profiles(_changed_id: String = "") -> void:
+	profiles_list.clear()
+
+	if not has_node("/root/ProfileManager"):
+		return
+
+	var pm: Node = get_node("/root/ProfileManager")
+
+	var items_v: Variant = pm.call("get_profiles")
+	if typeof(items_v) != TYPE_ARRAY:
+		return
+	var items: Array = items_v as Array
+
+	var current_id_v: Variant = pm.call("get_current_profile_id")
+	var current_id: String = String(current_id_v)
+
+	for d_v in items:
+		if typeof(d_v) != TYPE_DICTIONARY:
+			continue
+
+		var d: Dictionary = d_v as Dictionary
+		var id: String = String(d.get("id", ""))
+		var display_name: String = String(d.get("display_name", "Player"))
+		var is_active: bool = (id == current_id)
+		var row_text: String = display_name + "  (" + id + ")"
+		if is_active:
+			row_text = "★ " + row_text + "   [ACTIVE]"
+
+		var row: int = profiles_list.add_item(row_text)
+		profiles_list.set_item_metadata(row, id)
+
+		# ←← Put your RESET lines right here (for every row)
+		profiles_list.set_item_custom_bg_color(row, Color(0, 0, 0, 0))
+		profiles_list.set_item_custom_fg_color(row, Color(1, 1, 1, 1))
+
+		# Then, if this is the active one, override with the highlight
+		if is_active:
+			profiles_list.select(row)
+			profiles_list.set_item_custom_bg_color(row, Color(0.18, 0.33, 0.22, 1.0))
+			profiles_list.set_item_custom_fg_color(row, Color(0.9, 1.0, 0.9, 1.0))
+
+func _selected_profile_id() -> String:
+	var sel: PackedInt32Array = profiles_list.get_selected_items()
+	if sel.size() == 0:
+		return ""
+	var idx: int = int(sel[0])
+	var meta_v: Variant = profiles_list.get_item_metadata(idx)
+	return String(meta_v)
+
+func _on_create_pressed() -> void:
+	if not has_node("/root/ProfileManager"):
+		return
+	var name_in: String = new_name.text
+	var pm: Node = get_node("/root/ProfileManager")
+	pm.call("create_profile", name_in)
+	new_name.text = ""
+	_refresh_profiles()
+
+func _on_rename_pressed() -> void:
+	if not has_node("/root/ProfileManager"):
+		return
+	var id: String = _selected_profile_id()
+	if id == "":
+		return
+	var new_label: String = new_name.text
+	if new_label.strip_edges() == "":
+		return
+	var pm: Node = get_node("/root/ProfileManager")
+	pm.call("rename_profile", id, new_label)
+	new_name.text = ""
+	_refresh_profiles()
+
+func _on_delete_pressed() -> void:
+	if not has_node("/root/ProfileManager"):
+		return
+	var id: String = _selected_profile_id()
+	if id == "":
+		return
+	var pm: Node = get_node("/root/ProfileManager")
+	pm.call("delete_profile", id)
+	_refresh_profiles()
+
+func _on_set_active_pressed() -> void:
+	if not has_node("/root/ProfileManager"):
+		return
+	var id: String = _selected_profile_id()
+	if id == "":
+		return
+	var pm: Node = get_node("/root/ProfileManager")
+	pm.call("set_current_profile", id)
+	_refresh_profiles()
+
+func _on_profiles_item_activated(_index: int) -> void:
+	_on_set_active_pressed()
+
+# -----------------------------
+# Library (Published manifest)
+# -----------------------------
+func _refresh_library() -> void:
+	library_list.clear()
+	_library_items.clear()
+
+	# Bail early if there’s no manifest yet.
+	if not FileAccess.file_exists(_manifest_path):
+		return
+
+	var f: FileAccess = FileAccess.open(_manifest_path, FileAccess.READ)
+	if f == null:
+		return
+	var txt: String = f.get_as_text()
+	f.close()
+
+	var parsed_v: Variant = JSON.parse_string(txt)
+	if typeof(parsed_v) != TYPE_DICTIONARY:
+		return
+	var manifest: Dictionary = parsed_v as Dictionary
+
+	var arr_v: Variant = manifest.get("items", [])
+	if typeof(arr_v) != TYPE_ARRAY:
+		return
+	var arr: Array = arr_v as Array
+
+	# --- Optional: “Mine only” filter needs the current profile id ---
+	var current_id: String = ""
+	if has_node("/root/ProfileManager"):
+		var pm: Node = get_node("/root/ProfileManager")
+		var id_v: Variant = pm.call("get_current_profile_id")
+		current_id = String(id_v)
+
+	# Show newest first (simple stable reverse)
+	for i in range(arr.size() - 1, -1, -1):
+		var it_v: Variant = arr[i]
+		if typeof(it_v) == TYPE_DICTIONARY:
+			var it: Dictionary = it_v as Dictionary
+
+			# ---- Mine only filter (skip entries that aren’t mine) ----
+			if mine_only_cb.button_pressed and current_id != "":
+				var owner_id: String = String(it.get("profile_id", ""))
+				if owner_id != current_id:
+					continue
+			# ----------------------------------------------------------
+
+			_library_items.append(it)
+
+			var title: String = String(it.get("title", "Untitled"))
+			var path: String = String(it.get("path", ""))
+			var when: String = String(it.get("published_at", ""))
+
+			# --- NEW: version pulled from manifest entry (safe if missing) ---
+			var ver: String = String(it.get("game_version", ""))
+			# -----------------------------------------------------------------
+
+			# Build the row text. Only append version if present to avoid noise
+			# on older manifests that don’t have game_version yet.
+			var row_text: String = title + "   —   " + when
+			if ver != "":
+				row_text += "   —   v " + ver
+			row_text += "\n" + path
+
+			var row: int = library_list.add_item(row_text)
+			library_list.set_item_metadata(row, path)
+
+func _on_refresh_library_pressed() -> void:
+	_refresh_library()
+
+func _play_coil_at_path(path: String) -> void:
+	if path == "":
+		return
+	if not FileAccess.file_exists(path):
+		return
+	var f: FileAccess = FileAccess.open(path, FileAccess.READ)
+	if f == null:
+		return
+	var txt: String = f.get_as_text()
+	f.close()
+	var parsed_v: Variant = JSON.parse_string(txt)
+	if typeof(parsed_v) != TYPE_DICTIONARY:
+		return
+	var coil: Dictionary = parsed_v as Dictionary
+	if has_node("/root/CoilSession"):
+		var cs: Node = get_node("/root/CoilSession")
+		cs.call("start_coil", coil, "hub")
+
+func _on_library_item_activated(index: int) -> void:
+	var meta_v: Variant = library_list.get_item_metadata(index)
+	var path: String = String(meta_v)
+	_play_coil_at_path(path)
+
+func _on_play_selected_pressed() -> void:
+	var sel: PackedInt32Array = library_list.get_selected_items()
+	if sel.size() == 0:
+		return
+	var idx: int = int(sel[0])
+	_on_library_item_activated(idx)
+
+# -----------------------------
+# Main actions
+# -----------------------------
+func _on_play_pressed() -> void:
+	# If a library item is selected, play that. Otherwise, try profile's last opened coil.
+	var sel: PackedInt32Array = library_list.get_selected_items()
+	if sel.size() > 0:
+		var idx: int = int(sel[0])
+		_on_library_item_activated(idx)
+		return
+
+	if has_node("/root/ProfileManager"):
+		var pm: Node = get_node("/root/ProfileManager")
+		var last_path: String = String(pm.call("get_current_last_opened_coil"))
+		if last_path != "":
+			_play_coil_at_path(last_path)
+
+func _on_build_pressed() -> void:
+	# Let CoilSession take us to Builder to keep navigation consistent
+	if has_node("/root/CoilSession"):
+		var cs: Node = get_node("/root/CoilSession")
+		cs.call("return_to_builder")
+
+func _refresh_version_label() -> void:
+	if version_label == null:
+		return
+	var core: String = "%d.%d.%d" % [version_major, version_minor, version_patch]
+	var text_out: String = core
+	if include_build_date:
+		text_out += "." + _yymmdd_today()
+	if build_tag.strip_edges() != "":
+		text_out += build_tag
+	version_label.text = "v " + text_out
+
+func _yymmdd_today() -> String:
+	var dt: Dictionary = Time.get_datetime_dict_from_system(false) # local time
+	var yy: int = int(dt["year"]) % 100
+	var mm: int = int(dt["month"])
+	var dd: int = int(dt["day"])
+	return _pad2(yy) + _pad2(mm) + _pad2(dd)
+
+func _pad2(n: int) -> String:
+	if n < 10:
+		return "0" + str(n)
+	return str(n)
+
+func _on_exit_pressed() -> void:
+	# In editor this stops the running game; in desktop export it quits the app.
+	get_tree().quit()
+
+## end res://Scenes/Heartroot/Heartroot.gd
+
+========================================================================
+FILE: verdant-coil/Scenes/Tiles/base_tile.gd
+========================================================================
+## base_tile.gd
+
+extends Node2D
+## Base class for all interactable tiles in Verdant Coil.
+## Each tile type inherits from this and overrides its behavior.
+
+# --- Tile Metadata ---
+@export var tile_type: String = "Base"
+@export var biomass_cost: int = 1  # Used later in Builder mode
+
+# Group tag for lookup
+func _ready() -> void:
+	add_to_group("tiles")
+
+# Called when the crawler moves onto this tile
+func on_crawler_entered(crawler: Node) -> void:
+	# By default, do nothing. Subclasses will override this.
+	print("[BaseTile] Crawler entered a tile of type:", tile_type)
+
+## end base_tile.gd
+
+========================================================================
+FILE: verdant-coil/Scenes/UI/hearts_row.gd
+========================================================================
+## hearts_row.gd
+## Godot 4.4.1
+## Role: Visualize health as a row of hearts (top-left).
+## - Subscribes to /root/HealthSystem.health_changed.
+## - Lights the first `current` hearts; dims the rest up to `max_health`.
+## - Hides any extra heart nodes beyond `max_health`.
+##
+## KISS principles:
+## - No ternaries.
+## - Explicit variables and checks.
+## - Clear comments on every step.
+
+extends HBoxContainer
+
+@export var full_modulate: Color = Color(1, 1, 1, 1)             # Bright "full" heart
+@export var empty_modulate: Color = Color(0.35, 0.35, 0.35, 0.9)  # Dim "empty" heart
+
+# Keep a ref to HealthSystem if connected so we can disconnect cleanly
+var _health_system: Node = null
+
+func _ready() -> void:
+	# Subscribe to the global HealthSystem if present.
+	if has_node("/root/HealthSystem"):
+		_health_system = get_node("/root/HealthSystem")
+		# Connect to live updates
+		if _health_system.has_signal("health_changed"):
+			_health_system.connect("health_changed", Callable(self, "_on_health_changed"))
+		# Initialize once from getters if available
+		var current: int = 0
+		var max_health: int = 0
+		if _health_system.has_method("get_current"):
+			var v_cur: Variant = _health_system.call("get_current")
+			current = int(v_cur)
+		if _health_system.has_method("get_max"):
+			var v_max: Variant = _health_system.call("get_max")
+			max_health = int(v_max)
+		_update_visual(current, max_health)
+	else:
+		# No HealthSystem present: fall back to a safe default visual
+		_update_visual(0, get_child_count())
+
+func _exit_tree() -> void:
+	# Disconnect to avoid stale connections if this HUD is removed/reloaded.
+	if _health_system != null:
+		if _health_system.has_signal("health_changed"):
+			_health_system.disconnect("health_changed", Callable(self, "_on_health_changed"))
+		_health_system = null
+
+# Signal handler from HealthSystem.
+func _on_health_changed(current: int, max_health: int) -> void:
+	_update_visual(current, max_health)
+
+# Applies tinting and visibility to children.
+# Algorithm:
+# 1) Sanitize inputs: clamp current to [0, max_health]; clamp max_health to >= 0.
+# 2) For each child i:
+#    - If i < max_health: child.visible = true; tint "full" if i < current else "empty".
+#    - Else: child.visible = false (do not show hearts beyond the reported maximum).
+func _update_visual(current: int, max_health: int) -> void:
+	# --- Sanitize inputs ---
+	if max_health < 0:
+		max_health = 0
+	if current < 0:
+		current = 0
+	if current > max_health:
+		current = max_health
+
+	# --- Apply to each child in order ---
+	var total_children: int = get_child_count()
+	var i: int = 0
+	while i < total_children:
+		var child: Node = get_child(i)
+
+		# Only attempt to modulate visible nodes (CanvasItem or subclasses like TextureRect)
+		if child is CanvasItem:
+			var item: CanvasItem = child
+
+			# Show only up to max_health hearts
+			var within_max: bool = i < max_health
+			item.visible = within_max
+
+			if within_max:
+				# Light the first `current` hearts; dim the rest up to max_health
+				var is_full: bool = i < current
+				if is_full:
+					item.modulate = full_modulate
+				else:
+					item.modulate = empty_modulate
+		i += 1
+	# (Optional) This is a good insertion point for tiny feedback when health drops or rises.
+	# For example, you could briefly scale the first changed heart.
+	# We keep it out for 1.6(b) to stay KISS.
+
+## end heartsrow.gd
+
+========================================================================
+FILE: verdant-coil/Scenes/UI/lose_overlay.gd
+========================================================================
+## res://Scenes/UI/lose_overlay.gd
+## Godot 4.4.1
+## Role: Show a modal "You died" overlay on global death, block world input,
+##       and offer Retry (reload Explore) or Exit (return to Heartroot via CoilSession).
+
+extends Control
+
+# --- Exported NodePaths (drag in the Inspector for safe wiring) ---
+@export_node_path("Button") var retry_button_path: NodePath
+@export_node_path("Button") var exit_button_path: NodePath
+@export_node_path("CanvasItem") var dimmer_path: NodePath
+@export_node_path("Control") var dialog_path: NodePath
+
+# --- Resolved nodes (typed) ---
+@onready var _retry_btn: Button = get_node_or_null(retry_button_path)
+@onready var _exit_btn: Button = get_node_or_null(exit_button_path)
+@onready var _dimmer: CanvasItem = get_node_or_null(dimmer_path)
+@onready var _dialog: Control = get_node_or_null(dialog_path)
+
+# Keep a ref to HealthSystem to disconnect safely
+var _health_system: Node = null
+
+func _ready() -> void:
+	# Start hidden; we'll show on death signal.
+	visible = false
+
+	# Connect button presses
+	if _retry_btn != null:
+		_retry_btn.pressed.connect(_on_retry_pressed)
+	if _exit_btn != null:
+		_exit_btn.pressed.connect(_on_exit_pressed)
+
+	# Subscribe to global HealthSystem.died to open the overlay.
+	if has_node("/root/HealthSystem"):
+		_health_system = get_node("/root/HealthSystem")
+		if _health_system.has_signal("died"):
+			_health_system.connect("died", Callable(self, "_on_died"))
+
+func _exit_tree() -> void:
+	# Disconnect to avoid stale connections on reload.
+	if _health_system != null:
+		if _health_system.has_signal("died"):
+			_health_system.disconnect("died", Callable(self, "_on_died"))
+		_health_system = null
+
+# --- Signal handlers ---
+
+func _on_died() -> void:
+	# Show overlay, block input (MouseFilter is already Stop on root Control).
+	_show_overlay()
+
+func _on_retry_pressed() -> void:
+	# Reload the current Explore scene. Coil data is still in CoilSession.pending_coil.
+	# This restarts the run cleanly without awarding anything.
+	#get_tree().reload_current_scene()
+	if has_node("/root/CoilSession"):
+		get_node("/root/CoilSession").call("retry_last_coil")
+
+func _on_exit_pressed() -> void:
+	# Explicitly end the coil as a LOSS (no nutrient, no success flags).
+	if has_node("/root/CoilSession"):
+		get_node("/root/CoilSession").call("end_coil", false)
+		return
+
+	# Fallback if CoilSession is unavailable.
+	get_tree().change_scene_to_file("res://Scenes/Heartroot/heartroot.tscn")
+
+# --- Visual helpers ---
+
+func _show_overlay() -> void:
+	# Make visible, then optionally animate a small fade/scale for clarity.
+	visible = true
+
+	# Safety: ensure the dialog starts at normal scale before animating.
+	if _dialog != null:
+		_dialog.scale = Vector2(1.0, 1.0)
+	if _dimmer != null:
+		_dimmer.modulate.a = 0.0
+
+	var t: Tween = create_tween()
+	# Fade-in the dimmer quickly
+	if _dimmer != null:
+		t.tween_property(_dimmer, "modulate:a", 0.5, 0.12)
+	# Subtle pop on the dialog
+	if _dialog != null:
+		t.tween_property(_dialog, "scale", Vector2(1.06, 1.06), 0.08)
+		t.tween_property(_dialog, "scale", Vector2(1.00, 1.00), 0.10)
+
+	# Move keyboard focus to Retry for quick Enter/Esc use
+	if _retry_btn != null:
+		_retry_btn.grab_focus()
+
+## end res://Scenes/UI/lose_overlay.gd
+
+========================================================================
+FILE: verdant-coil/Scenes/UI/resource_counters.gd
+========================================================================
+## res://Scenes/UI/resource_counters.gd
+## Godot 4.4.1
+## Responsibility:
+## - Display current Nutrient and Sporeprint values during Explore runs.
+## - Listen to ProfileManager signals to update live.
+## - Play a tiny pulse animation on gains to reinforce feedback.
+##
+## This script is attached to: ExploreMode/HUD/SafeArea/TopRight/ResourceCounters (HBoxContainer)
+## Children are two "pill" panels with an icon and a label:
+##   - NutrientPill (PanelContainer) -> NutrientRow (HBoxContainer) -> NIcon (TextureRect), NLabel (Label)
+##   - SporeprintPill (PanelContainer) -> SporeRow (HBoxContainer) -> SIcon (TextureRect), SLabel (Label)
+
+extends HBoxContainer
+
+# --- Exported NodePaths so we do not rely on brittle string lookups ---
+@export_node_path("Label") var nutrient_label_path: NodePath
+@export_node_path("Label") var sporeprint_label_path: NodePath
+@export_node_path("Control") var nutrient_pill_path: NodePath
+@export_node_path("Control") var sporeprint_pill_path: NodePath
+
+# --- Resolved node references (typed) ---
+@onready var _nutrient_label: Label = get_node_or_null(nutrient_label_path)
+@onready var _spore_label: Label = get_node_or_null(sporeprint_label_path)
+@onready var _nutrient_pill: Control = get_node_or_null(nutrient_pill_path)
+@onready var _spore_pill: Control = get_node_or_null(sporeprint_pill_path)
+
+# --- Local cache so we can detect "increases" for pulse animations ---
+var _last_nutrient: int = -1
+var _last_sporeprint: int = -1
+
+func _ready() -> void:
+	# 1) Connect to ProfileManager signals if available
+	_connect_profile_signals()
+
+	# 2) Set initial text safely from current profile values
+	_refresh_from_profile()
+
+# Connect to signals we care about:
+# - resources_changed(nutrient, sporeprint): when counters change (e.g., coil completion)
+# - current_profile_changed(id): when the active profile changes
+func _connect_profile_signals() -> void:
+	if has_node("/root/ProfileManager"):
+		var pm: Node = get_node("/root/ProfileManager")
+		if pm.has_signal("resources_changed"):
+			pm.connect("resources_changed", Callable(self, "_on_resources_changed"))
+		if pm.has_signal("current_profile_changed"):
+			pm.connect("current_profile_changed", Callable(self, "_on_profile_changed"))
+
+# Pull values from ProfileManager once (used on _ready and when profile changes)
+func _refresh_from_profile() -> void:
+	var nutrient_value: int = 0
+	var sporeprint_value: int = 0
+
+	if has_node("/root/ProfileManager"):
+		var pm: Node = get_node("/root/ProfileManager")
+		if pm.has_method("get_resources"):
+			var res_v: Variant = pm.call("get_resources")
+			if typeof(res_v) == TYPE_DICTIONARY:
+				var res: Dictionary = res_v as Dictionary
+				var n_v: Variant = res.get("nutrient", 0)
+				var s_v: Variant = res.get("sporeprint", 0)
+				nutrient_value = int(n_v)
+				sporeprint_value = int(s_v)
+
+	_update_nutrient(nutrient_value)
+	_update_sporeprint(sporeprint_value)
+
+# Update the nutrient label and pulse if it increased
+func _update_nutrient(value: int) -> void:
+	if _nutrient_label != null:
+		_nutrient_label.text = str(value)
+
+	# Pulse only when value increases (reinforce gains, avoid distraction on non-changes)
+	var should_pulse: bool = false
+	if _last_nutrient >= 0:
+		if value > _last_nutrient:
+			should_pulse = true
+
+	_last_nutrient = value
+
+	if should_pulse:
+		_pulse(_nutrient_pill)
+
+# Update the sporeprint label and pulse if it increased
+func _update_sporeprint(value: int) -> void:
+	if _spore_label != null:
+		_spore_label.text = str(value)
+
+	var should_pulse: bool = false
+	if _last_sporeprint >= 0:
+		if value > _last_sporeprint:
+			should_pulse = true
+
+	_last_sporeprint = value
+
+	if should_pulse:
+		_pulse(_spore_pill)
+
+# Tiny scale pulse to make gains feel good without covering gameplay
+func _pulse(target: Control) -> void:
+	if target == null:
+		return
+	# Reset first to avoid compounding scales when many events happen quickly
+	target.scale = Vector2(1.0, 1.0)
+
+	var t: Tween = create_tween()
+	# Grow slightly, then return to 1.0
+	t.tween_property(target, "scale", Vector2(1.10, 1.10), 0.08)
+	t.tween_property(target, "scale", Vector2(1.00, 1.00), 0.12)
+
+# --- Signal handlers ---
+
+# Called whenever ProfileManager tells us the resources changed
+func _on_resources_changed(nutrient: int, sporeprint: int) -> void:
+	_update_nutrient(nutrient)
+	_update_sporeprint(sporeprint)
+
+# Called when current profile changes (we should re-read values)
+func _on_profile_changed(_id: String) -> void:
+	_refresh_from_profile()
+
+func _exit_tree() -> void:
+	if has_node("/root/ProfileManager"):
+		var pm := get_node("/root/ProfileManager")
+		if pm.is_connected("resources_changed", Callable(self, "_on_resources_changed")):
+			pm.disconnect("resources_changed", Callable(self, "_on_resources_changed"))
+		if pm.is_connected("current_profile_changed", Callable(self, "_on_profile_changed")):
+			pm.disconnect("current_profile_changed", Callable(self, "_on_profile_changed"))
+
+## end res://Scenes/UI/resource_counters.gd
+
+========================================================================
+FILE: verdant-coil/Scenes/UI/upgrade_row.gd
+========================================================================
+## res://Scenes/UI/upgrade_row.gd
+# res://UI/upgrade_row.gd
+# Godot 4.4.1
+# HUD row that mirrors the Crawler's UpgradeController and/or the global UpgradeState.
+
+extends HBoxContainer
+
+# --- Assign these in the editor ---
+@export_node_path("CanvasItem") var hardened_icon_path: NodePath
+@export_node_path("CanvasItem") var acid_icon_path: NodePath
+@export_node_path("CanvasItem") var ghost_icon_path: NodePath
+
+@export var active_modulate: Color = Color(1, 1, 1, 1)
+@export var inactive_modulate: Color = Color(0.55, 0.55, 0.55, 1)
+
+# --- Resolved nodes (typed) ---
+@onready var _hardened_icon: CanvasItem = get_node_or_null(hardened_icon_path)
+@onready var _acid_icon: CanvasItem     = get_node_or_null(acid_icon_path)
+@onready var _ghost_icon: CanvasItem    = get_node_or_null(ghost_icon_path)
+
+# Reference to the crawler's controller (set from ExploreMode)
+var _controller: Node = null
+
+func _ready() -> void:
+	# Optional: listen to global loadout so we can tint once at run start.
+	if has_node("/root/UpgradeState"):
+		var us: Node = get_node("/root/UpgradeState")
+		if us.has_signal("loadout_changed"):
+			us.connect("loadout_changed", Callable(self, "_refresh_from_state"))
+
+	_refresh_from_state()  # safe even if UpgradeState not present
+
+# --- Public: called by ExploreMode after spawning the crawler ---
+func set_controller(controller: Node) -> void:
+	_controller = controller
+	if _controller != null and _controller.has_signal("upgrade_changed"):
+		_controller.connect("upgrade_changed", Callable(self, "_on_controller_upgrade_changed"))
+	# Initial sync from the controller, if available
+	_refresh_from_controller()
+
+# --- Signal handler from UpgradeController (instant visual feedback) ---
+func _on_controller_upgrade_changed(upgrade: int, value: bool) -> void:
+	# Map enum -> icon and tint
+	if upgrade == _controller.Upgrade.HARDENED_SKIN:
+		_set_icon(_hardened_icon, value)
+	elif upgrade == _controller.Upgrade.ACID_SAC:
+		_set_icon(_acid_icon, value)
+	elif upgrade == _controller.Upgrade.GHOST_TRAIL:
+		_set_icon(_ghost_icon, value)
+
+# --- Read from UpgradeController if we have it ---
+func _refresh_from_controller() -> void:
+	if _controller == null:
+		return
+	var H: bool = false
+	var A: bool = false
+	var G: bool = false
+
+	if _controller.has_method("has_upgrade"):
+		H = bool(_controller.call("has_upgrade", _controller.Upgrade.HARDENED_SKIN))
+		A = bool(_controller.call("has_upgrade", _controller.Upgrade.ACID_SAC))
+		G = bool(_controller.call("has_upgrade", _controller.Upgrade.GHOST_TRAIL))
+
+	_set_icon(_hardened_icon, H)
+	_set_icon(_acid_icon, A)
+	_set_icon(_ghost_icon, G)
+
+# --- Fallback: read current values from UpgradeState (run start) ---
+func _refresh_from_state() -> void:
+	var H: bool = false
+	var A: bool = false
+	var G: bool = false
+
+	if has_node("/root/UpgradeState"):
+		var us: Node = get_node("/root/UpgradeState")
+		if us.has_method("has_hardened_skin"):
+			H = bool(us.call("has_hardened_skin"))
+		if us.has_method("has_acid_sac"):
+			A = bool(us.call("has_acid_sac"))
+		if us.has_method("has_ghost_trail"):
+			G = bool(us.call("has_ghost_trail"))
+
+	_set_icon(_hardened_icon, H)
+	_set_icon(_acid_icon, A)
+	_set_icon(_ghost_icon, G)
+
+# --- Tint helper (typed & explicit) ---
+func _set_icon(icon: CanvasItem, is_active: bool) -> void:
+	if icon == null:
+		return
+	if is_active:
+		icon.modulate = active_modulate
+	else:
+		icon.modulate = inactive_modulate
+
+## end res://Scenes/UI/upgrade_row.gd
+
+========================================================================
+FILE: verdant-coil/Scenes/World/explore_mode.gd
+========================================================================
+## explore_mode.gd
+extends Node2D
+
+const GridUtil := preload("res://System/grid.gd")
+
+const CRAWLER_SCENE: PackedScene = preload("res://Scenes/Actors/Crawler.tscn")
+@export var base_layer: TileMapLayer
+@export var walls_layer: TileMapLayer
+@export var hazard_layer: TileMapLayer
+@export var marker_layer: TileMapLayer
+
+func _ready() -> void:
+	# 1) If Builder handed us a coil via the Autoload, rebuild the map now.
+	#    Use consume_pending_coil() so we TAKE the snapshot and CLEAR it in the session.
+	if has_node("/root/CoilSession"):
+		var cs: Node = get_node("/root/CoilSession")
+		var data: Dictionary = {}
+
+		# Preferred: explicit API that deep-dupes and clears the stored snapshot
+		if cs.has_method("consume_pending_coil"):
+			var v: Variant = cs.call("consume_pending_coil")
+			if typeof(v) == TYPE_DICTIONARY:
+				data = v as Dictionary
+		else:
+			# Fallback for older builds: read the raw property once, then clear it.
+			var raw_v: Variant = cs.get("pending_coil")
+			if typeof(raw_v) == TYPE_DICTIONARY:
+				data = (raw_v as Dictionary).duplicate(true)  # defensive copy
+				cs.set("pending_coil", {})                    # clear to avoid leaks
+		if not data.is_empty():
+			_load_from_coil(data)  # fills base/walls/hazard/marker
+
+	# --- NEW: initialize global systems for this run ---
+	if has_node("/root/UpgradeState"):
+		var us: Node = get_node("/root/UpgradeState")
+		if us.has_method("load_active_loadout"):
+			us.call("load_active_loadout")
+
+	if has_node("/root/HealthSystem"):
+		var hs: Node = get_node("/root/HealthSystem")
+		if hs.has_method("reset"):
+			hs.call("reset", 3)  # Track-1 baseline: 3 HP
+
+	# 2) Spawn the crawler at the Spawn marker (or fallback)
+	var crawler: Area2D = CRAWLER_SCENE.instantiate()
+	crawler.base_layer   = base_layer
+	crawler.wall_layer   = walls_layer
+	crawler.hazard_layer = hazard_layer
+	crawler.marker_layer = marker_layer
+
+	var spawn_tile: Vector2i = get_spawn_position()
+	crawler.position = GridUtil.to_world(spawn_tile)  # your util converts map→world
+	add_child(crawler)
+
+	var row_path: String = "HUD/SafeArea/BottomCenter/UpgradeRow"
+	var row: Node = get_node_or_null(row_path)
+	if row != null and row.has_method("set_controller"):
+		var controller: Node = crawler.get_node_or_null("UpgradeController")
+		row.call("set_controller", controller)
+
+	# --- NEW: mirror global UpgradeState into the Crawler's UpgradeController once ---
+	_apply_upgrade_state_to_crawler(crawler)
+
+# NEW: copies global upgrade booleans into the crawler's UpgradeController node.
+func _apply_upgrade_state_to_crawler(crawler: Area2D) -> void:
+	if crawler == null:
+		return
+	# Find child node by name (scene uses "UpgradeController" as a child of Crawler)
+	var uc: Node = crawler.get_node_or_null("UpgradeController")
+	if uc == null:
+		return
+
+	# Read from UpgradeState singleton
+	var hardened: bool = false
+	var acid: bool = false
+	var ghost: bool = false
+
+	if has_node("/root/UpgradeState"):
+		var us: Node = get_node("/root/UpgradeState")
+		if us.has_method("has_hardened_skin"):
+			hardened = bool(us.call("has_hardened_skin"))
+		if us.has_method("has_acid_sac"):
+			acid = bool(us.call("has_acid_sac"))
+		if us.has_method("has_ghost_trail"):
+			ghost = bool(us.call("has_ghost_trail"))
+
+	# Set values explicitly using your controller's API:
+	# (We do not have direct setters, so we sync by toggling only when needed.)
+	if uc.has_method("has_upgrade") and uc.has_method("toggle_upgrade"):
+		# Hardened
+		var need_hardened: bool = hardened
+		var has_hardened_now: bool = bool(uc.call("has_upgrade", uc.Upgrade.HARDENED_SKIN))
+		if need_hardened and (not has_hardened_now):
+			uc.call("toggle_upgrade", uc.Upgrade.HARDENED_SKIN)
+		if (not need_hardened) and has_hardened_now:
+			uc.call("toggle_upgrade", uc.Upgrade.HARDENED_SKIN)
+
+		# Acid
+		var need_acid: bool = acid
+		var has_acid_now: bool = bool(uc.call("has_upgrade", uc.Upgrade.ACID_SAC))
+		if need_acid and (not has_acid_now):
+			uc.call("toggle_upgrade", uc.Upgrade.ACID_SAC)
+		if (not need_acid) and has_acid_now:
+			uc.call("toggle_upgrade", uc.Upgrade.ACID_SAC)
+
+		# Ghost
+		var need_ghost: bool = ghost
+		var has_ghost_now: bool = bool(uc.call("has_upgrade", uc.Upgrade.GHOST_TRAIL))
+		if need_ghost and (not has_ghost_now):
+			uc.call("toggle_upgrade", uc.Upgrade.GHOST_TRAIL)
+		if (not need_ghost) and has_ghost_now:
+			uc.call("toggle_upgrade", uc.Upgrade.GHOST_TRAIL)
+	print("UpgradeState → Crawler sync done (H:", hardened, ", A:", acid, ", G:", ghost, ")")
+
+## Returns the tile coordinates of the spawn tile marked with `is_spawn = true` in the Marker layer.
+## Falls back to (12, 23) with a warning if none is found.
+func get_spawn_position() -> Vector2i:
+	if marker_layer == null:
+		push_error("Marker layer not assigned")
+		return Vector2i(12, 23)
+
+	var spawn_cells: Array[Vector2i] = marker_layer.get_used_cells()
+	for coords in spawn_cells:
+		var td: TileData = marker_layer.get_cell_tile_data(coords)
+		if td == null:
+			continue
+		var is_spawn := td.get_custom_data("is_spawn") as bool
+		if is_spawn:
+			return coords
+	push_error("❌ No spawn tile found in Markers layer! Using fallback.")
+	return Vector2i(12, 23)
+
+# Load a full coil Dictionary into the four TileMapLayers.
+func _load_from_coil(data: Dictionary) -> void:
+	# Clear first so we don't mix scenes.
+	if base_layer: base_layer.clear()
+	if walls_layer: walls_layer.clear()
+	if hazard_layer: hazard_layer.clear()
+	if marker_layer: marker_layer.clear()
+
+	# Pull "layers" safely from Variant
+	var layers_v: Variant = data.get("layers", {})
+	if typeof(layers_v) != TYPE_DICTIONARY:
+		return
+
+	var layers: Dictionary = layers_v as Dictionary
+	_rebuild_layer_from_json(layers.get("base", []),   base_layer)
+	_rebuild_layer_from_json(layers.get("walls", []),  walls_layer)
+	_rebuild_layer_from_json(layers.get("hazard", []), hazard_layer)
+	_rebuild_layer_from_json(layers.get("marker", []), marker_layer)
+
+	print("ExploreMode: loaded coil from CoilSession (layers applied).")
+
+## Rebuild one TileMapLayer from JSON array entries:
+## [{x,y,source_id,atlas_x,atlas_y}, ...]
+func _rebuild_layer_from_json(arr_v: Variant, layer: TileMapLayer) -> void:
+	if layer == null:
+		return
+	if typeof(arr_v) != TYPE_ARRAY:
+		return
+	var arr: Array = arr_v
+	for cell_v in arr:
+		if typeof(cell_v) != TYPE_DICTIONARY:
+			continue
+		var cell: Dictionary = cell_v as Dictionary
+		if not (cell.has("x") and cell.has("y") and cell.has("source_id")):
+			continue
+		var coords: Vector2i = Vector2i(int(cell["x"]), int(cell["y"]))
+		var sid: int = int(cell["source_id"])
+		var ac: Vector2i = Vector2i.ZERO
+		if cell.has("atlas_x") and cell.has("atlas_y"):
+			ac = Vector2i(int(cell["atlas_x"]), int(cell["atlas_y"]))
+		layer.set_cell(coords, sid, ac)
+
+## end explore_mode.gd
+
+========================================================================
+FILE: verdant-coil/System/autoload/coil_session.gd
+========================================================================
+## coil_session.gd
+extends Node
+# Holds the coil we want to test and swaps to ExploreMode.
+
+# Set this to your ExploreMode scene path.
+@export var explore_scene_path: String = "res://Scenes/World/ExploreMode.tscn"
+@export var builder_scene_path: String = "res://Scenes/BuilderMode/BuilderMode.tscn"
+@export var heartroot_scene_path: String = "res://Scenes/Heartroot/heartroot.tscn"
+
+var pending_coil: Dictionary = {}  # the last coil handed off from Builder
+var _origin: String = "hub"   # "builder" or "hub"
+var _last_run_coil: Dictionary = {}
+
+## Start ExploreMode with an explicit snapshot (Builder hands it in)
+func start_coil(coil: Dictionary, origin: String = "hub") -> void:
+	pending_coil = coil
+	_origin = origin
+	_last_run_coil = coil.duplicate(true)  # keep a clean copy for retry
+
+	# Check if the coil that was loaded has the correct meta data
+	var meta := coil.get("meta", {}) as Dictionary
+	var used := int(meta.get("biomass_used", -1))
+	var cap  := int(meta.get("biomass_cap", -1))
+	if used >= 0 and cap >= 0:
+		print("CoilSession: start_coil → biomass ", used, "/", cap, ".")
+
+	get_tree().change_scene_to_file(explore_scene_path)
+
+func end_coil(success: bool = false) -> void:
+	# Only award on SUCCESSFUL completion from Hub-origin runs.
+	if success and has_node("/root/ProfileManager") and (_origin == "hub"):
+		var pm: Node = get_node("/root/ProfileManager")
+		if pm.has_method("add_nutrient"):
+			var REWARD_PER_COIL: int = 1  # Phase 1.6(b) simple reward
+			print("Added ", REWARD_PER_COIL, " nutrient on win!")
+			pm.call("add_nutrient", REWARD_PER_COIL)
+	# Return to where we came from (no reward on failure).
+	if _origin == "builder":
+		return_to_builder()
+	else:
+		return_to_heartroot()
+
+func retry_last_coil() -> void:
+	if _last_run_coil.is_empty():
+		push_error("CoilSession.retry_last_coil: no previous coil to retry.")
+		return
+	# Queue a fresh copy, so Explore can consume it again
+	pending_coil = _last_run_coil.duplicate(true)
+	get_tree().change_scene_to_file(explore_scene_path)
+
+# Keep older call sites working (Explore/LoseOverlay/Heartroot).
+func start_playtest(coil: Dictionary, origin: String = "hub") -> void:
+	start_coil(coil, origin)
+
+func end_playtest() -> void:
+	end_coil()
+
+## Return the pending coil snapshot and clear it for the next session
+func consume_pending_coil() -> Dictionary:
+	var out: Dictionary = {}
+	if typeof(pending_coil) == TYPE_DICTIONARY:
+		# Deep-duplicate to keep the original snapshot intact if someone mutates later
+		out = pending_coil.duplicate(true)
+	pending_coil = {}
+	print("CoilSession: consumed pending coil.")
+	return out
+
+## Return to BuilderMode; Builder will restore from the session snapshot
+func return_to_builder() -> void:
+	print("CoilSession: return_to_builder() called.")
+	if builder_scene_path == "":
+		push_error("CoilSession: builder_scene_path is empty.")
+		return
+	get_tree().change_scene_to_file(builder_scene_path)
+
+func return_to_heartroot() -> void:
+	print("CoilSession: return_to_heartroot() called.")
+	if heartroot_scene_path == "":
+		push_error("CoilSession: heartroot_scene_path is empty.")
+		return
+	get_tree().change_scene_to_file(heartroot_scene_path)
+
+## end coil_session.gd
+
+========================================================================
+FILE: verdant-coil/System/autoload/health_system.gd
+========================================================================
+# res://System/autoload/health_system.gd
+# Godot 4.4.1
+# Role: Global health authority for the current run.
+# - Holds current and max health.
+# - Emits signals when health changes or reaches zero.
+# - No UI here; HUD will subscribe later.
+extends Node
+
+# --- Signals (other nodes listen to these) ---
+signal health_changed(current: int, max: int)
+signal died()  # Emitted exactly once when health reaches 0 from >0.
+
+# --- State (explicit ints; defaults are safe and small) ---
+var _max_health: int = 3
+var _current_health: int = 3
+var _is_dead: bool = false
+
+# Called once after autoload is ready.
+func _ready() -> void:
+	# Ensure internal invariants are valid at startup.
+	# The HUD will query immediately, so emit a first change.
+	#_emit_health_changed()
+	print("health_system _ready() running...")
+
+# Public API: reset health for a new run.
+# Example: reset(3) → sets max=3, current=3, clears death flag.
+func reset(max_health: int) -> void:
+	if max_health < 1:
+		max_health = 1  # Prevent invalid max
+	_max_health = max_health
+	_current_health = _max_health
+	_is_dead = false
+	_emit_health_changed()
+
+# Public API: apply damage. Source is a string label for future analytics ("acid", "enemy", etc.).
+# Damage cannot be negative. Health is clamped to [0, max].
+func apply_damage(amount: int, _source: String = "") -> void:
+	# The _source parameter is intentionally unused for now.
+	# We keep it so callers can pass context (e.g., "acid", "spike") for future VFX/SFX.
+	# Current logic only cares about 'amount'.
+	if amount < 0:
+		amount = 0
+	if _is_dead:
+		return  # Ignore further damage after death has occurred
+
+	var new_value: int = _current_health - amount
+	if new_value < 0:
+		new_value = 0
+	_current_health = new_value
+	_emit_health_changed()
+
+	# Check for death transition: not dead before, now exactly 0.
+	if (not _is_dead) and _current_health == 0:
+		_is_dead = true
+		emit_signal("died")
+
+# Public API: heal. Clamped to max.
+func heal(amount: int) -> void:
+	if amount < 0:
+		amount = 0
+	if _is_dead:
+		return  # Dead runs cannot heal (simple rule for now)
+	var new_value: int = _current_health + amount
+	if new_value > _max_health:
+		new_value = _max_health
+	_current_health = new_value
+	_emit_health_changed()
+
+# Public API: getters (clear and explicit).
+func get_current() -> int:
+	return _current_health
+
+func get_max() -> int:
+	return _max_health
+
+func is_dead() -> bool:
+	return _is_dead
+
+# Internal helper: notify listeners of a health change.
+func _emit_health_changed() -> void:
+	emit_signal("health_changed", _current_health, _max_health)
+	print("emit_signal(\"health_changed\", _current_health, _max_health)")
+	print("current_health: ", _current_health, "; max_health: ", _max_health)
+
+# end res://System/autoload/health_system.gd
+
+========================================================================
+FILE: verdant-coil/System/autoload/upgrade_state.gd
+========================================================================
+## res://System/upgrade_state.gd
+## Godot 4.4.1
+## Role: Global runtime view of selected upgrades for this play session.
+## - Reads from ProfileManager (later). For Track 1, defaults to false.
+## - ExploreMode will call load_active_loadout() at start of a run.
+extends Node
+
+# --- Signals ---
+signal loadout_changed()
+
+# --- State (explicit booleans) ---
+var _hardened_skin: bool = false
+var _acid_sac: bool = false
+var _ghost_trail: bool = false
+
+func _ready() -> void:
+	# Keep defaults for editor runs. We will call load_active_loadout()
+	# when Explore starts a run.
+	pass
+
+# For Phase 1.6:
+# - Every run starts with ALL upgrades OFF.
+# - We ignore any "desired_loadout" stored in profiles for now.
+func load_active_loadout() -> void:
+	_hardened_skin = false
+	_acid_sac = false
+	_ghost_trail = false
+	emit_signal("loadout_changed")
+
+# Public getters (explicit).
+func has_hardened_skin() -> bool:
+	return _hardened_skin
+
+func has_acid_sac() -> bool:
+	return _acid_sac
+
+func has_ghost_trail() -> bool:
+	return _ghost_trail
+
+# Dev helper: temporary override for testing (used under GameFlags dev mode).
+func set_runtime_overrides(hardened: bool, acid: bool, ghost: bool) -> void:
+	_hardened_skin = hardened
+	_acid_sac = acid
+	_ghost_trail = ghost
+	emit_signal("loadout_changed")
+
+## end res://System/upgrade_state.gd
+
+========================================================================
+FILE: verdant-coil/System/brush_entry.gd
+========================================================================
+## brush_entry.gd
+# One "brush" definition the Builder can paint with.
+
+extends Resource
+class_name BrushEntry
+
+# Human-readable name shown in status messages
+@export var display_name: String = ""
+
+# Which legality rule profile to apply when placing this brush.
+# Keep these strings exactly as written to match the painter.
+@export_enum("BASE", "WALL", "POOL", "MARKER", "ERASER")
+var rule_profile: String = "BASE"
+
+# Which TileMap layer this brush paints to. (ERASER ignores this.)
+# Uses labels in the Inspector but still stores an int (0..3).
+@export_enum("BASE", "WALLS", "HAZARDS", "MARKERS")
+var target_layer: int = 0
+
+# TileSet placement info (ERASER ignores these).
+@export var source_id: int = -1
+@export var atlas_coords: Vector2i = Vector2i.ZERO
+
+# Optional: only used by POOL brushes so we can keep acid vs sticky separate.
+# Example: "acid" or "sticky".
+@export var hazard_kind: String = ""
+
+# Optional icon for your UI buttons (not required by the painter).
+@export var icon: Texture2D
+
+## end brush_entry.gd
+
+========================================================================
+FILE: verdant-coil/System/brush_registry.gd
+========================================================================
+## brush_registry.gd
+# A data container holding all available brushes for the Builder.
+
+extends Resource
+class_name BrushRegistry
+
+@export var brushes: Array[BrushEntry] = []
+
+## end brush_registry.gd
+
+========================================================================
+FILE: verdant-coil/System/build_info.gd
+========================================================================
+## build_info.gd
+
+extends Node
+
+@export var major: int = 0
+@export var minor: int = 1
+@export var patch: int = 5
+@export var include_build_date: bool = true
+@export var tag: String = ""   # e.g. "a" / "b"
+
+func version_string() -> String:
+	var core := "%d.%d.%d" % [major, minor, patch]
+	if include_build_date:
+		core += "." + _yymmdd_today()
+	if tag.strip_edges() != "":
+		core += tag
+	return core
+
+func _yymmdd_today() -> String:
+	var dt := Time.get_datetime_dict_from_system(false)
+	var yy := int(dt["year"]) % 100
+	var mm := int(dt["month"])
+	var dd := int(dt["day"])
+	return "%02d%02d%02d" % [yy, mm, dd]
+
+## end build_info.gd
+
+========================================================================
+FILE: verdant-coil/System/coil_io.gd
+========================================================================
+## res://System/coil_io.gd
+## Pure save/load helpers for TileMapLayers.
+extends RefCounted
+
+static func serialize_layer(layer: TileMapLayer) -> Array:
+	var out: Array = []
+	if layer == null:
+		return out
+	for coords in layer.get_used_cells():
+		var source_id: int = layer.get_cell_source_id(coords)
+		if source_id == -1:
+			continue
+		var atlas: Vector2i = layer.get_cell_atlas_coords(coords)
+		var cell: Dictionary = {}
+		cell["x"] = coords.x
+		cell["y"] = coords.y
+		cell["source_id"] = source_id
+		cell["atlas_x"] = atlas.x
+		cell["atlas_y"] = atlas.y
+		out.append(cell)
+	return out
+
+
+static func rebuild_layer_from_json(arr_v: Variant, layer: TileMapLayer) -> void:
+	if layer == null:
+		return
+	if typeof(arr_v) != TYPE_ARRAY:
+		return
+	var arr: Array = arr_v
+	for cell_v in arr:
+		if typeof(cell_v) != TYPE_DICTIONARY:
+			continue
+		var cell: Dictionary = cell_v
+		if not (cell.has("x") and cell.has("y") and cell.has("source_id")):
+			continue
+		var coords: Vector2i = Vector2i(int(cell["x"]), int(cell["y"]))
+		var source_id: int = int(cell["source_id"])
+		var ac: Vector2i = Vector2i.ZERO
+		if cell.has("atlas_x") and cell.has("atlas_y"):
+			ac = Vector2i(int(cell["atlas_x"]), int(cell["atlas_y"]))
+		layer.set_cell(coords, source_id, ac)
+
+
+static func apply_coil(
+	data: Dictionary,
+	base_layer: TileMapLayer,
+	walls_layer: TileMapLayer,
+	hazard_layer: TileMapLayer,
+	marker_layer: TileMapLayer
+) -> void:
+	# Clear targets first
+	if base_layer != null:
+		base_layer.clear()
+	if walls_layer != null:
+		walls_layer.clear()
+	if hazard_layer != null:
+		hazard_layer.clear()
+	if marker_layer != null:
+		marker_layer.clear()
+
+	# Build from JSON
+	var layers_any: Variant = data.get("layers", {})
+	if typeof(layers_any) != TYPE_DICTIONARY:
+		return
+	var layers: Dictionary = layers_any
+
+	if layers.has("base"):
+		rebuild_layer_from_json(layers["base"], base_layer)
+	if layers.has("walls"):
+		rebuild_layer_from_json(layers["walls"], walls_layer)
+	if layers.has("hazard"):
+		rebuild_layer_from_json(layers["hazard"], hazard_layer)
+	if layers.has("marker"):
+		rebuild_layer_from_json(layers["marker"], marker_layer)
+
+## end res://System/coil_io.gd
+
+========================================================================
+FILE: verdant-coil/System/coil_query.gd
+========================================================================
+# res://System/coil_query.gd
+# Read-only tile queries shared by Builder/Explore/etc. (instance-based)
+extends RefCounted
+class_name CoilQuery
+
+func _get_tile_data(layer: TileMapLayer, coords: Vector2i) -> TileData:
+	if layer == null:
+		return null
+	if layer.get_cell_source_id(coords) == -1:
+		return null
+	return layer.get_cell_tile_data(coords)
+
+func has_tile(layer: TileMapLayer, coords: Vector2i) -> bool:
+	if layer == null:
+		return false
+	return layer.get_cell_source_id(coords) != -1
+
+func has_base(base_layer: TileMapLayer, coords: Vector2i) -> bool:
+	return has_tile(base_layer, coords)
+
+func has_wall(walls_layer: TileMapLayer, coords: Vector2i) -> bool:
+	return has_tile(walls_layer, coords)
+
+func get_hazard_kind(hazard_layer: TileMapLayer, coords: Vector2i) -> String:
+	var td: TileData = _get_tile_data(hazard_layer, coords)
+	if td == null:
+		return ""
+	var v = td.get_custom_data("hazard")
+	if v is String:
+		return String(v)
+	return ""
+
+func is_solid_wall(walls_layer: TileMapLayer, coords: Vector2i) -> bool:
+	var td: TileData = _get_tile_data(walls_layer, coords)
+	if td == null:
+		# No wall tile at all -> not solid.
+		return false
+	# Preferred: explicit boolean
+	var v = td.get_custom_data("is_solid")
+	if v is bool:
+		return v
+	# Fallback: string kind ("SOLID" / "DIGEST")
+	var k = td.get_custom_data("wall_kind")
+	if k is String:
+		return String(k) == "SOLID"
+	# Unknown metadata -> be conservative.
+	return true
+
+========================================================================
+FILE: verdant-coil/System/coil_validator.gd
+========================================================================
+## coil_validator.gd
+## Central map validation: spawn/heartroot counts, reachability, biomass.
+extends RefCounted
+class_name CoilValidator
+
+const CoilQueryScript: GDScript = preload("res://System/coil_query.gd")
+
+static func validate(
+	base_layer: TileMapLayer,
+	walls_layer: TileMapLayer,
+	hazard_layer: TileMapLayer,
+	marker_layer: TileMapLayer,
+	biomass_used: int,
+	biomass_cap: int,
+	ignore_biomass: bool
+) -> Dictionary:
+	var messages: Array[String] = []
+	var spawn: Vector2i = Vector2i(-999999, -999999)
+	var heart: Vector2i = Vector2i(-999999, -999999)
+
+	# 1) Exactly one Spawn and one Heartroot.
+	var spawn_cells: Array[Vector2i] = _find_marker_cells(marker_layer, "is_spawn")
+	var heart_cells: Array[Vector2i] = _find_marker_cells(marker_layer, "is_goal")
+
+	if spawn_cells.size() != 1:
+		messages.append("❌ Place exactly one Spawn (found %d)." % spawn_cells.size())
+	else:
+		spawn = spawn_cells[0]
+
+	if heart_cells.size() != 1:
+		messages.append("❌ Place exactly one Heartroot (found %d)." % heart_cells.size())
+	else:
+		heart = heart_cells[0]
+
+	# 2) Path exists from Spawn -> Heartroot.
+	if spawn.x > -900000 and heart.x > -900000:
+		var q: CoilQuery = CoilQueryScript.new()
+		var reachable := _is_reachable(q, base_layer, walls_layer, hazard_layer, spawn, heart)
+		if not reachable:
+			messages.append("❌ Heartroot unreachable from Spawn.")
+
+	# 3) Biomass cap (unless dev bypass is enabled).
+	if not ignore_biomass and biomass_used > biomass_cap:
+		var over: int = biomass_used - biomass_cap
+		messages.append("❌ Biomass over cap by %d (used %d / %d)." % [over, biomass_used, biomass_cap])
+
+	var ok_flag: bool = messages.is_empty()
+
+	return {
+		"ok": ok_flag,
+		"messages": messages,
+		"spawn": spawn,
+		"heart": heart
+	}
+
+
+static func _find_marker_cells(marker_layer: TileMapLayer, flag_key: String) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	if marker_layer == null:
+		return out
+
+	for c in marker_layer.get_used_cells():
+		var td: TileData = marker_layer.get_cell_tile_data(c)
+		if td != null:
+			var raw_flag = td.get_custom_data(flag_key)
+			var has_flag := false
+			if raw_flag is bool:
+				has_flag = bool(raw_flag)
+			if has_flag:
+				out.append(c)
+
+	return out
+
+
+static func _is_reachable(
+	q: CoilQuery,
+	base_layer: TileMapLayer,
+	walls_layer: TileMapLayer,
+	_hazard_layer: TileMapLayer,
+	start: Vector2i,
+	goal: Vector2i
+) -> bool:
+	if start == goal:
+		return true
+
+	var visited: Dictionary = {}
+	var queue: Array[Vector2i] = []
+	queue.append(start)
+	visited[start] = true
+
+	# 4-way BFS.
+	var dirs: Array[Vector2i] = [
+		Vector2i(1, 0), Vector2i(-1, 0),
+		Vector2i(0, 1), Vector2i(0, -1)
+	]
+
+	while queue.size() > 0:
+		var cur: Vector2i = queue.pop_front()
+		if cur == goal:
+			return true
+
+		for d in dirs:
+			var nxt: Vector2i = cur + d
+
+			# Must be on Flesh.
+			if not q.has_base(base_layer, nxt):
+				continue
+
+			# Solid walls block (digest walls do not).
+			if q.is_solid_wall(walls_layer, nxt):
+				continue
+
+			if not visited.has(nxt):
+				visited[nxt] = true
+				queue.append(nxt)
+
+	return false
+
+========================================================================
+FILE: verdant-coil/System/debug/scene_tree_printer.gd
+========================================================================
+## scene_tree_printer.gd
+extends Node
+class_name SceneTreePrinter
+
+# ------------------------------------------------------------------------------
+# BASIC CONTROLS (turn behavior on/off and choose where we start printing)
+# ------------------------------------------------------------------------------
+
+## If true, printing happens automatically in _ready().
+@export var printing_on: bool = true
+
+## If true, start from the engine's root (/root). If false, start from this node (self).
+@export var start_from_root: bool = true
+
+## Optional: if you set this to a valid NodePath, we start from that node instead.
+## This overrides start_from_root/self.
+@export var start_node_path: NodePath
+
+## Limit how deep we recurse into the tree.
+## -1 = no limit. 0 = just the start node. 1 = start node and its children, etc.
+@export var max_depth: int = -1
+
+# ------------------------------------------------------------------------------
+# FILTERS (leave empty to disable that filter)
+# ------------------------------------------------------------------------------
+
+## Only print node names that match this regex. Example: "^UI" prints names starting with "UI".
+@export var name_regex: String = ""
+
+## If non-empty, only nodes whose type is IN this list will be printed.
+## Example: ["TileMap", "Control"].
+@export var include_types: PackedStringArray = []
+
+## If non-empty, nodes whose type is IN this list will be skipped.
+## Example: ["CollisionShape2D"].
+@export var exclude_types: PackedStringArray = []
+
+# ------------------------------------------------------------------------------
+# EXTRA INFO (choose what extra facts to show for each node)
+# ------------------------------------------------------------------------------
+
+## Show which groups a node belongs to (useful for debugging signal buses and filters).
+@export var include_groups: bool = false
+
+## Show the unique path to the node (e.g. /root/Main/Level/Cam).
+@export var include_path: bool = false
+
+## Show the resource path of the attached script, if any (e.g. res://player.gd).
+@export var include_script_path: bool = false
+
+## Show how many children the node has.
+@export var include_children_count: bool = false
+
+## Show the node's instance ID (helpful for correlating logs to specific nodes).
+@export var include_instance_id: bool = false
+
+# ------------------------------------------------------------------------------
+# OUTPUT OPTIONS (choose where the text goes and in what order)
+# ------------------------------------------------------------------------------
+
+## If true, siblings are printed in alphabetical order by name.
+@export var sort_children_by_name: bool = false
+
+## Print to the Output console.
+@export var output_to_console: bool = true
+
+## Also write to a file under user:// (your app data directory).
+@export var output_to_file: bool = false
+
+## The file to write if output_to_file is true.
+@export var output_file_path: String = "user://scene_tree.txt"
+
+## Copy the full output to your clipboard (handy for sharing or quick pasting).
+@export var copy_to_clipboard: bool = false
+
+# ------------------------------------------------------------------------------
+# INTERNALS (you normally don't need to touch these)
+# ------------------------------------------------------------------------------
+
+## We build the output as a list of lines, then join once at the end for speed.
+var _lines: PackedStringArray = []
+
+## Compiled regular expression (if name_regex is set and valid).
+var _rx: RegEx
+
+func _ready() -> void:
+	# 1) Compile the regex (if one was provided). If it's invalid, we warn and ignore it.
+	if name_regex.strip_edges() != "":
+		_rx = RegEx.new()
+		var err := _rx.compile(name_regex)
+		if err != OK:
+			push_warning("SceneTreePrinter: Invalid name_regex; ignoring it.")
+			_rx = null
+
+	# 2) If printing is disabled, do nothing.
+	if not printing_on:
+		return
+
+	# 3) Figure out which node to start from (root, self, or a specific NodePath).
+	var root := _resolve_start_node()
+	if root == null:
+		push_warning("SceneTreePrinter: Start node not found; nothing to print.")
+		return
+
+	# 4) Build the output lines recursively.
+	_lines.clear()
+	_print_node_recursive(root, 0)
+
+	# 5) Join once and send the text wherever you asked (console, file, clipboard).
+	var text := "\n".join(_lines)
+
+	if output_to_console:
+		print(text)
+
+	if output_to_file:
+		_write_to_file(text)
+
+	if copy_to_clipboard:
+		# Godot 4.x: clipboard lives on DisplayServer.
+		DisplayServer.clipboard_set(text)
+
+## Decide which node to begin from based on your export settings.
+func _resolve_start_node() -> Node:
+	# Highest priority: explicit NodePath, if provided and valid.
+	if String(start_node_path) != "":
+		if has_node(start_node_path):
+			return get_node(start_node_path)
+		else:
+			push_warning("SceneTreePrinter: start_node_path not found in this scene.")
+			return null
+
+	# Otherwise, root or self.
+	if start_from_root:
+		return get_tree().root
+	return self
+
+## Recursively walk the tree and add one line per node.
+## - depth: how many levels deep we are (used for indentation).
+func _print_node_recursive(node: Node, depth: int) -> void:
+	# Respect the depth limit, if one is set.
+	if max_depth >= 0 and depth > max_depth:
+		return
+
+	# FILTER: name regex (if set). If the name doesn't match, we SKIP printing this node
+	# but we STILL recurse into its children so that deeper matches aren't lost.
+	if _rx and _rx.search(node.name) == null:
+		for child in _get_children(node):
+			_print_node_recursive(child, depth + 1)
+		return
+
+	# FILTER: include/exclude by type. We compare against get_class() (e.g. "Control", "TileMap").
+	var cls := node.get_class()
+	if include_types.size() > 0 and not _class_matches(cls, include_types):
+		for child in _get_children(node):
+			_print_node_recursive(child, depth + 1)
+		return
+
+	if exclude_types.size() > 0 and _class_matches(cls, exclude_types):
+		for child in _get_children(node):
+			_print_node_recursive(child, depth + 1)
+		return
+
+	# Build a single readable line for THIS node.
+	var parts: PackedStringArray = []
+
+	# Indentation visually shows the hierarchy. Each depth adds a "> ".
+	parts.append("> ".repeat(depth) + node.name + " (" + cls + ")")
+
+	# Optional extra facts (toggle in the Inspector).
+	if include_children_count:
+		parts.append("[children=" + str(node.get_child_count()) + "]")
+
+	if include_instance_id:
+		parts.append("[id=" + str(node.get_instance_id()) + "]")
+
+	if include_path:
+		# get_path() returns a NodePath; wrap with str() to concatenate safely.
+		parts.append("[path=" + str(node.get_path()) + "]")
+
+	if include_script_path:
+		# get_script() can be null or a Variant; cast to Script for safety.
+		var scr: Script = node.get_script() as Script
+		if scr:
+			var sp := scr.resource_path
+			if sp != "":
+				parts.append("[script=" + sp + "]")
+
+	if include_groups:
+		# get_groups() returns an Array of group names. Convert entries to strings and join.
+		var groups_arr: Array = []
+		for g in node.get_groups():
+			groups_arr.append(str(g))
+		if groups_arr.size() > 0:
+			parts.append("[groups=" + ", ".join(groups_arr) + "]")
+
+	# Add the final line for this node to our list.
+	_lines.append(" ".join(parts))
+
+	# Recurse into children.
+	for child in _get_children(node):
+		_print_node_recursive(child, depth + 1)
+
+## Return this node's children, optionally sorted by name for stable output.
+func _get_children(node: Node) -> Array:
+	var children := node.get_children()  # Array[Node]
+	if sort_children_by_name:
+		children.sort_custom(func(a, b): return a.name < b.name)
+	return children
+
+## Check if a class name matches any name in the provided list exactly (case-sensitive).
+## Tip: If you want "ancestry" matching (e.g. treat Button as Control), include both names
+## in include_types, or extend this function later to walk the inheritance chain.
+func _class_matches(cls: String, list: PackedStringArray) -> bool:
+	for t in list:
+		if cls == t:
+			return true
+	return false
+
+## Write the final text to disk. Uses user:// so it works on every platform.
+func _write_to_file(text: String) -> void:
+	var f := FileAccess.open(output_file_path, FileAccess.WRITE)
+	if f:
+		f.store_string(text)
+		f.close()
+	else:
+		push_warning("SceneTreePrinter: Could not open file for writing: " + output_file_path)
+
+
+## end scene_tree_printer.gd
+
+========================================================================
+FILE: verdant-coil/System/game_flags.gd
+========================================================================
+## System/game_flags.gd
+# Global developer flags and toggle logic (Godot 4.4.1)
+
+extends Node
+
+signal dev_mode_changed(enabled: bool)
+
+var dev_mode_enabled: bool = false
+var cheats_enabled: bool = false  # Master switch for all in-game cheats
+
+var ignore_biomass_limit: bool = false
+
+func _ready() -> void:
+	# Enable dev mode automatically in the editor or if the build carries the 'dev' feature.
+	dev_mode_enabled = Engine.is_editor_hint() or OS.has_feature("dev")
+	emit_signal("dev_mode_changed", dev_mode_enabled)
+
+	# Cheats are allowed in editor, or if build carries a 'cheats' feature flag.
+	# In playtest/release exports we simply won't include 'cheats'.
+	cheats_enabled = Engine.is_editor_hint() or OS.has_feature("cheats")
+
+func _unhandled_input(event: InputEvent) -> void:
+	# Runtime secret toggle: Ctrl+Alt+D (project action 'toggle_dev_mode')
+	if event.is_action_pressed("toggle_dev_mode"):
+		toggle_dev_mode()
+
+func toggle_dev_mode() -> void:
+	dev_mode_enabled = !dev_mode_enabled
+	emit_signal("dev_mode_changed", dev_mode_enabled)
+	print("Dev Mode:", dev_mode_enabled)
+
+## end game_flags.gd
+
+========================================================================
+FILE: verdant-coil/System/grid.gd
+========================================================================
+## grid.gd
+# Centralized grid positioning utilities for Verdant Coil
+# Handles consistent conversion between grid coordinates (Vector2i) and world positions (Vector2)
+# Use this for all crawler, hazard, tile, and object placement logic across the project
+
+extends Node
+
+## TILE_SIZE: Defines the size of each grid cell in pixels.
+## Changing this updates all snapping and positioning globally.
+const TILE_SIZE: int = 32
+
+## Converts a tile coordinate (Vector2i) to a world-space position (Vector2).
+## By default, this returns the *center* of the tile.
+## If `align_to_center = false`, it returns the *top-left corner* of the tile.
+static func to_world(tile_coords: Vector2i, align_to_center := true) -> Vector2:
+	# Convert to float Vector2 first to allow addition with subpixel offset
+	var pos := Vector2(tile_coords) * TILE_SIZE
+	if align_to_center:
+		pos += Vector2(TILE_SIZE * 0.5, TILE_SIZE * 0.5)
+	return pos
+
+## Converts a world-space position (Vector2) to the corresponding tile coordinate (Vector2i).
+## Assumes tiles are centered when snapped (default project convention).
+static func to_tile_coords(world_pos: Vector2) -> Vector2i:
+	var offset := Vector2(TILE_SIZE * 0.5, TILE_SIZE * 0.5)  # Correct for center alignment
+	return ((world_pos - offset) / TILE_SIZE).floor()
+
+## Snaps any world-space position to the nearest grid tile, returning a world-space Vector2.
+## This is useful for ensuring alignment even from rough input or procedural placement.
+## Use `align_to_center = false` if placing art that expects top-left anchoring (e.g. tiles).
+static func snap_position(world_pos: Vector2, align_to_center := true) -> Vector2:
+	var tile_coords := to_tile_coords(world_pos)
+	return to_world(tile_coords, align_to_center)
+
+## end grid.gd
+
+========================================================================
+FILE: verdant-coil/System/health_system.gd
+========================================================================
+extends Node
+
+========================================================================
+FILE: verdant-coil/System/profile_manager.gd
+========================================================================
+ ## res://System/profile_manager.gd
+ ## Godot 4.4.1 — Minimal Player Profile manager
+ ## Strict typing, JSON stored in user://Profiles/
+
+extends Node
+
+signal profile_list_changed
+signal current_profile_changed(profile_id: String)
+# --- Signals for UI to subscribe to (resource counters + upgrades panel) ---
+signal resources_changed(nutrient: int, sporeprint: int)
+signal upgrades_changed()
+
+# --- Whitelist of known upgrade keys so we can validate input everywhere ---
+const UPGRADE_KEYS: Array[String] = [
+	"HARDENED_SKIN",
+	"ACID_SAC",
+	"GHOST_TRAIL"
+]
+const DIR_PROFILES: String = "user://Profiles"
+const PATH_MANIFEST: String = "user://Profiles/manifest.json"
+
+# --- Internal State (cached after load) ---
+var _manifest: Dictionary = {}                 # {"version":1, "current_profile_id":"...", "items":[...]}
+
+# --- Lifecycle ---
+func _ready() -> void:
+	# Ensure folder exists
+	if DirAccess.open(DIR_PROFILES) == null:
+		var err: int = DirAccess.make_dir_recursive_absolute(DIR_PROFILES)
+		if err != OK:
+			push_error("ProfileManager: failed to create " + DIR_PROFILES)
+			return
+
+	# Load or create manifest
+	_manifest = _load_manifest()
+	_dedupe_manifest()
+	_save_manifest()
+
+	# If empty, create a default profile
+	var items: Array = []
+	var items_v: Variant = _manifest.get("items", [])
+	if typeof(items_v) == TYPE_ARRAY:
+		items = items_v as Array
+
+	if items.size() == 0:
+		var new_id: String = _create_profile_file("Player 1")
+		_append_manifest_item(new_id, "Player 1")
+		_set_current_profile_id(new_id)
+		_save_manifest()
+
+	emit_signal("profile_list_changed")
+	emit_signal("current_profile_changed", get_current_profile_id())
+
+# --- Public API (strict typed) ---
+
+func get_profiles() -> Array:
+	# Returns a shallow copy of items from manifest
+	var out: Array = []
+	var items_v: Variant = _manifest.get("items", [])
+	if typeof(items_v) == TYPE_ARRAY:
+		var items: Array = items_v as Array
+		for v in items:
+			if typeof(v) == TYPE_DICTIONARY:
+				out.append((v as Dictionary).duplicate(false))
+	return out
+
+func get_current_profile_id() -> String:
+	var id_v: Variant = _manifest.get("current_profile_id", "")
+	return String(id_v)
+
+func get_current_profile() -> Dictionary:
+	var id: String = get_current_profile_id()
+	return _load_profile_file(id)
+
+# Create a new profile, append to manifest, persist, and notify UI
+func create_profile(display_name: String) -> String:
+	if display_name.strip_edges() == "":
+		display_name = "Player"
+	var new_id: String = _create_profile_file(display_name)  # writes the profile_*.json
+	_append_manifest_item(new_id, display_name)              # add one entry (no duplicates)
+	_save_manifest()
+	emit_signal("profile_list_changed")
+	return new_id
+
+func _create_profile_file(display_name: String) -> String:
+	# Create a brand-new profile JSON with defaulted, explicit fields.
+	var id: String = _new_id()
+	var now: String = _iso_timestamp()
+
+	# --- Default resources (Phase 1.6 economy) ---
+	var default_nutrient: int = 0
+	var default_sporeprint: int = 0
+
+	# --- Default upgrade ownership (none owned at start) ---
+	var default_owned: Dictionary = {}
+	for key in UPGRADE_KEYS:
+		default_owned[key] = false
+
+	# --- Default desired loadout (nothing active until owned + toggled) ---
+	var default_loadout: Dictionary = {}
+	for key in UPGRADE_KEYS:
+		default_loadout[key] = false
+
+	var data: Dictionary = {
+		"id": id,
+		"display_name": display_name,
+		"avatar_color": "#87CEEB",
+		"last_opened_coil_path": "",
+		"version": 1,
+		"created_at": now,
+		"last_used_at": now,
+		# Economy + upgrades
+		"nutrient": default_nutrient,
+		"sporeprint": default_sporeprint,
+		"owned_upgrades": default_owned,
+		"desired_loadout": default_loadout
+	}
+
+	_save_profile_file(id, data)
+	return id
+
+# --- Ensure a profile Dictionary has all new Phase 1.6 fields and valid shapes. ---
+func _ensure_profile_defaults_shape(p: Dictionary) -> Dictionary:
+	# Defensive clone so we do not mutate caller's reference accidentally.
+	var out: Dictionary = p.duplicate(true)
+
+	# Resources
+	if not out.has("nutrient"):
+		out["nutrient"] = 0
+	if typeof(out["nutrient"]) != TYPE_INT:
+		out["nutrient"] = int(out["nutrient"])
+
+	if not out.has("sporeprint"):
+		out["sporeprint"] = 0
+	if typeof(out["sporeprint"]) != TYPE_INT:
+		out["sporeprint"] = int(out["sporeprint"])
+
+	# Ownership dictionary
+	if not out.has("owned_upgrades"):
+		out["owned_upgrades"] = {}
+	if typeof(out["owned_upgrades"]) != TYPE_DICTIONARY:
+		out["owned_upgrades"] = {}
+
+	# Ensure all known keys exist and are boolean
+	for key in UPGRADE_KEYS:
+		var has_key: bool = out["owned_upgrades"].has(key)
+		if not has_key:
+			out["owned_upgrades"][key] = false
+		else:
+			var v: Variant = out["owned_upgrades"][key]
+			out["owned_upgrades"][key] = bool(v)
+
+	# Desired-loadout dictionary
+	if not out.has("desired_loadout"):
+		out["desired_loadout"] = {}
+	if typeof(out["desired_loadout"]) != TYPE_DICTIONARY:
+		out["desired_loadout"] = {}
+
+	# Ensure all known keys exist and are boolean
+	for key in UPGRADE_KEYS:
+		var has_key2: bool = out["desired_loadout"].has(key)
+		if not has_key2:
+			out["desired_loadout"][key] = false
+		else:
+			var v2: Variant = out["desired_loadout"][key]
+			out["desired_loadout"][key] = bool(v2)
+
+	return out
+
+# --- Validate a proposed loadout against ownership and known keys. ---
+func _sanitize_desired_loadout(proposed: Dictionary, owned: Dictionary) -> Dictionary:
+	var clean: Dictionary = {}
+	for key in UPGRADE_KEYS:
+		# Only known keys; value must be boolean; cannot activate if not owned.
+		var wants_active: bool = false
+		if proposed.has(key):
+			wants_active = bool(proposed[key])
+		var is_owned: bool = false
+		if owned.has(key):
+			is_owned = bool(owned[key])
+		# Rule: cannot set active if not owned.
+		if is_owned:
+			clean[key] = wants_active
+		else:
+			clean[key] = false
+	return clean
+
+func rename_profile(id: String, new_name: String) -> void:
+	if id == "":
+		return
+	if new_name.strip_edges() == "":
+		return
+
+	var p: Dictionary = _load_profile_file(id)
+	if p.is_empty():
+		return
+
+	p["display_name"] = new_name
+	_save_profile_file(id, p)
+	_update_manifest_name(id, new_name)
+	_save_manifest()
+	emit_signal("profile_list_changed")
+
+func delete_profile(id: String) -> void:
+	# Safety: cannot delete current; cannot delete last profile
+	if id == "":
+		return
+	if id == get_current_profile_id():
+		push_error("ProfileManager: cannot delete the active profile.")
+		return
+
+	var items: Array = get_profiles()
+	if items.size() <= 1:
+		push_error("ProfileManager: cannot delete the last remaining profile.")
+		return
+
+	# Delete file
+	var path: String = _profile_path(id)
+	if FileAccess.file_exists(path):
+		DirAccess.remove_absolute(path)
+
+	_remove_manifest_item(id)
+	_save_manifest()
+	emit_signal("profile_list_changed")
+
+func set_current_profile(id: String) -> void:
+	if id == "":
+		return
+	# Verify exists
+	var exists: bool = _manifest_has_id(id)
+	if not exists:
+		return
+	_set_current_profile_id(id)
+	_touch_manifest_last_used(id)
+	_save_manifest()
+	emit_signal("current_profile_changed", id)
+
+func update_field(id: String, key: String, value: Variant) -> void:
+	if id == "":
+		return
+	var p: Dictionary = _load_profile_file(id)
+	if p.is_empty():
+		return
+	p[key] = value
+	_save_profile_file(id, p)
+	_touch_manifest_last_used(id)
+	_save_manifest()
+
+# Convenience for current profile last_opened_coil_path
+func set_current_last_opened_coil(path: String) -> void:
+	var id: String = get_current_profile_id()
+	if id != "":
+		update_field(id, "last_opened_coil_path", path)
+
+func get_current_last_opened_coil() -> String:
+	var id: String = get_current_profile_id()
+	if id == "":
+		return ""
+	var p: Dictionary = _load_profile_file(id)
+	var v: Variant = p.get("last_opened_coil_path", "")
+	return String(v)
+
+# --- Internal helpers (typed, no ternaries) ---
+
+func _load_manifest() -> Dictionary:
+	if not FileAccess.file_exists(PATH_MANIFEST):
+		var now_iso: String = _iso_timestamp()
+		return {
+			"version": 1,
+			"current_profile_id": "",
+			"items": [],
+			"created_at": now_iso
+		}
+
+	var f: FileAccess = FileAccess.open(PATH_MANIFEST, FileAccess.READ)
+	if f == null:
+		return {"version": 1, "current_profile_id": "", "items": []}
+	var txt: String = f.get_as_text()
+	f.close()
+	var parsed_v: Variant = JSON.parse_string(txt)
+	if typeof(parsed_v) != TYPE_DICTIONARY:
+		return {"version": 1, "current_profile_id": "", "items": []}
+	return parsed_v as Dictionary
+
+func _save_manifest() -> void:
+	var f: FileAccess = FileAccess.open(PATH_MANIFEST, FileAccess.WRITE)
+	if f == null:
+		push_error("ProfileManager: cannot write manifest.")
+		return
+	f.store_string(JSON.stringify(_manifest, "\t"))
+	f.close()
+
+func _profile_path(id: String) -> String:
+	return DIR_PROFILES + "/profile_" + id + ".json"
+
+func _load_profile_file(id: String) -> Dictionary:
+	# Load, then ensure new fields exist (migration), and resave if anything changed.
+	if id == "":
+		return {}
+	var path: String = _profile_path(id)
+	if not FileAccess.file_exists(path):
+		return {}
+
+	var f: FileAccess = FileAccess.open(path, FileAccess.READ)
+	if f == null:
+		return {}
+	var txt: String = f.get_as_text()
+	f.close()
+
+	var parsed_v: Variant = JSON.parse_string(txt)
+	if typeof(parsed_v) != TYPE_DICTIONARY:
+		return {}
+
+	var raw: Dictionary = parsed_v as Dictionary
+	var shaped: Dictionary = _ensure_profile_defaults_shape(raw)
+
+	# If migration added/changed fields, persist immediately for stability.
+	var needs_save: bool = (JSON.stringify(raw) != JSON.stringify(shaped))
+	if needs_save:
+		_save_profile_file(id, shaped)
+
+	return shaped
+
+func _save_profile_file(id: String, data: Dictionary) -> void:
+	var path: String = _profile_path(id)
+	var f: FileAccess = FileAccess.open(path, FileAccess.WRITE)
+	if f == null:
+		push_error("ProfileManager: cannot write profile " + id)
+		return
+	f.store_string(JSON.stringify(data, "\t"))
+	f.close()
+
+func _append_manifest_item(id: String, display_name: String) -> void:
+	var items: Array = []
+	var items_v: Variant = _manifest.get("items", [])
+	if typeof(items_v) == TYPE_ARRAY:
+		items = items_v as Array
+	var now: String = _iso_timestamp()
+	var entry: Dictionary = {
+		"id": id,
+		"display_name": display_name,
+		"created_at": now,
+		"last_used_at": now
+	}
+	items.append(entry)
+	_manifest["items"] = items
+
+func _remove_manifest_item(id: String) -> void:
+	var items: Array = []
+	var items_v: Variant = _manifest.get("items", [])
+	if typeof(items_v) == TYPE_ARRAY:
+		items = items_v as Array
+	var new_items: Array = []
+	for v in items:
+		if typeof(v) == TYPE_DICTIONARY:
+			var d: Dictionary = v as Dictionary
+			var vid: String = String(d.get("id", ""))
+			if vid != id:
+				new_items.append(d)
+	_manifest["items"] = new_items
+	# Clear current if it was pointing to this id
+	var cur: String = get_current_profile_id()
+	if cur == id:
+		_manifest["current_profile_id"] = ""
+
+func _update_manifest_name(id: String, new_name: String) -> void:
+	var items: Array = []
+	var items_v: Variant = _manifest.get("items", [])
+	if typeof(items_v) == TYPE_ARRAY:
+		items = items_v as Array
+	for i in range(items.size()):
+		var v: Variant = items[i]
+		if typeof(v) == TYPE_DICTIONARY:
+			var d: Dictionary = v as Dictionary
+			var vid: String = String(d.get("id", ""))
+			if vid == id:
+				d["display_name"] = new_name
+				items[i] = d
+				break
+	_manifest["items"] = items
+
+func _manifest_has_id(id: String) -> bool:
+	var items: Array = []
+	var items_v: Variant = _manifest.get("items", [])
+	if typeof(items_v) == TYPE_ARRAY:
+		items = items_v as Array
+	for v in items:
+		if typeof(v) == TYPE_DICTIONARY:
+			var d: Dictionary = v as Dictionary
+			var vid: String = String(d.get("id", ""))
+			if vid == id:
+				return true
+	return false
+
+func _set_current_profile_id(id: String) -> void:
+	_manifest["current_profile_id"] = id
+
+func _touch_manifest_last_used(id: String) -> void:
+	var items: Array = []
+	var items_v: Variant = _manifest.get("items", [])
+	if typeof(items_v) == TYPE_ARRAY:
+		items = items_v as Array
+	var now: String = _iso_timestamp()
+	for i in range(items.size()):
+		var v: Variant = items[i]
+		if typeof(v) == TYPE_DICTIONARY:
+			var d: Dictionary = v as Dictionary
+			var vid: String = String(d.get("id", ""))
+			if vid == id:
+				d["last_used_at"] = now
+				items[i] = d
+				break
+	_manifest["items"] = items
+
+func _new_id() -> String:
+	# Simple timestamp-based ID; good enough for local usage
+	# Format: yyyymmdd_hhmmss_msec
+	var dt: Dictionary = Time.get_datetime_dict_from_system(true)  # UTC
+	var y: int = int(dt["year"])
+	var m: int = int(dt["month"])
+	var d: int = int(dt["day"])
+	var hh: int = int(dt["hour"])
+	var mm: int = int(dt["minute"])
+	var ss: int = int(dt["second"])
+	var msec: int = Time.get_ticks_msec() % 1000
+	var y_s: String = str(y)
+	var m_s: String = _pad2(m)
+	var d_s: String = _pad2(d)
+	var hh_s: String = _pad2(hh)
+	var mm_s: String = _pad2(mm)
+	var ss_s: String = _pad2(ss)
+	var ms_s: String = str(msec)
+	return y_s + m_s + d_s + "_" + hh_s + mm_s + ss_s + "_" + ms_s
+
+func _pad2(n: int) -> String:
+	if n < 10:
+		return "0" + str(n)
+	return str(n)
+
+func _iso_timestamp() -> String:
+	return Time.get_datetime_string_from_system(true, true)  # UTC, with separators
+
+func _dedupe_manifest() -> void:
+	var items: Array = []
+	var items_v: Variant = _manifest.get("items", [])
+	if typeof(items_v) == TYPE_ARRAY:
+		items = items_v as Array
+
+	var seen: Dictionary = {}
+	var clean: Array = []
+	for v in items:
+		if typeof(v) == TYPE_DICTIONARY:
+			var d: Dictionary = v as Dictionary
+			var id: String = String(d.get("id", ""))
+			if id != "" and not seen.has(id):
+				seen[id] = true
+				clean.append(d)
+	_manifest["items"] = clean
+
+# --- Public getters for Hub/UI ---
+
+func get_resources() -> Dictionary:
+	# Returns current profile's nutrient and sporeprint in a small dictionary.
+	var id: String = get_current_profile_id()
+	if id == "":
+		return {"nutrient": 0, "sporeprint": 0}
+	var p: Dictionary = _load_profile_file(id)
+	var out: Dictionary = {
+		"nutrient": int(p.get("nutrient", 0)),
+		"sporeprint": int(p.get("sporeprint", 0))
+	}
+	return out
+
+func get_owned_upgrades() -> Dictionary:
+	# Returns a shallow copy to avoid external mutation.
+	var id: String = get_current_profile_id()
+	if id == "":
+		return {}
+	var p: Dictionary = _load_profile_file(id)
+	var owned: Dictionary = p.get("owned_upgrades", {})
+	return owned.duplicate(true)
+
+func get_desired_loadout() -> Dictionary:
+	# Returns a shallow copy to avoid external mutation.
+	var id: String = get_current_profile_id()
+	if id == "":
+		return {}
+	var p: Dictionary = _load_profile_file(id)
+	var loadout: Dictionary = p.get("desired_loadout", {})
+	return loadout.duplicate(true)
+
+func buy_upgrade(key: String, cost: int) -> bool:
+	# Attempts to purchase an upgrade with Nutrient.
+	# Returns true on success, false on failure (insufficient funds, invalid key, or already owned).
+	var id: String = get_current_profile_id()
+	if id == "":
+		return false
+
+	# Validate key
+	var is_known: bool = UPGRADE_KEYS.has(key)
+	if not is_known:
+		push_error("ProfileManager.buy_upgrade: unknown key " + key)
+		return false
+
+	# Load and enforce defaults
+	var p: Dictionary = _load_profile_file(id)
+	var nutrient: int = int(p.get("nutrient", 0))
+	var owned: Dictionary = p.get("owned_upgrades", {})
+	var already_owned: bool = false
+	if owned.has(key):
+		already_owned = bool(owned[key])
+
+	# Fail if already owned
+	if already_owned:
+		return false
+
+	# Check cost
+	if cost < 0:
+		cost = 0
+	var can_afford: bool = nutrient >= cost
+	if not can_afford:
+		return false
+
+	# Deduct and set owned
+	nutrient = nutrient - cost
+	owned[key] = true
+	p["nutrient"] = nutrient
+	p["owned_upgrades"] = owned
+
+	# Optionally: do not auto-toggle active; UI will set desired_loadout explicitly later.
+
+	# Persist and notify
+	_save_profile_file(id, p)
+	_touch_manifest_last_used(id)
+	_save_manifest()
+
+	# Emit signals so Hub pills and cards can refresh
+	emit_signal("resources_changed", nutrient, int(p.get("sporeprint", 0)))
+	emit_signal("upgrades_changed")
+	return true
+
+func set_desired_loadout(loadout: Dictionary) -> void:
+	# Saves the player's desired run-active upgrades.
+	# Enforces: only known keys, booleans, and cannot set active if not owned.
+	var id: String = get_current_profile_id()
+	if id == "":
+		return
+
+	var p: Dictionary = _load_profile_file(id)
+	var owned: Dictionary = p.get("owned_upgrades", {})
+	var clean: Dictionary = _sanitize_desired_loadout(loadout, owned)
+
+	p["desired_loadout"] = clean
+	_save_profile_file(id, p)
+	_touch_manifest_last_used(id)
+	_save_manifest()
+
+	emit_signal("upgrades_changed")
+
+# --- Public: resource helpers (centralize mutations + emit) ---
+
+func add_nutrient(delta: int) -> void:
+	# Increments Nutrient by delta (clamped ≥ 0). Emits resources_changed.
+	if delta == 0:
+		return
+	var id: String = get_current_profile_id()
+	if id == "":
+		return
+	var p: Dictionary = _load_profile_file(id)
+	var nutrient: int = int(p.get("nutrient", 0))
+	var sporeprint: int = int(p.get("sporeprint", 0))
+
+	# Clamp to avoid negative totals
+	nutrient = nutrient + delta
+	if nutrient < 0:
+		nutrient = 0
+
+	p["nutrient"] = nutrient
+	_save_profile_file(id, p)
+	_touch_manifest_last_used(id)
+	_save_manifest()
+
+	emit_signal("resources_changed", nutrient, sporeprint)
+
+func add_sporeprint(delta: int) -> void:
+	# Increments Sporeprint by delta (clamped ≥ 0). Emits resources_changed.
+	if delta == 0:
+		return
+	var id: String = get_current_profile_id()
+	if id == "":
+		return
+	var p: Dictionary = _load_profile_file(id)
+	var nutrient: int = int(p.get("nutrient", 0))
+	var sporeprint: int = int(p.get("sporeprint", 0))
+
+	sporeprint = sporeprint + delta
+	if sporeprint < 0:
+		sporeprint = 0
+
+	p["sporeprint"] = sporeprint
+	_save_profile_file(id, p)
+	_touch_manifest_last_used(id)
+	_save_manifest()
+
+	emit_signal("resources_changed", nutrient, sporeprint)
+
+
+## end res://System/profile_manager.gd
+
+========================================================================
+FILE: verdant-coil/System/upgrade_controller.gd
+========================================================================
+## upgrade_controller.gd
+extends Node
+
+## Tracks and manages crawler upgrade states.
+## Designed to be easily expandable in later phases.
+
+# --- Signals ---
+signal upgrade_changed(upgrade: Upgrade, value: bool)
+
+# --- Upgrade Enum ---
+enum Upgrade {
+	HARDENED_SKIN,
+	ACID_SAC,
+	GHOST_TRAIL,
+}
+
+# --- Internal State (booleans for now) ---
+var _hardened_skin: bool = false
+var _acid_sac: bool = false
+var _ghost_trail: bool = false
+
+func _ready() -> void:
+	add_to_group("upgrade_controller")
+
+# --- Public Methods ---
+
+# Check if a given upgrade is active
+func has_upgrade(upgrade: Upgrade) -> bool:
+	match upgrade:
+		Upgrade.HARDENED_SKIN: return _hardened_skin
+		Upgrade.ACID_SAC: return _acid_sac
+		Upgrade.GHOST_TRAIL: return _ghost_trail
+		_: return false
+
+# Toggle a given upgrade's state and emit signal
+func toggle_upgrade(upgrade: Upgrade) -> void:
+	match upgrade:
+		Upgrade.HARDENED_SKIN:
+			_hardened_skin = !_hardened_skin
+			emit_signal("upgrade_changed", upgrade, _hardened_skin)
+			print("Hardened Skin:", _hardened_skin)
+		Upgrade.ACID_SAC:
+			_acid_sac = !_acid_sac
+			emit_signal("upgrade_changed", upgrade, _acid_sac)
+			print("Acid Sac:", _acid_sac)
+		Upgrade.GHOST_TRAIL:
+			_ghost_trail = !_ghost_trail
+			emit_signal("upgrade_changed", upgrade, _ghost_trail)
+			print("Ghost Trail:", _ghost_trail)
+
+## end upgrade_controller.gd
+

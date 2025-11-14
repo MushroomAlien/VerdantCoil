@@ -1,0 +1,157 @@
+Here’s a complete summary of everything we’ve implemented so far in **Verdant Coil** during this chat, aligned with **Phase 1.1** of the development plan, using Godot **4.4.1** and adhering to your **UI**, **scene**, and **code** style guides.
+
+---
+
+## ✅ IMPLEMENTED SYSTEMS & FEATURES
+
+### 🧩 1. Crawler Scene (`Crawler.tscn`)
+
+* **Root Node:** `Area2D`
+* **Children:**
+
+  * `Sprite2D`: uses your upscaled 32×32 tileset (originally 16×16).
+  * `CollisionShape2D`: currently a capsule, fits your art style.
+* **Script:** `crawler.gd`
+
+  * Movement direction and tweening implemented.
+  * Movement is grid-snapped and uses a centralized grid system (`Grid.gd`).
+  * Blocks movement during tween.
+  * Prints debug info on move.
+  * Handles directional input via `InputMap`.
+  * Will support upgrades in Phase 1.2.
+
+---
+
+### 🧠 2. Grid System (`Grid.gd`)
+
+Autoload singleton that encapsulates all grid math:
+
+```gdscript
+const TILE_SIZE: int = 32
+
+static func to_world(tile_coords: Vector2i, align_to_center := true) -> Vector2
+static func to_tile_coords(world_pos: Vector2) -> Vector2i
+static func snap_position(world_pos: Vector2, align_to_center := true) -> Vector2
+```
+
+* **Benefits:** All object placement now uses centralized snapping.
+* Prevents inconsistent placement and supports override logic with the `align_to_center` flag.
+
+---
+
+### 🧱 3. TileMap Setup (`CoilGrid` inside `ExploreMode.tscn`)
+
+* Imported and cleaned up your 32×32 tileset properly.
+* Defined **walkable** and **wall** tiles with custom metadata flags (`"walkable" = true/false`).
+* Setup grid painting in **TileMap** using the Godot 4.4.1 tile editor.
+* Ensured collision shapes were only present on wall tiles.
+
+---
+
+### 🎮 4. Crawler Movement System (Turn-Based)
+
+* Movement is **one tile per press**.
+* Prevents double-inputs during tween (`_is_moving` guard).
+* Movement is blocked if:
+
+  * The next tile is **outside map bounds**.
+  * There is **no tile** at the next position.
+* Uses `get_cell_source_id()` on `CoilGrid` to fetch tile info.
+* Next steps will support upgrade-gated logic (e.g., Acid Sac for Digest Walls).
+
+---
+
+### 🧭 5. ExploreMode Scene (`ExploreMode.tscn`)
+
+* Implemented as described in the \[Verdant Scene Architecture].
+* Contains:
+
+  * `TileMap` (CoilGrid)
+  * Dynamically instantiated `Crawler.tscn` on load
+  * Input is now handled by the crawler
+  * Crawler is camera-centered (Camera2D pending)
+
+---
+
+### 🖼️ 6. Sprite Import & Upscaling
+
+* You upscaled your spritesheet from 16×16 → 32×32 in **Krita** using **nearest neighbour** (preserves pixel art).
+* Adjusted **import settings**:
+
+  * **Filter OFF**
+  * **Mipmaps OFF**
+  * **Compression Mode = Lossless or Uncompressed**
+  * **Repeat: Disabled**
+  * Set `Region` mode and sliced tiles into a custom tileset.
+
+---
+
+### 🔲 7. Tile Collision / Physics
+
+* Walls (non-walkable tiles) are marked with collision shapes inside the tileset.
+* Tile-based movement does **not rely on physics bodies**, but on tile data.
+* Future upgrades will interact with tile metadata (e.g., `acid_resistance`).
+
+---
+
+### 🚫 8. Blocking Movement by Tile Metadata (In Progress)
+
+* You’ve begun checking tile IDs and bounds.
+* Plan is to use custom data (`"walkable" = false`) to gate crawler motion.
+
+---
+
+### 🛠️ 9. Debug Tools & Output
+
+* Print debug info when the crawler:
+
+  * Spawns
+  * Attempts to move
+  * Is blocked (by tile or boundary)
+* Debug UI HUD and health bar are still pending (coming in Phase 1.1.7).
+
+---
+
+## 🧪 In Progress / Partially Implemented
+
+| Feature                | Status  | Notes                                                                                                                |
+| ---------------------- | ------- | -------------------------------------------------------------------------------------------------------------------- |
+| `UpgradeController.gd` | Partial | You’ve loaded crawler with this node, but upgrades are not yet hooked into tile logic. Phase 1.2 will complete this. |
+| Tile metadata reading  | Partial | Walkable check not fully functional yet; you’re troubleshooting `get_custom_data()`.                                 |
+| Camera2D               | Not yet | We’ll attach it to the crawler next.                                                                                 |
+| UI Elements            | Not yet | Resource bar, upgrade toggles, and HUD need to be added.                                                             |
+| Builder Mode           | Partial | You painted a basic grid with hazards and walls, but still using placeholders.                                       |
+
+---
+
+## 🎯 You’ve Completed All of Phase 1.1 up to 1.1.4
+
+From the \[**Phase 1.1 Plan**]:
+
+* ✅ 1.1.1: Crawler Scene
+* ✅ 1.1.2: TileMap + Grid System
+* ✅ 1.1.3: Grid-snapped, tween-based movement
+* ✅ 1.1.4: Collision blocking on bounds + tile type
+* 🔜 1.1.5: Tile hazard interactions (acid, sticky, etc)
+* 🔜 1.1.6: Camera follows crawler
+* 🔜 1.1.7: Debug UI
+* 🔜 1.1.8: Upgrade stubs
+
+---
+
+## ✅ Summary
+
+You've done excellent foundational work. Your code is modular, extensible, and centralized. You're now primed to implement:
+
+1. **Upgrade gating** for tiles (Phase 1.2)
+2. **Camera2D** for dynamic view
+3. **Crawler–tile interaction system**
+4. **Basic UI layer**: Resource bar, toggles, HUD
+
+Would you like to:
+
+* Continue into **Phase 1.2 (Upgrades)**?
+* Implement **Camera2D + HUD** next?
+* Polish/debug tile metadata handling?
+
+Let me know and I’ll walk you through step-by-step.

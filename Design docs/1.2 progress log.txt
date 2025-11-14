@@ -1,0 +1,86 @@
+Here’s a full summary of everything we implemented in this session for **Verdant Coil – Phase 1.2: Simple Upgrade System**.
+
+---
+
+## ✅ **Summary of Phase 1.2 Implementation**
+
+### 🧬 1. **UpgradeController.gd**
+
+* Created a new script `upgrade_controller.gd`
+* Scene-local (not autoloaded yet), attached to `Crawler.tscn`
+* Tracks three toggleable upgrades:
+
+  * `HARDENED_SKIN`
+  * `ACID_SAC`
+  * `GHOST_TRAIL` (formerly Directional Memory)
+* Uses `enum` to avoid string bugs
+* Emits `upgrade_changed(upgrade, value)` signal when toggled
+* Toggles upgrades via public method `toggle_upgrade(upgrade)`
+* Query upgrades via `has_upgrade(upgrade)`
+
+### 🧠 2. **Crawler Input Integration**
+
+* In `crawler.gd`, hooked hotkeys (1–3) to toggle upgrades
+* Accessed child node `UpgradeController` safely
+* Verified toggles via debug `print()` output
+
+### 🎮 3. **InputMap Bindings**
+
+* Added actions in **Project → Project Settings → Input Map**:
+
+  * `toggle_upgrade_1` → Key 1
+  * `toggle_upgrade_2` → Key 2
+  * `toggle_upgrade_3` → Key 3
+
+### 🎨 4. **UpgradeBar UI**
+
+* Created new scene: `UpgradeBar.tscn`
+
+  * Root: `Control`
+  * Child: `HBoxContainer` named `IconRow`
+  * Children: Three `TextureButton` nodes:
+
+    * `HardenedSkinIcon`
+    * `AcidSacIcon`
+    * `GhostTrailIcon`
+* Assigned placeholder `AtlasTexture` icons from a spritesheet
+* Set sizing and stretch mode to match UI spec
+
+### 📜 5. **UpgradeBar.gd**
+
+* Script: `upgrade_bar.gd` attached to `UpgradeBar`
+* Used `@onready` to reference the 3 icons
+* Used `call_deferred()` to wait until scene tree is ready
+* Connected to `upgrade_changed` signal from `UpgradeController`
+* Synced icon visuals using `modulate` (white = active, gray = inactive)
+* Matched enum indexes to icons (0, 1, 2)
+
+### 🧪 6. **Scene Integration**
+
+* Instanced `UpgradeBar.tscn` into `ExploreMode.tscn`
+* Added it to the existing `CanvasLayer`
+* Positioned in top-right using anchor `(1, 0)` and offset
+* Verified signal connections and state sync
+
+### 🧼 7. **Debug & Resilience**
+
+* Caught possible `null` errors when looking up `Crawler` or `UpgradeController`
+* Deferred UI connection to avoid premature access
+* Fully modular and scalable design
+
+---
+
+## 🔮 Prepared for Future Work
+
+* UpgradeController already supports future:
+
+  * Upgrade levels (change booleans to ints)
+  * Save/load integration
+  * Global autoload (if needed later)
+* Ghost Trail upgrade is ready to be implemented in later phases
+* UI is modular and polish-ready for icon swapping, tooltips, shaders
+
+---
+
+✅ Phase 1.2 is **complete**
+Would you like me to commit this progress to Git, update the canvas doc, or move to **Phase 1.3** now?
