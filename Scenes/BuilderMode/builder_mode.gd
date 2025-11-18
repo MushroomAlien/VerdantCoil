@@ -293,6 +293,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	# Mouse BUTTONS ------------------------------------------------------------
 	if event is InputEventMouseButton:
 		# Toggle state flags on press/release (no coords needed for releases).
+		var b := _current_brush()
 		match event.button_index:
 			MOUSE_BUTTON_LEFT:
 				_is_painting_left = event.pressed
@@ -301,7 +302,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			MOUSE_BUTTON_RIGHT:
 				_is_erasing_right = event.pressed
 				if event.pressed:
-					_erase_at(_cell_under_mouse())  # compute coords only when used
+					_erase_at(_cell_under_mouse(), b) # compute coords only when used
 		return  # done
 
 	# Mouse MOTION -------------------------------------------------------------
@@ -312,7 +313,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			if _is_painting_left:
 				_paint_at(coords)
 			elif _is_erasing_right:
-				_erase_at(coords)
+				_erase_at(coords, _current_brush())
 
 	# Debug: undo last paint command when the debug action is pressed.----------
 	if event.is_action_pressed("builder_undo_debug"):
@@ -364,52 +365,32 @@ func _current_brush() -> BrushEntry:
 
 ## --- Painting / Erasing --------------------------------------------------------
 
-### Place a tile using the selected brush after validation
-#func _paint_at(coords: Vector2i) -> void:
-	#var b: BrushEntry = _current_brush()
-	#if b == null:
-		#_show_status("⚠️ No brush selected.")
-		#return
-	#
-	## ERASER: just erase and return
-	#if b.rule_profile == "ERASER":
-		#_erase_at(coords)
-		#return
-	#
-	## Validate according to rule profile (see functions below)
-	#if not _validate_placement(b, coords):
-		#return
-	#
-	## Place the tile (BASE/WALL/POOL/MARKER)
-	#if b.source_id < 0:
-		#_show_status("⚠️ Source ID not set for brush: " + b.display_name)
-		#return
-	#
-	#var layer := _layer_for(b.target_layer)
-	#if layer == null:
-		#_show_status("⚠️ Unknown target layer: " + str(b.target_layer))
-		#return
-	#
-	## Place the tile
-	#layer.set_cell(coords, b.source_id, b.atlas_coords)
-	#
-	## If we just placed a marker, enforce singletons (Spawn and Heartroot)
-	#if layer == marker_layer:
-		#_enforce_single_spawn_at(coords)
-		#_enforce_single_heartroot_at(coords)
-	#
-	## Recalc biomass after successful placement
+### Remove tiles at the cell across relevant layers
+#func _erase_at(coords: Vector2i) -> void:
+	## Simple MVP: erase Hazards/Walls/Markers at this cell; keep Base Flesh intact.
+	## IMPORTANT: Do NOT touch base_layer here, despite the old comment.
+	#for layer_node in [marker_layer, hazard_layer, walls_layer]:
+		#if layer_node == null:
+			#continue
+#
+		## Capture the "before" state for this cell
+		#var before_state := _get_tile_state(layer_node, coords)
+#
+		## If it's already empty, nothing to do (and nothing to record)
+		#if before_state.get("is_empty", true):
+			#continue
+#
+		## Perform the erase
+		#layer_node.erase_cell(coords)
+#
+		## Capture the "after" state (should now be empty)
+		#var after_state := _get_tile_state(layer_node, coords)
+#
+		## Record this change in the undo stack
+		#_record_paint_command(coords, layer_node, before_state, after_state)
+#
+	## Recalc biomass after successful erases
 	#_recalc_biomass()
-
-## Remove tiles at the cell across relevant layers
-func _erase_at(coords: Vector2i) -> void:
-	# Simple MVP: erase Hazards/Walls/Markers at this cell; keep Base Flesh intact.
-	for layer_node in [base_layer, marker_layer, hazard_layer, walls_layer]:
-		if layer_node:
-			layer_node.erase_cell(coords)
-
-	# Recalc biomass after successful placement
-	_recalc_biomass()
 
 ## Place a tile using the selected brush after validation
 func _paint_at(coords: Vector2i) -> void:
@@ -420,7 +401,7 @@ func _paint_at(coords: Vector2i) -> void:
 
 	# ERASER: just erase and return
 	if b.rule_profile == "ERASER":
-		_erase_at(coords)
+		_erase_at(coords, b)
 		return
 
 	# Validate according to rule profile (see functions below)
@@ -458,6 +439,166 @@ func _paint_at(coords: Vector2i) -> void:
 		return
 
 	_record_paint_command(coords, layer, before_state, after_state)
+
+### Remove tiles at the cell, with behaviour depending on the current brush.
+#func _erase_at(coords: Vector2i, brush: BrushEntry = null) -> void:
+	#var layers_to_touch: Array[TileMapLayer] = []
+#
+	#if brush == null:
+		## Fallback: original MVP behaviour – non-base only.
+		#for l in [marker_layer, hazard_layer, walls_layer]:
+			#if l:
+				#layers_to_touch.append(l)
+#
+	#elif brush.rule_profile == "ERASER":
+		## Heavy eraser: clear ALL layers at this cell, including base.
+		#for l in [marker_layer, hazard_layer, walls_layer, base_layer]:
+			#if l:
+				#layers_to_touch.append(l)
+	#else:
+		## Layer-specific erase: only the layer that this brush paints on.
+		#var layer := _layer_for(brush.target_layer)
+		#if layer:
+			#layers_to_touch.append(layer)
+#
+	#for layer_node in layers_to_touch:
+		#if layer_node == null:
+			#continue
+#
+		## Capture the "before" state for this cell
+		#var before_state := _get_tile_state(layer_node, coords)
+#
+		## If it's already empty, nothing to do (and nothing to record)
+		#if before_state.get("is_empty", true):
+			#continue
+#
+		## Perform the erase
+		#layer_node.erase_cell(coords)
+#
+		## Capture the "after" state (should now be empty)
+		#var after_state := _get_tile_state(layer_node, coords)
+#
+		## Record this change in the undo stack
+		#_record_paint_command(coords, layer_node, before_state, after_state)
+#
+	## Recalc biomass after successful erases
+	#_recalc_biomass()
+
+### Remove tiles at the cell, with behaviour depending on the current brush.
+#func _erase_at(coords: Vector2i, brush: BrushEntry = null) -> void:
+	#var layers_to_touch: Array[TileMapLayer] = []
+#
+	#if brush == null:
+		## Fallback: original MVP behaviour – non-base only.
+		#for l in [marker_layer, hazard_layer, walls_layer]:
+			#if l:
+				#layers_to_touch.append(l)
+#
+	#elif brush.rule_profile == "ERASER":
+		## Heavy eraser: clear ALL layers at this cell, including base.
+		#for l in [marker_layer, hazard_layer, walls_layer, base_layer]:
+			#if l:
+				#layers_to_touch.append(l)
+	#else:
+		## Layer-specific erase: only the layer that this brush paints on.
+		#var layer := _layer_for(brush.target_layer)
+		#if layer:
+			#layers_to_touch.append(layer)
+#
+	#for layer_node in layers_to_touch:
+		#if layer_node == null:
+			#continue
+#
+		## Capture the "before" state for this cell
+		#var before_state := _get_tile_state(layer_node, coords)
+#
+		## If it's already empty, nothing to do (and nothing to record)
+		#if before_state.get("is_empty", true):
+			#continue
+#
+		## --- NEW: for non-eraser brushes, only erase matching tiles ---
+		#if brush != null and brush.rule_profile != "ERASER":
+			#var src_id: int = before_state.get("source_id", -1)
+			#var atlas_coords: Vector2i = before_state.get("atlas_coords", Vector2i.ZERO)
+#
+			## If the tile in the map isn't the same as the brush's tile, skip it.
+			#if src_id != brush.source_id or atlas_coords != brush.atlas_coords:
+				#continue
+#
+		## Perform the erase
+		#layer_node.erase_cell(coords)
+#
+		## Capture the "after" state (should now be empty)
+		#var after_state := _get_tile_state(layer_node, coords)
+#
+		## Record this change in the undo stack
+		#_record_paint_command(coords, layer_node, before_state, after_state)
+#
+	## Recalc biomass after successful erases
+	#_recalc_biomass()
+
+## Remove tiles at the cell, with behaviour depending on the current brush.
+func _erase_at(coords: Vector2i, brush: BrushEntry = null) -> void:
+	var layers_to_touch: Array[TileMapLayer] = []
+
+	if brush == null:
+		# Fallback: original MVP behaviour – non-base only.
+		for l in [marker_layer, hazard_layer, walls_layer]:
+			if l:
+				layers_to_touch.append(l)
+
+	elif brush.rule_profile == "ERASER":
+		# Heavy eraser: clear ALL layers at this cell, including base.
+		for l in [marker_layer, hazard_layer, walls_layer, base_layer]:
+			if l:
+				layers_to_touch.append(l)
+	else:
+		# Layer-specific erase: only the layer that this brush paints on.
+		var layer := _layer_for(brush.target_layer)
+		if layer:
+			layers_to_touch.append(layer)
+
+	for layer_node in layers_to_touch:
+		if layer_node == null:
+			continue
+
+		# --- NEW: prevent erasing Flesh if anything sits on top (except with ERASER) ---
+		if layer_node == base_layer and brush != null and brush.rule_profile != "ERASER":
+			var has_wall := walls_layer != null and walls_layer.get_cell_source_id(coords) != -1
+			var has_hazard := hazard_layer != null and hazard_layer.get_cell_source_id(coords) != -1
+			var has_marker := marker_layer != null and marker_layer.get_cell_source_id(coords) != -1
+
+			if has_wall or has_hazard or has_marker:
+				# Optional: only mildly nag; you'll get a lot of calls while dragging
+				_show_status("Can't erase Flesh under walls/pools/markers. Remove them first.")
+				continue
+
+		# Capture the "before" state for this cell
+		var before_state := _get_tile_state(layer_node, coords)
+
+		# If it's already empty, nothing to do (and nothing to record)
+		if before_state.get("is_empty", true):
+			continue
+
+		# For non-eraser brushes, only erase tiles that match the brush's tile
+		if brush != null and brush.rule_profile != "ERASER":
+			var src_id: int = before_state.get("source_id", -1)
+			var atlas_coords: Vector2i = before_state.get("atlas_coords", Vector2i.ZERO)
+
+			if src_id != brush.source_id or atlas_coords != brush.atlas_coords:
+				continue
+
+		# Perform the erase
+		layer_node.erase_cell(coords)
+
+		# Capture the "after" state (should now be empty)
+		var after_state := _get_tile_state(layer_node, coords)
+
+		# Record this change in the undo stack
+		_record_paint_command(coords, layer_node, before_state, after_state)
+
+	# Recalc biomass after successful erases
+	_recalc_biomass()
 
 ## Emit a friendly inline status and return false (used by placement validators).
 func _reject_or_false(msg: String, report: bool) -> bool:
