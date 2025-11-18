@@ -101,6 +101,11 @@ func _ready() -> void:
 	if walls_layer == null: push_error("❌ walls_layer not assigned on BuilderMode.")
 	if hazard_layer == null: push_error("❌ hazard_layer not assigned on BuilderMode.")
 	if marker_layer == null: push_error("❌ marker_layer not assigned on BuilderMode.")
+
+	# Reset undo/redo each time this scene is (re)entered
+	undo_stack.clear()
+	redo_stack.clear()
+
 	if validate_btn:
 		validate_btn.pressed.connect(_on_validate_pressed)
 	if save_btn:
@@ -222,7 +227,9 @@ func _record_paint_command(coords: Vector2i, layer: TileMapLayer, before_state: 
 	var cmd: Dictionary = {
 		"kind": "paint",
 		"coords": coords,
-		"layer_name": layer.name, # we store the layer name so we can look it up later
+		# Store a NodePath so we can re-resolve the layer every time
+		"layer_path": get_path_to(layer),
+		"layer_name": layer.name,  # optional, for debugging only
 		"before": before_state,
 		"after": after_state,
 	}
@@ -233,6 +240,7 @@ func _record_paint_command(coords: Vector2i, layer: TileMapLayer, before_state: 
 # Very simple debug undo: only supports "paint" commands right now.
 func _debug_undo_last_command() -> void:
 	if undo_stack.is_empty():
+		_show_status("Undo: stack empty.")
 		return  # nothing to undo
 
 	# Take the last command.
@@ -242,11 +250,21 @@ func _debug_undo_last_command() -> void:
 	if cmd.get("kind") != "paint":
 		return  # ignore unknown commands for now
 
-	# Find the layer we painted on.
-	var layer_name: String = cmd.get("layer_name", "")
-	var layer: TileMap = get_node_or_null(layer_name)
+	# Resolve the layer from its stored NodePath
+	var layer_path_v: Variant = cmd.get("layer_path", NodePath(""))
+	if typeof(layer_path_v) != TYPE_NODE_PATH:
+		push_error("Undo: missing or invalid layer_path in command.")
+		return
+
+	var layer_path: NodePath = layer_path_v
+	var layer_node := get_node_or_null(layer_path)
+	if layer_node == null:
+		push_error("Undo: could not resolve layer at path '%s'" % String(layer_path))
+		return
+
+	var layer := layer_node as TileMapLayer
 	if layer == null:
-		push_error("Undo: could not find TileMap layer '%s'" % layer_name)
+		push_error("Undo: node at '%s' is not a TileMapLayer." % String(layer_path))
 		return
 
 	var coords: Vector2i = cmd.get("coords", Vector2i.ZERO)
@@ -255,12 +273,13 @@ func _debug_undo_last_command() -> void:
 	# Apply the "before" tile state back to the map.
 	if before_state.get("is_empty", true):
 		# Empty tile -> clear the cell.
-		layer.set_cell(0, coords, -1, Vector2i.ZERO)
+		layer.erase_cell(coords)
 	else:
 		# Restore previous tile details.
 		var src_id: int = before_state.get("source_id", -1)
 		var atlas_coords: Vector2i = before_state.get("atlas_coords", Vector2i.ZERO)
-		layer.set_cell(0, coords, src_id, atlas_coords)
+		# TileMapLayer.set_cell(coords, source_id, atlas_coords)
+		layer.set_cell(coords, src_id, atlas_coords)
 
 	# Optional: push this command to redo_stack so we can redo later.
 	redo_stack.append(cmd)
