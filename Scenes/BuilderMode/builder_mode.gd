@@ -157,8 +157,22 @@ func _ready() -> void:
 			child.scale = Vector2.ONE
 
 	# --- Default select the first brush, if any ---
+	#if brush_registry != null and brush_registry.brushes.size() > 0:
+		#_select_brush(0)
+		# --- Default select the first brush, if any ---
 	if brush_registry != null and brush_registry.brushes.size() > 0:
+		# Select the first brush as the initial active brush (existing behaviour).
 		_select_brush(0)
+
+		# Remember this as the last non-eraser brush, if it isn't the ERASER.
+		var initial_brush := _current_brush()
+		if initial_brush != null and initial_brush.rule_profile != "ERASER":
+			_last_non_eraser_index = _current_index
+
+		# Optional: sanity check that an ERASER brush exists in the registry.
+		var eraser_idx := _find_eraser_index()
+		if eraser_idx == -1:
+			print("BuilderMode: warning – no ERASER brush found in BrushRegistry.")
 
 	# --- Start-with-Flesh: connect and apply once on load if ON ---
 	if start_with_flesh_cb:
@@ -332,29 +346,70 @@ func _on_dev_mode_changed(enabled: bool) -> void:
 
 ## --- Selection --------------------------------------------------------
 
+### Update the current brush and palette button visuals
+#func _select_brush(index: int) -> void:
+	#if brush_registry == null or index < 0 or index >= brush_registry.brushes.size():
+		#_show_status("⚠️ No brush at index " + str(index))
+		#return
+	#_current_index = index
+	#
+	#for i in range(_palette_buttons.size()):
+		#var btn := _palette_buttons[i]
+		#var selected := (i == _current_index)
+		#btn.button_pressed = selected
+		#if selected:
+			#btn.self_modulate = Color(1, 1, 1, 1)
+			#btn.scale = Vector2(1.1, 1.1)
+		#else:
+			#btn.self_modulate = Color(0.7, 0.7, 0.7, 1)
+			#btn.scale = Vector2.ONE
+	#
+		#if brush_registry and i < brush_registry.brushes.size():
+			#btn.tooltip_text = brush_registry.brushes[i].display_name
+	#
+	#var b: BrushEntry = brush_registry.brushes[index]
+	#_show_status("Brush: " + (b.display_name if b.display_name != "" else "Unnamed"))
+
 ## Update the current brush and palette button visuals
 func _select_brush(index: int) -> void:
+	# Guard: if we don't have a registry or the index is out of range, bail early.
 	if brush_registry == null or index < 0 or index >= brush_registry.brushes.size():
 		_show_status("⚠️ No brush at index " + str(index))
 		return
+
+	# Look up the target brush once so we can reason about it.
+	var brush: BrushEntry = brush_registry.brushes[index]
+
+	# If this brush is NOT the eraser, remember it as the last non-eraser brush.
+	# This is what lets us "jump back" from the eraser later.
+	if brush != null and brush.rule_profile != "ERASER":
+		_last_non_eraser_index = index
+
+	# Update the current index to this brush.
 	_current_index = index
 
+	# Update palette button visuals so the selected brush stands out.
 	for i in range(_palette_buttons.size()):
 		var btn := _palette_buttons[i]
 		var selected := (i == _current_index)
 		btn.button_pressed = selected
+
 		if selected:
+			# Selected brush: brighter and slightly larger.
 			btn.self_modulate = Color(1, 1, 1, 1)
 			btn.scale = Vector2(1.1, 1.1)
 		else:
+			# Unselected brushes: dimmer and normal scale.
 			btn.self_modulate = Color(0.7, 0.7, 0.7, 1)
 			btn.scale = Vector2.ONE
 
+		# Keep tooltip text in sync with the registry.
 		if brush_registry and i < brush_registry.brushes.size():
 			btn.tooltip_text = brush_registry.brushes[i].display_name
 
-	var b: BrushEntry = brush_registry.brushes[index]
-	_show_status("Brush: " + (b.display_name if b.display_name != "" else "Unnamed"))
+	# Show a friendly status message with the selected brush name.
+	_show_status("Brush: " + (brush.display_name if brush.display_name != "" else "Unnamed"))
+
 
 ## Return the current BrushEntry or null
 func _current_brush() -> BrushEntry:
