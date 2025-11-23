@@ -335,6 +335,34 @@ func _unhandled_input(event: InputEvent) -> void:
 		_debug_undo_last_command()
 		return
 
+	# Keyboard: brush hotkeys --------------------------------------------------
+	if event is InputEventKey and event.pressed:
+		# If the title LineEdit (or any other text field you care about) has focus,
+		# ignore brush hotkeys so you can type numbers safely.
+		if is_instance_valid(title_edit) and title_edit.has_focus():
+			return
+		# If there is no registry, we can't select any brushes.
+		if brush_registry == null:
+			return
+
+		# Decide how many hotkeys to support based on how many brushes we have,
+		# but never go past 8 (since we only defined builder_brush_1..8).
+		var max_brushes: int = min(brush_registry.brushes.size(), 8)
+
+		# Loop over 1..max_brushes and check if any of the builder_brush_N
+		# actions were just pressed. If so, select the corresponding index.
+		for i in range(max_brushes):
+			var action_name := "builder_brush_%d" % (i + 1)
+			if event.is_action_pressed(action_name):
+				_select_brush(i)
+				return  # stop after handling one hotkey
+				# Toggle eraser if the eraser hotkey is pressed.
+
+		# Toggle eraser
+		if event.is_action_pressed("build_toggle_eraser"):
+			_toggle_eraser()
+			return
+
 ## Toggle visibility for dev-only badge
 func _on_dev_mode_changed(enabled: bool) -> void:
 	if dev_badge:
@@ -345,30 +373,6 @@ func _on_dev_mode_changed(enabled: bool) -> void:
 	_show_status("Dev Mode: " + state_text)
 
 ## --- Selection --------------------------------------------------------
-
-### Update the current brush and palette button visuals
-#func _select_brush(index: int) -> void:
-	#if brush_registry == null or index < 0 or index >= brush_registry.brushes.size():
-		#_show_status("⚠️ No brush at index " + str(index))
-		#return
-	#_current_index = index
-	#
-	#for i in range(_palette_buttons.size()):
-		#var btn := _palette_buttons[i]
-		#var selected := (i == _current_index)
-		#btn.button_pressed = selected
-		#if selected:
-			#btn.self_modulate = Color(1, 1, 1, 1)
-			#btn.scale = Vector2(1.1, 1.1)
-		#else:
-			#btn.self_modulate = Color(0.7, 0.7, 0.7, 1)
-			#btn.scale = Vector2.ONE
-	#
-		#if brush_registry and i < brush_registry.brushes.size():
-			#btn.tooltip_text = brush_registry.brushes[i].display_name
-	#
-	#var b: BrushEntry = brush_registry.brushes[index]
-	#_show_status("Brush: " + (b.display_name if b.display_name != "" else "Unnamed"))
 
 ## Update the current brush and palette button visuals
 func _select_brush(index: int) -> void:
@@ -395,12 +399,19 @@ func _select_brush(index: int) -> void:
 		btn.button_pressed = selected
 
 		if selected:
-			# Selected brush: brighter and slightly larger.
-			btn.self_modulate = Color(1, 1, 1, 1)
-			btn.scale = Vector2(1.1, 1.1)
+			# Slightly larger and fully bright so the active brush is very clear.
+			# We bump the scale just a bit more than before to read better at a glance.
+			btn.self_modulate = Color(1.0, 1.0, 1.0, 1.0)
+			btn.scale = Vector2(1.15, 1.15)
+
+			# Optional: if this selected brush *is* the eraser, give it a very subtle tint
+			# so destructive mode is more visually distinctive.
+			if brush != null and brush.rule_profile == "ERASER":
+				btn.self_modulate = Color(1.0, 0.95, 0.95, 1.0)  # tiny red-ish bias
 		else:
-			# Unselected brushes: dimmer and normal scale.
-			btn.self_modulate = Color(0.7, 0.7, 0.7, 1)
+			# Unselected brushes: clearly dimmer and slightly transparent,
+			# to reinforce that they're "available but inactive".
+			btn.self_modulate = Color(0.65, 0.65, 0.65, 0.85)
 			btn.scale = Vector2.ONE
 
 		# Keep tooltip text in sync with the registry.
@@ -409,7 +420,7 @@ func _select_brush(index: int) -> void:
 
 	# Show a friendly status message with the selected brush name.
 	_show_status("Brush: " + (brush.display_name if brush.display_name != "" else "Unnamed"))
-
+	print("Selected index: ", _current_index, ", last_non_eraser_index: ", _last_non_eraser_index, ", rule_profile: ", brush.rule_profile)
 
 ## Return the current BrushEntry or null
 func _current_brush() -> BrushEntry:
@@ -440,6 +451,43 @@ func _find_eraser_index() -> int:
 
 	# If we reached this point, there is no ERASER brush configured.
 	return -1
+
+## Toggle between the eraser brush and the last non-eraser brush.
+func _toggle_eraser() -> void:
+	# If we have no registry or no brushes, do nothing.
+	if brush_registry == null or brush_registry.brushes.is_empty():
+		_show_status("⚠️ No brushes available.")
+		return
+
+	var current := _current_brush()
+	if current == null:
+		_show_status("⚠️ No current brush selected.")
+		return
+
+	# Are we currently using the eraser?
+	var eraser_idx: int = _find_eraser_index()
+	if eraser_idx == -1:
+		_show_status("⚠️ No eraser brush in palette.")
+		return
+
+	if current.rule_profile != "ERASER":
+		# We are on a normal brush → swap to eraser.
+		_select_brush(eraser_idx)
+	else:
+		# We are on the eraser → go back to last non-eraser.
+		# Must be inside valid range.
+		if _last_non_eraser_index >= 0 and _last_non_eraser_index < brush_registry.brushes.size():
+			_select_brush(_last_non_eraser_index)
+		else:
+			# Fallback if _last_non_eraser_index is corrupted.
+			# Choose the first non-eraser brush available.
+			for i in range(brush_registry.brushes.size()):
+				var b := brush_registry.brushes[i]
+				if b != null and b.rule_profile != "ERASER":
+					_select_brush(i)
+					return
+
+			_show_status("⚠️ No non-eraser brushes found.")
 
 ## --- Painting / Erasing --------------------------------------------------------
 
