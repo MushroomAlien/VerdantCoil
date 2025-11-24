@@ -66,11 +66,27 @@ func consume_pending_coil() -> Dictionary:
 	return out
 
 ## Return to BuilderMode; Builder will restore from the session snapshot
+#func return_to_builder() -> void:
+	#print("CoilSession: return_to_builder() called.")
+	#if builder_scene_path == "":
+		#push_error("CoilSession: builder_scene_path is empty.")
+		#return
+	#get_tree().change_scene_to_file(builder_scene_path)
 func return_to_builder() -> void:
 	print("CoilSession: return_to_builder() called.")
+
+	# Make sure Builder has something to restore
+	if _last_run_coil.is_empty():
+		push_warning("CoilSession: return_to_builder() → _last_run_coil is empty; Builder will get an empty coil.")
+		pending_coil = {}  # explicit, for clarity
+	else:
+		# Give Builder a fresh copy to consume
+		pending_coil = _last_run_coil.duplicate(true)
+
 	if builder_scene_path == "":
 		push_error("CoilSession: builder_scene_path is empty.")
 		return
+
 	get_tree().change_scene_to_file(builder_scene_path)
 
 func return_to_heartroot() -> void:
