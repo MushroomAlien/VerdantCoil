@@ -523,14 +523,14 @@ Outcome: Builder painting workflow now feels significantly smoother, faster, and
 
 ========================================================================
 VERDANT COIL — COMBINED GDSCRIPT DUMP
-Generated: 2025-11-23 23:08:49
+Generated: 2025-11-30 18:20:59
 Project root: G:\Game Dev\Verdant Coil
 Files found: 25
 ========================================================================
 
 TABLE OF CONTENTS
  - verdant-coil/Scenes/Actors/crawler.gd  (365 lines)
- - verdant-coil/Scenes/BuilderMode/builder_mode.gd  (1444 lines)
+ - verdant-coil/Scenes/BuilderMode/builder_mode.gd  (1416 lines)
  - verdant-coil/Scenes/BuilderMode/dev_controls_root.gd  (71 lines)
  - verdant-coil/Scenes/Heartroot/heartroot.gd  (318 lines)
  - verdant-coil/Scenes/Tiles/base_tile.gd  (21 lines)
@@ -539,7 +539,7 @@ TABLE OF CONTENTS
  - verdant-coil/Scenes/UI/resource_counters.gd  (131 lines)
  - verdant-coil/Scenes/UI/upgrade_row.gd  (97 lines)
  - verdant-coil/Scenes/World/explore_mode.gd  (176 lines)
- - verdant-coil/System/autoload/coil_session.gd  (84 lines)
+ - verdant-coil/System/autoload/coil_session.gd  (94 lines)
  - verdant-coil/System/autoload/health_system.gd  (86 lines)
  - verdant-coil/System/autoload/upgrade_state.gd  (48 lines)
  - verdant-coil/System/brush_entry.gd  (32 lines)
@@ -1842,34 +1842,6 @@ func _on_load_pressed() -> void:
 		load_dialog.popup_centered()
 
 ## Load a selected coil JSON and apply it to layers
-#func _on_load_file_selected(path: String) -> void:
-	#var f := FileAccess.open(path, FileAccess.READ)
-	#if f == null:
-		#_show_status("Load failed (" + str(FileAccess.get_open_error()) + ").")
-		#return
-	#var txt: String = f.get_as_text()
-	#f.close()
-	#var parsed_v: Variant = JSON.parse_string(txt)
-	#if typeof(parsed_v) != TYPE_DICTIONARY:
-		#_show_status("Load failed: JSON malformed.")
-		#return
-	#var data: Dictionary = parsed_v as Dictionary
-	#var meta_v: Variant = data.get("meta", {})
-	#if typeof(meta_v) == TYPE_DICTIONARY:
-		#var meta: Dictionary = meta_v
-		#var creator_id: String = String(meta.get("creator_profile_id", ""))
-		#var cur_id: String = _current_profile_id()
-		#if creator_id != "" and cur_id != "" and creator_id != cur_id:
-			#_show_status("⚠ Loaded coil from another profile.")
-	#CoilIO.apply_coil(data, base_layer, walls_layer, hazard_layer, marker_layer)
-	#_recalc_biomass()
-	#_show_status("Loaded: " + path)
-	#_refresh_validation_state()  # don't touch disk; just reflect truth in UI
-	## Remember last_opened_coil_path on current profile
-	#if has_node("/root/ProfileManager"):
-		#var pm3: Node = get_node("/root/ProfileManager")
-		#if pm3.has_method("set_current_last_opened_coil"):
-			#pm3.call("set_current_last_opened_coil", path)
 func _on_load_file_selected(path: String) -> void:
 	var f := FileAccess.open(path, FileAccess.READ)
 	if f == null:
@@ -3470,9 +3442,19 @@ func consume_pending_coil() -> Dictionary:
 ## Return to BuilderMode; Builder will restore from the session snapshot
 func return_to_builder() -> void:
 	print("CoilSession: return_to_builder() called.")
+
+	# Make sure Builder has something to restore
+	if _last_run_coil.is_empty():
+		push_warning("CoilSession: return_to_builder() → _last_run_coil is empty; Builder will get an empty coil.")
+		pending_coil = {}  # explicit, for clarity
+	else:
+		# Give Builder a fresh copy to consume
+		pending_coil = _last_run_coil.duplicate(true)
+
 	if builder_scene_path == "":
 		push_error("CoilSession: builder_scene_path is empty.")
 		return
+
 	get_tree().change_scene_to_file(builder_scene_path)
 
 func return_to_heartroot() -> void:

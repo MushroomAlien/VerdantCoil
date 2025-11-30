@@ -914,34 +914,6 @@ func _on_load_pressed() -> void:
 		load_dialog.popup_centered()
 
 ## Load a selected coil JSON and apply it to layers
-#func _on_load_file_selected(path: String) -> void:
-	#var f := FileAccess.open(path, FileAccess.READ)
-	#if f == null:
-		#_show_status("Load failed (" + str(FileAccess.get_open_error()) + ").")
-		#return
-	#var txt: String = f.get_as_text()
-	#f.close()
-	#var parsed_v: Variant = JSON.parse_string(txt)
-	#if typeof(parsed_v) != TYPE_DICTIONARY:
-		#_show_status("Load failed: JSON malformed.")
-		#return
-	#var data: Dictionary = parsed_v as Dictionary
-	#var meta_v: Variant = data.get("meta", {})
-	#if typeof(meta_v) == TYPE_DICTIONARY:
-		#var meta: Dictionary = meta_v
-		#var creator_id: String = String(meta.get("creator_profile_id", ""))
-		#var cur_id: String = _current_profile_id()
-		#if creator_id != "" and cur_id != "" and creator_id != cur_id:
-			#_show_status("⚠ Loaded coil from another profile.")
-	#CoilIO.apply_coil(data, base_layer, walls_layer, hazard_layer, marker_layer)
-	#_recalc_biomass()
-	#_show_status("Loaded: " + path)
-	#_refresh_validation_state()  # don't touch disk; just reflect truth in UI
-	## Remember last_opened_coil_path on current profile
-	#if has_node("/root/ProfileManager"):
-		#var pm3: Node = get_node("/root/ProfileManager")
-		#if pm3.has_method("set_current_last_opened_coil"):
-			#pm3.call("set_current_last_opened_coil", path)
 func _on_load_file_selected(path: String) -> void:
 	var f := FileAccess.open(path, FileAccess.READ)
 	if f == null:
