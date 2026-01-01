@@ -9,7 +9,49 @@ const CRAWLER_SCENE: PackedScene = preload("res://Scenes/Actors/Crawler.tscn")
 @export var hazard_layer: TileMapLayer
 @export var marker_layer: TileMapLayer
 
+# --- Lighting baseline (Step 1) ---
+# This is your single "ambient darkness" tuning value.
+# Lighter = less dark. Darker = more dark.
+@export var ambient_darkness: Color = Color(0.2, 0.2, 0.4, 1.0)
+
+@onready var world_darkness: CanvasModulate = $WorldDarkness
+@onready var coil_map: TileMap = $CoilMap
+
 func _ready() -> void:
+	# --- Step 1: Apply global darkness baseline to the world canvas ---
+	# This will dim CoilMap + crawler sprite, but NOT HUD (CanvasLayer),
+	# and NOT the ParallaxBackground because we moved it under BackgroundLayer (CanvasLayer).
+	world_darkness.color = ambient_darkness
+	
+	# TileSet on the TileMap (typical setup)
+	var ts: TileSet = coil_map.tile_set
+	if ts == null:
+		print("Preflight: CoilMap has NO TileSet assigned.")
+		return
+
+	# Print identifying info
+	print("Preflight: CoilMap TileSet =", ts)
+	print("Preflight: CoilMap TileSet resource_path =", ts.resource_path)
+
+	# Also confirm the Walls layer exists by name (debug sanity check)
+	var walls_layer := coil_map.get_node_or_null("Walls")
+	print("Preflight: Walls layer node =", walls_layer)
+
+
+	# ...existing TileSet prints...
+
+	# Check if LightMaskLayer exists as a node
+	var light_mask_layer := $CoilMap.get_node_or_null("LightMaskLayer")
+	print("Preflight: LightMaskLayer node =", light_mask_layer)
+
+	# Check whether anything is toggling it (visibility can be a clue)
+	if light_mask_layer != null:
+		# Many node types have 'visible' or 'visible' equivalents; we just print what we can safely.
+		if light_mask_layer.has_method("is_visible"):
+			print("Preflight: LightMaskLayer visible =", light_mask_layer.is_visible())
+		else:
+			print("Preflight: LightMaskLayer has no is_visible() method (that can be normal).")
+
 	# 1) If Builder handed us a coil via the Autoload, rebuild the map now.
 	#    Use consume_pending_coil() so we TAKE the snapshot and CLEAR it in the session.
 	if has_node("/root/CoilSession"):

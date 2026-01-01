@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" uid="uid://dd0fq3qbaw3l1" path="res://System/brush_entry.gd" id="1_f2srp"]
 [ext_resource type="Script" uid="uid://kdhl6aofvq0k" path="res://System/brush_registry.gd" id="2_cntgp"]
-[ext_resource type="Texture2D" uid="uid://c4eqrqt63s4vg" path="res://Assets/roguelikeSheet_transparent_32x32.png" id="2_f6ucc"]
+[ext_resource type="Texture2D" uid="uid://b7tt3ydw5qm6q" path="res://Assets/roguelikeSheet_transparent_32x32.png" id="2_f6ucc"]
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_xxkp0"]
 atlas = ExtResource("2_f6ucc")

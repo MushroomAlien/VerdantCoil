@@ -3,7 +3,7 @@
 [ext_resource type="Script" uid="uid://djodedx8i3l5l" path="res://Scenes/Heartroot/heartroot.gd" id="1_3ld42"]
 [ext_resource type="PackedScene" uid="uid://khw225w867t3" path="res://System/debug/scene_tree_printer.tscn" id="1_6og3p"]
 [ext_resource type="Script" uid="uid://55pijkd5ikda" path="res://Scenes/UI/resource_counters.gd" id="2_uh4yy"]
-[ext_resource type="Texture2D" uid="uid://c4eqrqt63s4vg" path="res://Assets/roguelikeSheet_transparent_32x32.png" id="3_0tek3"]
+[ext_resource type="Texture2D" uid="uid://b7tt3ydw5qm6q" path="res://Assets/roguelikeSheet_transparent_32x32.png" id="3_0tek3"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_3ld42"]
 content_margin_left = 12.0
@@ -265,3 +265,4 @@ text = "Play Selected
 "
 
 [node name="SceneTreePrinter" parent="." instance=ExtResource("1_6og3p")]
+printing_on = false

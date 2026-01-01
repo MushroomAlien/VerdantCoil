@@ -459,6 +459,255 @@ This section captures and organizes your raw ideas into structured sections. As 
 * **Streak Rewards**: Bonuses for consecutive completions, encouraging consistent play.
 * **Composting System**: Recycling coils to recover nutrients and manage biomass portfolio.
 
+## Engineers Map Plan — Method 2 Lighting (Godot 4.4.1)
+
+### Goal (what “done” means)
+
+* **World is dark by default**.
+* **Crawler emits light**.
+* **Walls block light** (no light passing through).
+* Walls are **readable when lit**.
+* The design supports adding more emitters later (trail/creatures/start/Heartroot).
+
+Confidence: **High** | Evidence: **Mod** | Key uncertainties: which TileSet(s) your `CoilMap` layers currently use for Walls.
+
+---
+
+## A) Where this fits in your current node structure
+
+### Explorer scene (where lighting lives)
+
+You currently have:
+
+* `ExploreMode (Node2D)`
+
+  * `CoilMap (TileMap)`
+
+    * `Base (TileMapLayer)`
+    * `Walls (TileMapLayer)`
+    * `Hazard (TileMapLayer)`
+    * `Marker (TileMapLayer)`
+    * `LightMaskLayer (TileMapLayer)` *(currently exists)*
+  * `Crawler (Area2D)`
+
+    * `Sprite2D`
+    * `Camera2D`
+  * `HUD (CanvasLayer)` *(UI should remain unaffected)*
+
+**Lighting should be part of the world render, not the HUD.**
+So: **CanvasModulate + lights + occlusion live under `ExploreMode`**, and the occluders are defined in the **TileSet used by `CoilMap/Walls`**.
+
+---
+
+## B) Epic + Tasks (Engineers Map-ready)
+
+### EPIC L2.0 — Lighting Foundation (global darkness)
+
+**Intent:** Make the world dim so light sources matter.
+
+**Tasks**
+
+1. **Add `CanvasModulate` to `ExploreMode`**
+
+   * Node sits as a child of `ExploreMode (Node2D)`.
+   * Set a dark ambient colour (not pitch black yet).
+
+2. **Define “lighting baseline” config**
+
+   * One place to tune ambient darkness (e.g. a constant in an ExploreMode config script or a small settings resource later).
+
+**Dependencies:** none
+**Integrations:** affects everything under `ExploreMode` (CoilMap + Crawler + props).
+**Acceptance tests**
+
+* With no Light2D anywhere, the world is visibly dim.
+* HUD remains normal brightness (CanvasLayer is not affected).
+
+---
+
+### EPIC L2.1 — Crawler Light Source
+
+**Intent:** Crawler carries a bioluminescent glow.
+
+**Tasks**
+
+1. **Add a Light2D as a child of `Crawler`**
+
+   * e.g. `Crawler/GlowLight (PointLight2D or Light2D)`.
+
+2. **Tuning pass: “bioluminescent blob”**
+
+   * Choose radius + energy + texture falloff appropriate to tilescale.
+   * Decide whether the crawler light is coloured or neutral for Phase 1.
+
+3. **Layer/mask sanity check**
+
+   * Ensure the crawler light affects the world layers you intend (TileMap + actors), not UI.
+
+**Dependencies:** L2.0
+**Integrations:** `Crawler` scene; follows movement automatically.
+**Acceptance tests**
+
+* Light moves with crawler without any special logic.
+* Nearby tiles brighten smoothly with distance falloff.
+
+---
+
+### EPIC L2.2 — Wall Occlusion via TileSet Occluders
+
+**Intent:** Walls block light.
+
+**Tasks**
+
+1. **Identify the TileSet used by `CoilMap/Walls`**
+
+   * Confirm the wall tiles come from a TileSet that supports occluders.
+
+2. **Define occluder polygons for wall tiles**
+
+   * For every “solid wall” tile, add an occluder polygon matching the tile footprint (usually the full tile square).
+   * If you have half-walls / diagonals later, those get their own polygons.
+
+3. **Establish the “Wall Tile Contract”**
+
+   * Any tile that blocks movement **must** also block light.
+   * Add this to your internal definition-of-done checklist for new wall tiles.
+
+**Dependencies:** L2.0 + having wall tiles in a TileSet
+**Integrations:** `CoilMap/Walls` layer; Builder Mode wall placement/removal inherits this automatically.
+**Acceptance tests**
+
+* Stand crawler on one side of a wall: light does **not** illuminate tiles behind it.
+* “Corner test”: at an L-shaped corner, light doesn’t leak around the corner unnaturally.
+
+---
+
+### EPIC L2.3 — Wall Readability Pass (make walls readable when lit)
+
+**Intent:** Ensure players can tell “that’s a wall” from the lit side.
+
+**Tasks**
+
+1. **Choose a readability policy (Phase 1)**
+
+   * Option A: Ambient not too dark + strong crawler falloff.
+   * Option B: Wall tiles slightly brighter than floor tiles in their base art.
+   * Option C (later): subtle outline overlay near light edge (avoid for Phase 1 unless needed).
+
+2. **Tune ambient + crawler light together**
+
+   * Avoid “pitch black except the centre” if it makes navigation unpleasant.
+   * Ensure the near face of a wall catches enough light to read as solid.
+
+**Dependencies:** L2.0–L2.2
+**Integrations:** art + lighting tuning.
+**Acceptance tests**
+
+* Approaching a wall: the wall becomes clearly identifiable before collision.
+* The player can read corridors and barriers without squinting.
+
+---
+
+### EPIC L2.4 — Extensible Emitters Framework (future-proofing without overbuilding)
+
+**Intent:** Make it trivial to add new glow sources later.
+
+**Tasks**
+
+1. **Define a simple emitter rule**
+
+   * Any object/tile that “glows” gets a Light2D as a child.
+   * Two categories:
+
+     * **Actor emitters** (Crawler/Creatures): Light2D is part of the actor scene.
+     * **Static tile emitters** (Start/Heartroot/props): spawn a small Node2D scene at the tile with a Light2D.
+
+2. **Decide how builder/explorer spawns static emitters**
+
+   * When coil loads, place static emitter scenes at designated tile coords.
+   * When builder edits a glow tile later, spawn/despawn those emitters.
+
+**Dependencies:** L2.0–L2.2
+**Integrations:** Coil loading (CoilSession → ExploreMode), Builder Mode tile placement, future content.
+**Acceptance tests**
+
+* Add one test “glow prop” in the map: it lights its area and is blocked by walls.
+* Multiple emitters combine naturally (overlapping light looks brighter).
+
+---
+
+## C) Integration points (how lighting attaches to other systems)
+
+### 1) ExploreMode load pipeline (CoilSession → ExploreMode)
+
+* On load, `CoilMap` layers are populated.
+* Lighting responds automatically because:
+
+  * CanvasModulate is always present (global darkness).
+  * Occluders are baked into wall tiles (no code).
+  * Lights exist on actors/props (scene composition).
+
+**Engineers map link:** “ExploreMode load” → ensures emitters for special tiles get spawned (L2.4).
+
+### 2) Crawler movement
+
+* No special lighting code required.
+* Light is a child of crawler → it moves with the node.
+
+**Engineers map link:** “Crawler movement” depends only on the light being attached (L2.1).
+
+### 3) Builder mode wall placement/removal
+
+* If Builder mode paints/removes wall tiles on `CoilMap/Walls`, occlusion updates automatically.
+* **Risk:** if Builder uses a different tile set / decorative layer for walls, you can get “looks like a wall but doesn’t block light”.
+
+**Engineers map link:** Builder mode must place walls **on the occluding Walls layer** using the TileSet tiles with occluders (L2.2 contract).
+
+### 4) HealthSystem / HUD
+
+* Should be unaffected (CanvasLayer isolates it).
+* If it dims, CanvasModulate is placed too high in the tree.
+
+**Engineers map link:** Verify UI remains bright in L2.0 acceptance tests.
+
+---
+
+## D) What to do with your existing `LightMaskLayer`
+
+You already have `CoilMap/LightMaskLayer (TileMapLayer)`.
+
+For Method 2:
+
+* **It is not required** for dynamic lighting.
+* Options:
+
+  1. **Keep it but mark as deprecated** (maybe it was for Method 3/overlay).
+  2. **Repurpose it later** for fog-of-war/memory (separate from lighting).
+  3. **Remove it** only if you are sure nothing references it.
+
+**Engineers map note:** add a small “Audit LightMaskLayer usage” task to avoid breaking something quietly.
+
+---
+
+## E) Minimal dependency graph (so you can draw it)
+
+* **L2.0 CanvasModulate** → required for everything to “feel” dark.
+* **L2.1 Crawler Light** → depends on L2.0.
+* **L2.2 Wall Occluders** → depends on having wall TileSet, pairs with L2.1 to create shadows.
+* **L2.3 Readability tuning** → depends on L2.0–L2.2.
+* **L2.4 Future emitters** → depends on L2.0–L2.2, links into coil load + builder.
+
+---
+
+## Verification checklist (quick, practical)
+
+1. **UI unaffected** (HUD brightness unchanged).
+2. **Crawler glow works** (moves with crawler).
+3. **Walls block light** (no light behind wall).
+4. **Corner behaviour acceptable** (no weird diagonal leaks).
+5. **Builder wall edit updates lighting instantly**.
+6. **Two light sources overlap correctly** (later test prop).
+
 ========================================================================
 VERDANT COIL — COMBINED GDSCRIPT DUMP
 Generated: 2025-09-22 19:12:05
