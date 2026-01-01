@@ -32,8 +32,11 @@ position_smoothing_enabled = true
 script = ExtResource("3_0kwjx")
 
 [node name="GlowLight" type="PointLight2D" parent="."]
-color = Color(1, 0.835294, 0.623529, 1)
+color = Color(1, 0.784314, 0.588235, 1)
 energy = 1.2
+shadow_enabled = true
+shadow_filter = 1
+shadow_filter_smooth = 1.0
 texture = ExtResource("4_v16nv")
 texture_scale = 6.0
 

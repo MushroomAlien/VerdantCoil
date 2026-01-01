@@ -34,8 +34,8 @@ func _ready() -> void:
 	print("Preflight: CoilMap TileSet resource_path =", ts.resource_path)
 
 	# Also confirm the Walls layer exists by name (debug sanity check)
-	var walls_layer := coil_map.get_node_or_null("Walls")
-	print("Preflight: Walls layer node =", walls_layer)
+	var walls_layer_debug := coil_map.get_node_or_null("Walls")
+	print("Preflight: Walls layer node =", walls_layer_debug)
 
 
 	# ...existing TileSet prints...
