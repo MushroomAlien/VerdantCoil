@@ -1,6 +1,12 @@
-[gd_resource type="TileSet" load_steps=5 format=3 uid="uid://0dggvm2m4qyl"]
+[gd_resource type="TileSet" load_steps=7 format=3 uid="uid://0dggvm2m4qyl"]
 
 [ext_resource type="Texture2D" uid="uid://b7tt3ydw5qm6q" path="res://Assets/roguelikeSheet_transparent_32x32.png" id="1_gp51x"]
+
+[sub_resource type="OccluderPolygon2D" id="OccluderPolygon2D_4303n"]
+polygon = PackedVector2Array(0, 0, -5.33333, 5.33333, 0, 10.6667, 5.33333, 5.33333)
+
+[sub_resource type="OccluderPolygon2D" id="OccluderPolygon2D_kq1l7"]
+polygon = PackedVector2Array(0, 8, -4, 4, -4, 0, 0, -4, 4, 0, 4, 4)
 
 [sub_resource type="OccluderPolygon2D" id="OccluderPolygon2D_qfftw"]
 polygon = PackedVector2Array(-16, -16, -16, 16, 16, 16, 16, -16)
@@ -935,6 +941,7 @@ texture_region_size = Vector2i(32, 32)
 13:6/0 = 0
 13:7/0 = 0
 13:8/0 = 0
+13:8/0/occlusion_layer_0/polygon_0/polygon = SubResource("OccluderPolygon2D_4303n")
 13:8/0/custom_data_0 = "spawn"
 13:8/0/custom_data_1 = true
 13:8/0/custom_data_2 = "none"
@@ -969,11 +976,6 @@ texture_region_size = Vector2i(32, 32)
 14:5/0 = 0
 14:6/0 = 0
 14:7/0 = 0
-14:8/0 = 0
-14:8/0/custom_data_0 = "heartroot"
-14:8/0/custom_data_1 = true
-14:8/0/custom_data_2 = "none"
-14:8/0/custom_data_6 = true
 14:9/0 = 0
 14:10/0 = 0
 14:11/0 = 0
@@ -2277,6 +2279,12 @@ texture_region_size = Vector2i(32, 32)
 56:27/0 = 0
 56:28/0 = 0
 56:29/0 = 0
+14:8/0 = 0
+14:8/0/occlusion_layer_0/polygon_0/polygon = SubResource("OccluderPolygon2D_kq1l7")
+14:8/0/custom_data_0 = "heartroot"
+14:8/0/custom_data_1 = true
+14:8/0/custom_data_2 = "none"
+14:8/0/custom_data_6 = true
 
 [resource]
 tile_size = Vector2i(32, 32)

@@ -12,10 +12,24 @@ const CRAWLER_SCENE: PackedScene = preload("res://Scenes/Actors/Crawler.tscn")
 # --- Lighting baseline (Step 1) ---
 # This is your single "ambient darkness" tuning value.
 # Lighter = less dark. Darker = more dark.
-@export var ambient_darkness: Color = Color(0.2, 0.2, 0.4, 1.0)
+#@export var ambient_darkness: Color = Color(0.1, 0.1, 0.2, 1.0)
 
 @onready var world_darkness: CanvasModulate = $WorldDarkness
 @onready var coil_map: TileMap = $CoilMap
+# --- Step 4: Readability tuning (Phase 1) ---
+@export var ambient_darkness: Color = Color(0.08, 0.08, 0.12, 1.0)
+
+# World (shadowed) light: affects mask 1
+@export var glow_world_energy: float = 1.0
+@export var glow_world_texture_scale: float = 8.0
+@export var glow_world_colour: Color = Color(1.0, 0.9, 0.85, 1.0) # warm
+
+# Wall reveal (unshadowed) light: affects mask 2
+@export var wall_light_energy: float = 1.0
+@export var wall_light_texture_scale: float = 3.5
+@export var wall_light_colour: Color = Color(1.0, 0.95, 0.90, 1.0) # near-neutral
+
+#@onready var world_darkness: CanvasModulate = $WorldDarkness
 
 func _ready() -> void:
 	# --- Step 1: Apply global darkness baseline to the world canvas ---
@@ -93,6 +107,7 @@ func _ready() -> void:
 	var spawn_tile: Vector2i = get_spawn_position()
 	crawler.position = GridUtil.to_world(spawn_tile)  # your util converts map→world
 	add_child(crawler)
+	_apply_crawler_lights(crawler)
 
 	var row_path: String = "HUD/SafeArea/BottomCenter/UpgradeRow"
 	var row: Node = get_node_or_null(row_path)
@@ -153,6 +168,32 @@ func _apply_upgrade_state_to_crawler(crawler: Area2D) -> void:
 		if (not need_ghost) and has_ghost_now:
 			uc.call("toggle_upgrade", uc.Upgrade.GHOST_TRAIL)
 	print("UpgradeState → Crawler sync done (H:", hardened, ", A:", acid, ", G:", ghost, ")")
+
+# Configures crawler lights for Phase 1 readability.
+# Requires in Crawler.tscn:
+# - GlowLight (PointLight2D): shadowed world light, mask 1
+# - WallLight (PointLight2D): unshadowed wall reveal, mask 2
+func _apply_crawler_lights(crawler: Area2D) -> void:
+	if crawler == null:
+		return
+
+	var glow: PointLight2D = crawler.get_node_or_null("GlowLight")
+	if glow != null:
+		glow.energy = glow_world_energy
+		glow.texture_scale = glow_world_texture_scale
+		glow.color = glow_world_colour
+		# Safety: ensure it only affects world mask 1
+		#glow.item_cull_mask = 1
+
+	var wall: PointLight2D = crawler.get_node_or_null("WallLight")
+	if wall != null:
+		wall.energy = wall_light_energy
+		wall.texture_scale = wall_light_texture_scale
+		wall.color = wall_light_colour
+		# Safety: walls only (mask 2)
+		#wall.item_cull_mask = 2
+		# Ensure wall reveal doesn't cast shadows
+		#wall.shadow_enabled = false
 
 ## Returns the tile coordinates of the spawn tile marked with `is_spawn = true` in the Marker layer.
 ## Falls back to (12, 23) with a warning if none is found.

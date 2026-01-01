@@ -33,11 +33,20 @@ script = ExtResource("3_0kwjx")
 
 [node name="GlowLight" type="PointLight2D" parent="."]
 color = Color(1, 0.784314, 0.588235, 1)
-energy = 1.2
+energy = 0.8
 shadow_enabled = true
 shadow_filter = 1
 shadow_filter_smooth = 1.0
 texture = ExtResource("4_v16nv")
 texture_scale = 6.0
+
+[node name="WallLight" type="PointLight2D" parent="."]
+color = Color(1, 0.784314, 0.588235, 1)
+energy = 0.9
+range_item_cull_mask = 2
+shadow_filter = 1
+shadow_filter_smooth = 1.0
+texture = ExtResource("4_v16nv")
+texture_scale = 2.5
 
 [node name="SceneTreePrinter" parent="." instance=ExtResource("4_okp5s")]
