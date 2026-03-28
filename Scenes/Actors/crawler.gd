@@ -317,6 +317,11 @@ var _pending_toggle: int = -1
 
 # Queue a toggle to run on the next idle frame. Avoids re-entrancy inside input callbacks.
 func _request_toggle(index: int) -> void:
+	# Ghost Trail (index 2) is not yet implemented — block the toggle until Phase 4.
+	if index == 2:
+		print("[TOGGLE] Ghost Trail is not yet available.")
+		return
+
 	# Ignore if we are already moving or a toggle is already queued.
 	if _is_moving:
 		print("[TOGGLE] Ignored; currently moving.")

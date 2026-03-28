@@ -101,12 +101,12 @@ Both files are well-commented internally.
 
 ## Current Status
 
-**Active Phase: Phase 2 — Bug Fixes**
+**Active Phase: Phase 3 — Resolution Shift + Builder Camera** (Phase 2 complete)
 
-### Known Open Bugs (fix these first)
-1. **Death awards win reward** — route through `CoilSession.end_coil(false)`, check `success` flag before awarding nutrient in `CoilSession` and/or `ProfileManager`
-2. **`UpgradeState.load_active_loadout()` hard-resets all upgrades to `false`** instead of reading `desired_loadout` cross-checked against `owned_upgrades` from `ProfileManager`
-3. **Ghost Trail occupies a UI slot and does nothing** — disable/grey the button cleanly with a tooltip until it is implemented in Phase 4
+### Phase 2 Bug Fixes — Status
+1. ~~**Death awards win reward**~~ — Already correctly implemented. `coil_session.gd:end_coil()` guards `if success and (_origin == "hub")`. `lose_overlay.gd` calls `end_coil(false)` on exit. No code change needed.
+2. ✅ **`UpgradeState.load_active_loadout()` fixed** — Now reads `desired_loadout` cross-checked against `owned_upgrades` from `ProfileManager`. Falls back to all-off if ProfileManager unavailable.
+3. ✅ **Ghost Trail disabled** — Toggle blocked in `crawler.gd`. Icon always renders as `locked_modulate` in `upgrade_row.gd`.
 
 ---
 

@@ -12,6 +12,8 @@ extends HBoxContainer
 
 @export var active_modulate: Color = Color(1, 1, 1, 1)
 @export var inactive_modulate: Color = Color(0.55, 0.55, 0.55, 1)
+# Used for upgrades that are not yet implemented (e.g. Ghost Trail until Phase 4).
+@export var locked_modulate: Color = Color(0.3, 0.3, 0.3, 0.45)
 
 # --- Resolved nodes (typed) ---
 @onready var _hardened_icon: CanvasItem = get_node_or_null(hardened_icon_path)
@@ -46,7 +48,8 @@ func _on_controller_upgrade_changed(upgrade: int, value: bool) -> void:
 	elif upgrade == _controller.Upgrade.ACID_SAC:
 		_set_icon(_acid_icon, value)
 	elif upgrade == _controller.Upgrade.GHOST_TRAIL:
-		_set_icon(_ghost_icon, value)
+		# Ghost Trail is not yet implemented — keep it locked regardless of toggle signal.
+		_set_icon_locked(_ghost_icon)
 
 # --- Read from UpgradeController if we have it ---
 func _refresh_from_controller() -> void:
@@ -63,7 +66,8 @@ func _refresh_from_controller() -> void:
 
 	_set_icon(_hardened_icon, H)
 	_set_icon(_acid_icon, A)
-	_set_icon(_ghost_icon, G)
+	# Ghost Trail is not yet implemented — always show as locked regardless of state.
+	_set_icon_locked(_ghost_icon)
 
 # --- Fallback: read current values from UpgradeState (run start) ---
 func _refresh_from_state() -> void:
@@ -82,7 +86,8 @@ func _refresh_from_state() -> void:
 
 	_set_icon(_hardened_icon, H)
 	_set_icon(_acid_icon, A)
-	_set_icon(_ghost_icon, G)
+	# Ghost Trail is not yet implemented — always show as locked regardless of state.
+	_set_icon_locked(_ghost_icon)
 
 # --- Tint helper (typed & explicit) ---
 func _set_icon(icon: CanvasItem, is_active: bool) -> void:
@@ -92,5 +97,12 @@ func _set_icon(icon: CanvasItem, is_active: bool) -> void:
 		icon.modulate = active_modulate
 	else:
 		icon.modulate = inactive_modulate
+
+# Renders an icon as locked/unavailable — distinct from merely inactive.
+# Used for upgrades not yet implemented (e.g. Ghost Trail until Phase 4).
+func _set_icon_locked(icon: CanvasItem) -> void:
+	if icon == null:
+		return
+	icon.modulate = locked_modulate
 
 ## end res://Scenes/UI/upgrade_row.gd

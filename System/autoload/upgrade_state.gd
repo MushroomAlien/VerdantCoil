@@ -18,13 +18,46 @@ func _ready() -> void:
 	# when Explore starts a run.
 	pass
 
-# For Phase 1.6:
-# - Every run starts with ALL upgrades OFF.
-# - We ignore any "desired_loadout" stored in profiles for now.
+# Reads the player's desired loadout from ProfileManager and cross-checks it
+# against owned upgrades. An upgrade is only active if the player both OWNS it
+# and has selected it in their desired loadout. Falls back to all-off if
+# ProfileManager is unavailable (e.g. editor runs without the autoload).
 func load_active_loadout() -> void:
+	# Start from a clean slate.
 	_hardened_skin = false
 	_acid_sac = false
 	_ghost_trail = false
+
+	# Resolve ProfileManager via the safe autoload access pattern.
+	if not has_node("/root/ProfileManager"):
+		push_error("UpgradeState: ProfileManager not found — upgrades will default to off.")
+		emit_signal("loadout_changed")
+		return
+
+	var pm: Node = get_node("/root/ProfileManager")
+
+	if not pm.has_method("get_owned_upgrades") or not pm.has_method("get_desired_loadout"):
+		push_error("UpgradeState: ProfileManager is missing expected methods.")
+		emit_signal("loadout_changed")
+		return
+
+	# Fetch both dictionaries and guard their types before use.
+	var owned_v: Variant = pm.call("get_owned_upgrades")
+	var desired_v: Variant = pm.call("get_desired_loadout")
+
+	if typeof(owned_v) != TYPE_DICTIONARY or typeof(desired_v) != TYPE_DICTIONARY:
+		push_error("UpgradeState: Unexpected types from ProfileManager — upgrades will default to off.")
+		emit_signal("loadout_changed")
+		return
+
+	var owned: Dictionary = owned_v as Dictionary
+	var desired: Dictionary = desired_v as Dictionary
+
+	# Active = owned AND in the desired loadout. Missing keys default to false.
+	_hardened_skin = bool(owned.get("HARDENED_SKIN", false)) and bool(desired.get("HARDENED_SKIN", false))
+	_acid_sac      = bool(owned.get("ACID_SAC",      false)) and bool(desired.get("ACID_SAC",      false))
+	_ghost_trail   = bool(owned.get("GHOST_TRAIL",   false)) and bool(desired.get("GHOST_TRAIL",   false))
+
 	emit_signal("loadout_changed")
 
 # Public getters (explicit).

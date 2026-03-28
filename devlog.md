@@ -35,3 +35,45 @@ This file is append-only. Sections are never deleted.
 - Run a play-through to confirm all three fixes hold
 
 ---
+
+## Session 2 — 2026-03-28
+
+### What We Did
+Phase 2 bug fixes. Read all relevant files before touching anything.
+
+**Bug 1 (Death awards win):** Investigation showed this is already correctly implemented.
+`coil_session.gd:end_coil()` guards `if success and (_origin == "hub")` before awarding nutrient.
+`lose_overlay.gd` calls `end_coil(false)` on Exit and `retry_last_coil()` on Retry (no reward).
+`crawler._on_global_death()` only blocks input; it does not call `end_coil`.
+No code change needed. Marked as resolved in CLAUDE.md.
+
+**Bug 2 (UpgradeState hard-reset):** Fixed in `System/autoload/upgrade_state.gd`.
+`load_active_loadout()` now reads `get_owned_upgrades()` and `get_desired_loadout()` from
+ProfileManager via the safe `.call()` pattern, type-guards both return values, and sets each
+upgrade boolean to `owned AND desired`. Falls back to all-off with `push_error` if ProfileManager
+is unavailable.
+
+**Bug 3 (Ghost Trail does nothing):** Fixed in two files.
+- `Scenes/Actors/crawler.gd`: `_request_toggle(index)` now returns early for index 2 (Ghost Trail)
+  with a print message. The toggle is completely blocked — no turn consumed, no signal fired.
+- `Scenes/UI/upgrade_row.gd`: Added `locked_modulate` export colour (dark, semi-transparent).
+  Added `_set_icon_locked()` helper. All three refresh paths (`_refresh_from_state`,
+  `_refresh_from_controller`, `_on_controller_upgrade_changed`) now call `_set_icon_locked`
+  for the Ghost Trail icon instead of `_set_icon`, so it always appears visually unavailable.
+
+### Files Changed
+- `System/autoload/upgrade_state.gd`
+- `Scenes/Actors/crawler.gd`
+- `Scenes/UI/upgrade_row.gd`
+- `CLAUDE.md` (phase status updated to Phase 3)
+
+### Active Phase
+**Phase 3 — Resolution Shift (768×768 → 1024×576) + Scrollable Builder Camera**
+
+### Next Session Should
+- Shift project viewport to 1024×576 in `project.godot`
+- Update all UI scenes for new aspect ratio (Heartroot, ExploreMode HUD, BuilderMode)
+- Add scrollable/pannable camera to BuilderMode
+- Update default coil grid dimensions to match new viewport (32×18 tiles)
+
+---
