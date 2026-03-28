@@ -31,9 +31,18 @@ extends Control
 @onready var library_list: ItemList    = %LibraryList
 @onready var play_selected_btn: Button = %PlaySelectedBtn
 
+# --- Upgrade shop definitions ---
+# Cost is in Nutrient. Ghost Trail is locked until Phase 4.
+const UPGRADE_DEFS: Array = [
+	{ "key": "HARDENED_SKIN", "display": "Hardened Skin", "desc": "Reduces acid damage by 1 per step.", "cost": 3 },
+	{ "key": "ACID_SAC",      "display": "Acid Sac",      "desc": "Digest and pass through digestible walls.", "cost": 5 },
+	{ "key": "GHOST_TRAIL",   "display": "Ghost Trail",   "desc": "Bioluminescent trail. Coming in Phase 4.", "cost": 8, "locked": true },
+]
+
 # --- Local state (typed) ---
 var _library_items: Array = []  # Array<Dictionary> each entry mirrors manifest item
 var _manifest_path: String = "user://Published/manifest.json"
+var _upgrades_window: Window = null  # single instance guard
 
 func _ready() -> void:
 	# Wire UI signals
@@ -44,6 +53,7 @@ func _ready() -> void:
 	profiles_list.item_activated.connect(_on_profiles_item_activated) # double-click convenience
 	play_btn.pressed.connect(_on_play_pressed)
 	build_btn.pressed.connect(_on_build_pressed)
+	upgrades_btn.pressed.connect(_on_upgrades_pressed)
 	refresh_library_btn.pressed.connect(_on_refresh_library_pressed)
 	exit_btn.pressed.connect(_on_exit_pressed)
 	mine_only_cb.toggled.connect(func(_pressed): _refresh_library())
@@ -313,5 +323,180 @@ func _pad2(n: int) -> String:
 func _on_exit_pressed() -> void:
 	# In editor this stops the running game; in desktop export it quits the app.
 	get_tree().quit()
+
+# -----------------------------
+# Upgrade Shop
+# -----------------------------
+
+func _on_upgrades_pressed() -> void:
+	# Don't open a second window if one is already visible.
+	if _upgrades_window != null and is_instance_valid(_upgrades_window):
+		_upgrades_window.grab_focus()
+		return
+
+	var win: Window = Window.new()
+	win.title = "Upgrades"
+	win.initial_position = Window.WINDOW_INITIAL_POSITION_CENTER_MAIN_WINDOW_SCREEN
+	win.size = Vector2i(480, 360)
+	win.unresizable = true
+
+	# Clean up the window reference when it is closed.
+	win.close_requested.connect(func() -> void:
+		win.queue_free()
+		_upgrades_window = null
+	)
+
+	add_child(win)
+	_upgrades_window = win
+	_build_upgrade_content(win)
+	win.popup()
+
+# Builds (or rebuilds) the full content inside the upgrade window.
+# Called on first open and after every buy/equip action.
+func _build_upgrade_content(win: Window) -> void:
+	# Remove any existing child nodes before rebuilding.
+	for child in win.get_children():
+		win.remove_child(child)
+		child.queue_free()
+
+	# Fetch current state from ProfileManager.
+	var owned: Dictionary = {}
+	var desired: Dictionary = {}
+	var nutrient: int = 0
+
+	if has_node("/root/ProfileManager"):
+		var pm: Node = get_node("/root/ProfileManager")
+
+		var owned_v: Variant = pm.call("get_owned_upgrades")
+		if typeof(owned_v) == TYPE_DICTIONARY:
+			owned = owned_v as Dictionary
+
+		var desired_v: Variant = pm.call("get_desired_loadout")
+		if typeof(desired_v) == TYPE_DICTIONARY:
+			desired = desired_v as Dictionary
+
+		var res_v: Variant = pm.call("get_resources")
+		if typeof(res_v) == TYPE_DICTIONARY:
+			var res: Dictionary = res_v as Dictionary
+			nutrient = int(res.get("nutrient", 0))
+
+	# Root margin so content doesn't press against the window edges.
+	var margin: MarginContainer = MarginContainer.new()
+	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	margin.add_theme_constant_override("margin_left", 14)
+	margin.add_theme_constant_override("margin_right", 14)
+	margin.add_theme_constant_override("margin_top", 10)
+	margin.add_theme_constant_override("margin_bottom", 10)
+	win.add_child(margin)
+
+	var vbox: VBoxContainer = VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 6)
+	margin.add_child(vbox)
+
+	# Nutrient balance header.
+	var header: Label = Label.new()
+	header.text = "Nutrient balance: %d" % nutrient
+	vbox.add_child(header)
+
+	vbox.add_child(HSeparator.new())
+
+	# One row per upgrade definition.
+	for def_v in UPGRADE_DEFS:
+		if typeof(def_v) != TYPE_DICTIONARY:
+			continue
+		var def: Dictionary = def_v as Dictionary
+
+		var key: String       = String(def.get("key",     ""))
+		var display: String   = String(def.get("display", key))
+		var desc: String      = String(def.get("desc",    ""))
+		var cost: int         = int(def.get("cost",       0))
+		var locked: bool      = bool(def.get("locked",    false))
+		var is_owned: bool    = bool(owned.get(key,       false))
+		var is_desired: bool  = bool(desired.get(key,     false))
+
+		var row: HBoxContainer = HBoxContainer.new()
+		row.add_theme_constant_override("separation", 10)
+		vbox.add_child(row)
+
+		# Left side: name + description.
+		var info: VBoxContainer = VBoxContainer.new()
+		info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(info)
+
+		var name_lbl: Label = Label.new()
+		name_lbl.text = display + ("  [owned]" if is_owned else "")
+		info.add_child(name_lbl)
+
+		var desc_lbl: Label = Label.new()
+		desc_lbl.text = desc
+		desc_lbl.modulate = Color(0.7, 0.7, 0.7, 1.0)
+		desc_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		info.add_child(desc_lbl)
+
+		# Right side: action button.
+		if locked:
+			# Not yet implemented — show a disabled placeholder.
+			var lbl: Label = Label.new()
+			lbl.text = "Locked"
+			lbl.modulate = Color(0.45, 0.45, 0.45, 1.0)
+			row.add_child(lbl)
+
+		elif is_owned:
+			# Owned: show an equip/unequip toggle.
+			var equip_btn: Button = Button.new()
+			equip_btn.text = "Unequip" if is_desired else "Equip"
+			equip_btn.custom_minimum_size = Vector2(80, 0)
+			# Capture state at build time for the closure.
+			var captured_key: String = key
+			var captured_desired: Dictionary = desired.duplicate()
+			equip_btn.pressed.connect(func() -> void:
+				_toggle_desired(captured_key, captured_desired, win)
+			)
+			row.add_child(equip_btn)
+
+		else:
+			# Not owned: show a buy button, disabled if insufficient funds.
+			var buy_btn: Button = Button.new()
+			buy_btn.text = "Buy (%d N)" % cost
+			buy_btn.custom_minimum_size = Vector2(80, 0)
+			buy_btn.disabled = nutrient < cost
+			var captured_key: String = key
+			var captured_cost: int = cost
+			buy_btn.pressed.connect(func() -> void:
+				_do_buy(captured_key, captured_cost, win)
+			)
+			row.add_child(buy_btn)
+
+		vbox.add_child(HSeparator.new())
+
+# Flips one upgrade in the desired loadout and persists it.
+func _toggle_desired(key: String, current_desired: Dictionary, win: Window) -> void:
+	if not has_node("/root/ProfileManager"):
+		return
+	var pm: Node = get_node("/root/ProfileManager")
+
+	# Flip the target key; leave all others as-is.
+	var new_desired: Dictionary = current_desired.duplicate()
+	new_desired[key] = not bool(new_desired.get(key, false))
+
+	pm.call("set_desired_loadout", new_desired)
+	# Rebuild so the button label and state are immediately correct.
+	_build_upgrade_content(win)
+
+# Attempts to purchase an upgrade and rebuilds the window on success.
+func _do_buy(key: String, cost: int, win: Window) -> void:
+	if not has_node("/root/ProfileManager"):
+		return
+	var pm: Node = get_node("/root/ProfileManager")
+
+	var success_v: Variant = pm.call("buy_upgrade", key, cost)
+	var bought: bool = bool(success_v)
+
+	if not bought:
+		push_error("Heartroot: buy_upgrade failed for key=%s cost=%d" % [key, cost])
+		return
+
+	# Rebuild so the newly owned upgrade shows its equip button.
+	_build_upgrade_content(win)
 
 ## end res://Scenes/Heartroot/Heartroot.gd

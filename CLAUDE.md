@@ -110,6 +110,28 @@ Both files are well-commented internally.
 
 ---
 
+## Engineering Principles
+
+All code in this repository follows these principles. They are not aspirational — they are constraints.
+
+### Rob Pike's 5 Rules of Programming
+
+1. **You can't tell where a program is going to spend its time.** Bottlenecks occur in surprising places, so don't try to second guess and put in a speed hack until you've proven that's where the bottleneck is.
+2. **Measure.** Don't tune for speed until you've measured, and even then don't unless one part of the code overwhelms the rest.
+3. **Fancy algorithms are slow when n is small, and n is usually small.** Fancy algorithms have big constants. Until you know that n is frequently going to be big, don't get fancy. (Even if n does get big, use Rule 2 first.)
+4. **Fancy algorithms are buggier than simple ones, and they're much harder to implement.** Use simple algorithms as well as simple data structures.
+5. **Data dominates.** If you've chosen the right data structures and organised things well, the algorithms will almost always be self-evident. Data structures, not algorithms, are central to programming.
+
+### SOLID Principles
+
+- **Single Responsibility:** A class/function should have only one reason to change.
+- **Open/Closed:** Code should be open for extension but closed for modification.
+- **Liskov Substitution:** You should be able to swap a component with its "child" without breaking the system.
+- **Interface Segregation:** Don't force a module to depend on things it doesn't use.
+- **Dependency Inversion:** Depend on abstractions, not hard-coded specifics.
+
+---
+
 ## Claude Code Rules
 
 - **Only edit `.gd` script files** unless explicitly told otherwise
