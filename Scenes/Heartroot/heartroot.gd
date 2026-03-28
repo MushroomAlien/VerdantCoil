@@ -442,9 +442,9 @@ func _build_upgrade_content(win: Window) -> void:
 			row.add_child(lbl)
 
 		elif is_owned:
-			# Owned: show an equip/unequip toggle.
+			# Owned: slot or remove from the run loadout.
 			var equip_btn: Button = Button.new()
-			equip_btn.text = "Unequip" if is_desired else "Equip"
+			equip_btn.text = "Remove" if is_desired else "Slot"
 			equip_btn.custom_minimum_size = Vector2(80, 0)
 			# Capture state at build time for the closure.
 			var captured_key: String = key

@@ -334,7 +334,9 @@ func _request_toggle(index: int) -> void:
 	call_deferred("_apply_pending_toggle")
 	print("[TOGGLE] Queued index:", index)
 
-# Runs on idle; performs the toggle and consumes one turn without moving.
+# Runs on idle; checks the upgrade is slotted, toggles it, then consumes one turn.
+# If the upgrade is not equipped for this run, the key press is silently ignored
+# and no turn is spent — pressing an empty slot costs nothing.
 func _apply_pending_toggle() -> void:
 	var index: int = _pending_toggle
 	_pending_toggle = -1
@@ -344,21 +346,28 @@ func _apply_pending_toggle() -> void:
 		print("[TOGGLE] UpgradeController not found; abort.")
 		return
 
-	# Map index → enum explicitly (no inferred Variants).
+	# Resolve index → enum.
+	var upgrade_enum: int = -1
 	if index == 0:
-		print("[TOGGLE] Hardened Skin")
-		uc.call("toggle_upgrade", uc.Upgrade.HARDENED_SKIN)
+		upgrade_enum = uc.Upgrade.HARDENED_SKIN
 	elif index == 1:
-		print("[TOGGLE] Acid Sac")
-		uc.call("toggle_upgrade", uc.Upgrade.ACID_SAC)
+		upgrade_enum = uc.Upgrade.ACID_SAC
 	elif index == 2:
-		print("[TOGGLE] Ghost Trail")
-		uc.call("toggle_upgrade", uc.Upgrade.GHOST_TRAIL)
+		upgrade_enum = uc.Upgrade.GHOST_TRAIL
 	else:
 		print("[TOGGLE] Unknown index:", index)
 		return
 
-	# Spend a turn and apply end-of-action effects on our current tile (acid, sticky, etc.).
+	# Only consume a turn if the upgrade is actually slotted for this run.
+	# UpgradeController.toggle_upgrade() will also guard this, but checking here
+	# avoids spending a turn on an empty slot.
+	if uc.has_method("is_equipped") and not bool(uc.call("is_equipped", upgrade_enum)):
+		print("[TOGGLE] Upgrade not slotted for this run — no turn consumed.")
+		return
+
+	uc.call("toggle_upgrade", upgrade_enum)
+
+	# Spend a turn and apply end-of-action effects on our current tile.
 	_consume_turn_no_move()
 
 func _on_global_death() -> void:

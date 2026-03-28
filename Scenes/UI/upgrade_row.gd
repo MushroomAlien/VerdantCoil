@@ -10,10 +10,10 @@ extends HBoxContainer
 @export_node_path("CanvasItem") var acid_icon_path: NodePath
 @export_node_path("CanvasItem") var ghost_icon_path: NodePath
 
-@export var active_modulate: Color = Color(1, 1, 1, 1)
-@export var inactive_modulate: Color = Color(0.55, 0.55, 0.55, 1)
-# Used for upgrades that are not yet implemented (e.g. Ghost Trail until Phase 4).
-@export var locked_modulate: Color = Color(0.3, 0.3, 0.3, 0.45)
+@export var active_modulate: Color   = Color(1, 1, 1, 1)           # upgrade is ON
+@export var equipped_modulate: Color = Color(0.75, 0.75, 0.75, 1)  # slotted but inactive
+@export var inactive_modulate: Color = Color(0.35, 0.35, 0.35, 1)  # not in this run's loadout
+@export var locked_modulate: Color   = Color(0.3, 0.3, 0.3, 0.45)  # not yet implemented
 
 # --- Resolved nodes (typed) ---
 @onready var _hardened_icon: CanvasItem = get_node_or_null(hardened_icon_path)
@@ -42,64 +42,76 @@ func set_controller(controller: Node) -> void:
 
 # --- Signal handler from UpgradeController (instant visual feedback) ---
 func _on_controller_upgrade_changed(upgrade: int, value: bool) -> void:
-	# Map enum -> icon and tint
+	# value = new active state. Read equipped state from the controller too.
+	var equipped: bool = false
+	if _controller != null and _controller.has_method("is_equipped"):
+		equipped = bool(_controller.call("is_equipped", upgrade))
+
 	if upgrade == _controller.Upgrade.HARDENED_SKIN:
-		_set_icon(_hardened_icon, value)
+		_set_icon_state(_hardened_icon, value, equipped)
 	elif upgrade == _controller.Upgrade.ACID_SAC:
-		_set_icon(_acid_icon, value)
+		_set_icon_state(_acid_icon, value, equipped)
 	elif upgrade == _controller.Upgrade.GHOST_TRAIL:
-		# Ghost Trail is not yet implemented — keep it locked regardless of toggle signal.
-		_set_icon_locked(_ghost_icon)
+		_set_icon_locked(_ghost_icon)  # always locked until Phase 4
 
 # --- Read from UpgradeController if we have it ---
 func _refresh_from_controller() -> void:
 	if _controller == null:
 		return
-	var H: bool = false
-	var A: bool = false
-	var G: bool = false
+
+	# Read both active and equipped states from the controller.
+	var h_active: bool = false
+	var a_active: bool = false
+	var h_equipped: bool = false
+	var a_equipped: bool = false
 
 	if _controller.has_method("has_upgrade"):
-		H = bool(_controller.call("has_upgrade", _controller.Upgrade.HARDENED_SKIN))
-		A = bool(_controller.call("has_upgrade", _controller.Upgrade.ACID_SAC))
-		G = bool(_controller.call("has_upgrade", _controller.Upgrade.GHOST_TRAIL))
+		h_active = bool(_controller.call("has_upgrade", _controller.Upgrade.HARDENED_SKIN))
+		a_active = bool(_controller.call("has_upgrade", _controller.Upgrade.ACID_SAC))
 
-	_set_icon(_hardened_icon, H)
-	_set_icon(_acid_icon, A)
-	# Ghost Trail is not yet implemented — always show as locked regardless of state.
-	_set_icon_locked(_ghost_icon)
+	if _controller.has_method("is_equipped"):
+		h_equipped = bool(_controller.call("is_equipped", _controller.Upgrade.HARDENED_SKIN))
+		a_equipped = bool(_controller.call("is_equipped", _controller.Upgrade.ACID_SAC))
 
-# --- Fallback: read current values from UpgradeState (run start) ---
+	_set_icon_state(_hardened_icon, h_active, h_equipped)
+	_set_icon_state(_acid_icon,     a_active, a_equipped)
+	_set_icon_locked(_ghost_icon)  # always locked until Phase 4
+
+# --- Fallback: read equipped set from UpgradeState (called at run start before controller exists) ---
+# At this point no upgrade is active yet, so we only show equipped vs not-equipped.
 func _refresh_from_state() -> void:
-	var H: bool = false
-	var A: bool = false
-	var G: bool = false
+	var h_equipped: bool = false
+	var a_equipped: bool = false
 
 	if has_node("/root/UpgradeState"):
 		var us: Node = get_node("/root/UpgradeState")
-		if us.has_method("has_hardened_skin"):
-			H = bool(us.call("has_hardened_skin"))
-		if us.has_method("has_acid_sac"):
-			A = bool(us.call("has_acid_sac"))
-		if us.has_method("has_ghost_trail"):
-			G = bool(us.call("has_ghost_trail"))
+		if us.has_method("is_equipped"):
+			h_equipped = bool(us.call("is_equipped", "HARDENED_SKIN"))
+			a_equipped = bool(us.call("is_equipped", "ACID_SAC"))
 
-	_set_icon(_hardened_icon, H)
-	_set_icon(_acid_icon, A)
-	# Ghost Trail is not yet implemented — always show as locked regardless of state.
-	_set_icon_locked(_ghost_icon)
+	# Nothing is active yet — show equipped state only (active = false).
+	_set_icon_state(_hardened_icon, false, h_equipped)
+	_set_icon_state(_acid_icon,     false, a_equipped)
+	_set_icon_locked(_ghost_icon)  # always locked until Phase 4
 
-# --- Tint helper (typed & explicit) ---
-func _set_icon(icon: CanvasItem, is_active: bool) -> void:
+# --- Tint helpers ---
+
+# Three-state icon renderer.
+# active=true → bright (upgrade is ON).
+# active=false, equipped=true → medium (slotted this run, available to activate).
+# active=false, equipped=false → dim (not in this run's loadout).
+func _set_icon_state(icon: CanvasItem, is_active: bool, is_equipped: bool) -> void:
 	if icon == null:
 		return
 	if is_active:
 		icon.modulate = active_modulate
+	elif is_equipped:
+		icon.modulate = equipped_modulate
 	else:
 		icon.modulate = inactive_modulate
 
-# Renders an icon as locked/unavailable — distinct from merely inactive.
-# Used for upgrades not yet implemented (e.g. Ghost Trail until Phase 4).
+# Renders an icon as locked/unavailable — distinct from not-slotted.
+# Used for Ghost Trail until Phase 4.
 func _set_icon_locked(icon: CanvasItem) -> void:
 	if icon == null:
 		return

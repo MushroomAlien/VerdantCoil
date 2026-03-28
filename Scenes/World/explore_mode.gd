@@ -36,7 +36,7 @@ func _ready() -> void:
 	# This will dim CoilMap + crawler sprite, but NOT HUD (CanvasLayer),
 	# and NOT the ParallaxBackground because we moved it under BackgroundLayer (CanvasLayer).
 	world_darkness.color = ambient_darkness
-	
+
 	# TileSet on the TileMap (typical setup)
 	var ts: TileSet = coil_map.tile_set
 	if ts == null:
@@ -118,56 +118,36 @@ func _ready() -> void:
 	# --- NEW: mirror global UpgradeState into the Crawler's UpgradeController once ---
 	_apply_upgrade_state_to_crawler(crawler)
 
-# NEW: copies global upgrade booleans into the crawler's UpgradeController node.
+# Tells the crawler's UpgradeController which upgrades are SLOTTED for this run.
+# All upgrades start INACTIVE — the player activates them mid-run by pressing 1/2/3.
+# This deliberately does NOT toggle anything ON; it only sets the equipped set.
 func _apply_upgrade_state_to_crawler(crawler: Area2D) -> void:
 	if crawler == null:
 		return
-	# Find child node by name (scene uses "UpgradeController" as a child of Crawler)
+
 	var uc: Node = crawler.get_node_or_null("UpgradeController")
 	if uc == null:
 		return
 
-	# Read from UpgradeState singleton
-	var hardened: bool = false
-	var acid: bool = false
-	var ghost: bool = false
+	# Read the equipped set from UpgradeState (populated from ProfileManager).
+	var h_equipped: bool = false
+	var a_equipped: bool = false
+	var g_equipped: bool = false
 
 	if has_node("/root/UpgradeState"):
 		var us: Node = get_node("/root/UpgradeState")
-		if us.has_method("has_hardened_skin"):
-			hardened = bool(us.call("has_hardened_skin"))
-		if us.has_method("has_acid_sac"):
-			acid = bool(us.call("has_acid_sac"))
-		if us.has_method("has_ghost_trail"):
-			ghost = bool(us.call("has_ghost_trail"))
+		if us.has_method("is_equipped"):
+			h_equipped = bool(us.call("is_equipped", "HARDENED_SKIN"))
+			a_equipped = bool(us.call("is_equipped", "ACID_SAC"))
+			g_equipped = bool(us.call("is_equipped", "GHOST_TRAIL"))
 
-	# Set values explicitly using your controller's API:
-	# (We do not have direct setters, so we sync by toggling only when needed.)
-	if uc.has_method("has_upgrade") and uc.has_method("toggle_upgrade"):
-		# Hardened
-		var need_hardened: bool = hardened
-		var has_hardened_now: bool = bool(uc.call("has_upgrade", uc.Upgrade.HARDENED_SKIN))
-		if need_hardened and (not has_hardened_now):
-			uc.call("toggle_upgrade", uc.Upgrade.HARDENED_SKIN)
-		if (not need_hardened) and has_hardened_now:
-			uc.call("toggle_upgrade", uc.Upgrade.HARDENED_SKIN)
+	# Push the equipped set to the controller so it knows which keys are live.
+	if uc.has_method("set_equipped"):
+		uc.call("set_equipped", uc.Upgrade.HARDENED_SKIN, h_equipped)
+		uc.call("set_equipped", uc.Upgrade.ACID_SAC,      a_equipped)
+		uc.call("set_equipped", uc.Upgrade.GHOST_TRAIL,   g_equipped)
 
-		# Acid
-		var need_acid: bool = acid
-		var has_acid_now: bool = bool(uc.call("has_upgrade", uc.Upgrade.ACID_SAC))
-		if need_acid and (not has_acid_now):
-			uc.call("toggle_upgrade", uc.Upgrade.ACID_SAC)
-		if (not need_acid) and has_acid_now:
-			uc.call("toggle_upgrade", uc.Upgrade.ACID_SAC)
-
-		# Ghost
-		var need_ghost: bool = ghost
-		var has_ghost_now: bool = bool(uc.call("has_upgrade", uc.Upgrade.GHOST_TRAIL))
-		if need_ghost and (not has_ghost_now):
-			uc.call("toggle_upgrade", uc.Upgrade.GHOST_TRAIL)
-		if (not need_ghost) and has_ghost_now:
-			uc.call("toggle_upgrade", uc.Upgrade.GHOST_TRAIL)
-	print("UpgradeState → Crawler sync done (H:", hardened, ", A:", acid, ", G:", ghost, ")")
+	print("UpgradeState → Crawler equipped (H:", h_equipped, ", A:", a_equipped, ", G:", g_equipped, ")")
 
 # Configures crawler lights for Phase 1 readability.
 # Requires in Crawler.tscn:
