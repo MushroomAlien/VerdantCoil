@@ -1,6 +1,6 @@
 [gd_resource type="TileSet" load_steps=7 format=3 uid="uid://0dggvm2m4qyl"]
 
-[ext_resource type="Texture2D" uid="uid://b7tt3ydw5qm6q" path="res://Assets/roguelikeSheet_transparent_32x32.png" id="1_gp51x"]
+[ext_resource type="Texture2D" uid="uid://c4eqrqt63s4vg" path="res://Assets/roguelikeSheet_transparent_32x32.png" id="1_gp51x"]
 
 [sub_resource type="OccluderPolygon2D" id="OccluderPolygon2D_4303n"]
 polygon = PackedVector2Array(0, 0, -5.33333, 5.33333, 0, 10.6667, 5.33333, 5.33333)

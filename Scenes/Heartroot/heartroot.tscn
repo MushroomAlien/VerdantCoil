@@ -3,7 +3,7 @@
 [ext_resource type="Script" uid="uid://djodedx8i3l5l" path="res://Scenes/Heartroot/heartroot.gd" id="1_3ld42"]
 [ext_resource type="PackedScene" uid="uid://khw225w867t3" path="res://System/debug/scene_tree_printer.tscn" id="1_6og3p"]
 [ext_resource type="Script" uid="uid://55pijkd5ikda" path="res://Scenes/UI/resource_counters.gd" id="2_uh4yy"]
-[ext_resource type="Texture2D" uid="uid://b7tt3ydw5qm6q" path="res://Assets/roguelikeSheet_transparent_32x32.png" id="3_0tek3"]
+[ext_resource type="Texture2D" uid="uid://c4eqrqt63s4vg" path="res://Assets/roguelikeSheet_transparent_32x32.png" id="3_0tek3"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_3ld42"]
 content_margin_left = 12.0
@@ -46,12 +46,13 @@ build_tag = "a"
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
+offset_bottom = 86.0
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_constants/margin_left = 24
-theme_override_constants/margin_top = 24
-theme_override_constants/margin_right = 24
-theme_override_constants/margin_bottom = 24
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 8
 
 [node name="RootCol" type="VBoxContainer" parent="UI/SafeArea"]
 layout_mode = 2
@@ -148,9 +149,8 @@ text = "0"
 
 [node name="ProfilesList" type="ItemList" parent="UI/SafeArea/RootCol/MainRow/ProfilePanel/ProfileCol"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 300)
+custom_minimum_size = Vector2(0, 100)
 layout_mode = 2
-size_flags_vertical = 3
 
 [node name="NewRow" type="HBoxContainer" parent="UI/SafeArea/RootCol/MainRow/ProfilePanel/ProfileCol"]
 layout_mode = 2
@@ -249,9 +249,8 @@ text = "Mine Only"
 
 [node name="LibraryList" type="ItemList" parent="UI/SafeArea/RootCol/MainRow/LibraryPanel/LibraryCol"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 300)
+custom_minimum_size = Vector2(0, 100)
 layout_mode = 2
-size_flags_vertical = 3
 allow_reselect = true
 
 [node name="LibraryActions" type="HBoxContainer" parent="UI/SafeArea/RootCol/MainRow/LibraryPanel/LibraryCol"]
@@ -265,4 +264,3 @@ text = "Play Selected
 "
 
 [node name="SceneTreePrinter" parent="." instance=ExtResource("1_6og3p")]
-printing_on = false

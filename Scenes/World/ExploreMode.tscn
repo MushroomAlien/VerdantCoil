@@ -2,11 +2,11 @@
 
 [ext_resource type="Script" uid="uid://brhe1gqri6osw" path="res://Scenes/World/explore_mode.gd" id="1_sdi1h"]
 [ext_resource type="TileSet" uid="uid://0dggvm2m4qyl" path="res://Assets/Resources/flesh_tile.tres" id="1_u2iet"]
-[ext_resource type="Texture2D" uid="uid://b1jq0po7e5i86" path="res://Assets/PatternedAI-free-image-1754232821017 720.png" id="2_s0ewa"]
+[ext_resource type="Texture2D" uid="uid://b3fh4r72u2qo" path="res://Assets/PatternedAI-free-image-1754232821017 720.png" id="2_s0ewa"]
 [ext_resource type="TileSet" uid="uid://bdn7mbhohm8c7" path="res://Assets/Resources/lightmask.tres" id="4_0bwi2"]
 [ext_resource type="Script" uid="uid://68y4cqtbmfp1" path="res://Scenes/UI/hearts_row.gd" id="4_bb7uf"]
 [ext_resource type="PackedScene" uid="uid://khw225w867t3" path="res://System/debug/scene_tree_printer.tscn" id="5_6rfcl"]
-[ext_resource type="Texture2D" uid="uid://b7tt3ydw5qm6q" path="res://Assets/roguelikeSheet_transparent_32x32.png" id="5_cwjdx"]
+[ext_resource type="Texture2D" uid="uid://c4eqrqt63s4vg" path="res://Assets/roguelikeSheet_transparent_32x32.png" id="5_cwjdx"]
 [ext_resource type="Script" uid="uid://c8sv784btijjm" path="res://Scenes/UI/upgrade_row.gd" id="6_cwjdx"]
 [ext_resource type="Script" uid="uid://55pijkd5ikda" path="res://Scenes/UI/resource_counters.gd" id="6_uw1bd"]
 [ext_resource type="Script" uid="uid://b34eqlkehqj3x" path="res://Scenes/UI/lose_overlay.gd" id="8_8p348"]

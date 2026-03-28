@@ -28,8 +28,8 @@ UpgradeState="*res://System/autoload/upgrade_state.gd"
 
 [display]
 
-window/size/viewport_width=768
-window/size/viewport_height=768
+window/size/viewport_width=1024
+window/size/viewport_height=576
 window/stretch/mode="viewport"
 window/stretch/aspect="expand"
 

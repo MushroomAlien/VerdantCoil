@@ -134,3 +134,49 @@ is unavailable.
 - Update default new-coil grid size to 32×18 tiles
 
 ---
+
+## Session 4 — 2026-03-28 (continued)
+
+### What We Did
+
+**Phase 3: Resolution Shift + Scrollable Builder Camera** — completed.
+
+**Viewport change (`project.godot`):** `viewport_width=1024`, `viewport_height=576`. Done in previous session context.
+
+**Builder camera (pure GDScript, no .tscn edit):**
+- Added four pan-state vars to `builder_mode.gd`: `_camera`, `_is_panning`, `_pan_mouse_origin`, `_pan_cam_origin`.
+- End of `_ready()` now creates a `Camera2D`, positions it at the centre of the default canvas
+  (`start_flesh_rect.size × Grid.TILE_SIZE × 0.5`), and calls `make_current()`.
+- `_unhandled_input()` gains a middle-mouse block at the top:
+  - `MOUSE_BUTTON_MIDDLE` press → records origins, sets `_is_panning = true`.
+  - `MOUSE_BUTTON_MIDDLE` release → clears `_is_panning`.
+  - `InputEventMouseMotion` while panning → `camera.position = _pan_cam_origin - (mouse - _pan_mouse_origin)`, consumed with `set_input_as_handled()`.
+  - Pan events return early before paint/erase logic, so no accidental tile changes while panning.
+
+**Default canvas size:** `start_flesh_rect` default updated from `Vector2i(24, 24)` to `Vector2i(32, 18)` to match the new 1024×576 viewport at 32 px tiles.
+
+**Heartroot hub layout (editor — `heartroot.tscn`):** Fixed UI breakage from the aspect ratio shift.
+SafeArea margins corrected, ItemList minimum sizes set, all buttons now visible and functional at 1024×576.
+Three-panel layout (Profiles / Actions / Published Levels) renders correctly in-game.
+
+### Files Changed
+- `project.godot` (viewport dimensions — prior session)
+- `Scenes/BuilderMode/builder_mode.gd` (camera creation, pan state, `start_flesh_rect` default)
+- `Scenes/Heartroot/heartroot.tscn` (SafeArea margins, ItemList min sizes — editor fix)
+- `CLAUDE.md` (phase status updated to Phase 4)
+
+### Known Outstanding
+- User should open the project in Godot editor and check all UI scenes (Heartroot, ExploreMode HUD, BuilderMode toolbar) for anchor/layout breakage caused by the aspect ratio change. Any pixel-locked anchors may need manual correction in the editor.
+- ~~Heartroot hub~~ — fixed in editor this session (SafeArea margins, ItemList min sizes).
+- ExploreMode HUD and BuilderMode toolbar not yet verified at new resolution — check on next entry into those scenes.
+
+### Active Phase
+**Phase 4 — Fog of War (LightMaskLayer) + Ghost Trail**
+
+### Next Session Should
+- Implement fog-of-war: LightMaskLayer management, three tile visibility states (unseen/seen/visible)
+- Crawler emits a light radius; BFS flood-fill from crawler position blocked by walls
+- Persist `seen_ever` set per run (dim previously-visited tiles)
+- Implement Ghost Trail upgrade behaviour: leave bioluminescent spores on walked tiles
+
+---

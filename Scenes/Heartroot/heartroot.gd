@@ -45,6 +45,9 @@ var _manifest_path: String = "user://Published/manifest.json"
 var _upgrades_window: Window = null  # single instance guard
 
 func _ready() -> void:
+	# Always match SafeArea to the actual viewport size, regardless of resolution
+	$UI/SafeArea.size = get_viewport_rect().size
+	$UI/SafeArea.position = Vector2.ZERO
 	# Wire UI signals
 	create_btn.pressed.connect(_on_create_pressed)
 	rename_btn.pressed.connect(_on_rename_pressed)

@@ -101,7 +101,7 @@ Both files are well-commented internally.
 
 ## Current Status
 
-**Active Phase: Phase 3 — Resolution Shift + Builder Camera** (Phase 2 complete)
+**Active Phase: Phase 4 — Fog of War + Ghost Trail** (Phase 3 complete)
 
 ### Phase 2 Bug Fixes — Status
 1. ~~**Death awards win reward**~~ — Already correctly implemented. `coil_session.gd:end_coil()` guards `if success and (_origin == "hub")`. `lose_overlay.gd` calls `end_coil(false)` on exit. No code change needed.
@@ -147,9 +147,9 @@ All code in this repository follows these principles. They are not aspirational 
 
 ## Roadmap
 
-- **Phase 2 — Fix three known bugs** ← CURRENT
-- Phase 3 — Resolution shift (768×768 → 1024×576) + scrollable builder camera
-- Phase 4 — Fog of war (LightMaskLayer) + Ghost Trail light trail
+- ~~Phase 2 — Fix three known bugs~~
+- ~~Phase 3 — Resolution shift (768×768 → 1024×576) + scrollable builder camera~~
+- **Phase 4 — Fog of war (LightMaskLayer) + Ghost Trail light trail** ← CURRENT
 - Phase 5 — First static enemy (Guard Nodule, cyclic attacker)
 - Phase 6 — Move counter + par score
 - Phase 7 — 8–10 handcrafted campaign coils + unlock gates

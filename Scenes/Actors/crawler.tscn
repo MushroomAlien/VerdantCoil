@@ -1,7 +1,7 @@
 [gd_scene load_steps=7 format=3 uid="uid://dbf2noyqbln42"]
 
 [ext_resource type="Script" uid="uid://c33rvqjr1h1kj" path="res://Scenes/Actors/crawler.gd" id="1_80vex"]
-[ext_resource type="Texture2D" uid="uid://c3n8xmwqj3dsx" path="res://Assets/tilemap_32x32.png" id="2_0kwjx"]
+[ext_resource type="Texture2D" uid="uid://bvp12aoitu7nu" path="res://Assets/tilemap_32x32.png" id="2_0kwjx"]
 [ext_resource type="Script" uid="uid://dg6t4huhkspv4" path="res://System/upgrade_controller.gd" id="3_0kwjx"]
 [ext_resource type="PackedScene" uid="uid://khw225w867t3" path="res://System/debug/scene_tree_printer.tscn" id="4_okp5s"]
 [ext_resource type="Texture2D" uid="uid://dnmy3p138s7gc" path="res://Assets/Resources/glowlight.tres" id="4_v16nv"]

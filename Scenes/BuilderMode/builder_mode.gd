@@ -49,7 +49,7 @@ class ValidationResult:
 
 @export_group("Save/Export")
 @export var save_dir: String = DIR_COILS
-@export var start_flesh_rect: Rect2i = Rect2i(Vector2i(0, 0), Vector2i(24, 24)) # auto-fill when Start With Flesh is ON
+@export var start_flesh_rect: Rect2i = Rect2i(Vector2i(0, 0), Vector2i(32, 18)) # auto-fill when Start With Flesh is ON
 @export var biomass_cap: int = 100  # hard cap unless dev bypass is enabled
 
 ## --- Scene references --------------------------------------------------------
@@ -88,6 +88,12 @@ var _biomass_used: int = 0
 var _last_validation_ok: bool = false
 var undo_stack: Array = []
 var redo_stack: Array = []
+
+# --- Builder camera pan state -----------------------------------------------
+var _camera: Camera2D = null          # programmatically created; no .tscn edit needed
+var _is_panning: bool = false         # true while middle mouse is held
+var _pan_mouse_origin: Vector2 = Vector2.ZERO   # screen position where pan began
+var _pan_cam_origin: Vector2 = Vector2.ZERO     # camera world position when pan began
 
 ## --- UI wiring & Lifecycle --------------------------------------------------------
 
@@ -198,6 +204,19 @@ func _ready() -> void:
 	# --- Initial strict validation -> set Draft/Valid chip & Publish enable ---
 	_refresh_validation_state()
 
+	# --- Builder camera (programmatic, avoids .tscn modification) ---------------
+	# Creates a Camera2D centred on the default start_flesh_rect so the whole
+	# starting canvas is visible on entry. Middle-mouse drag pans this camera.
+	_camera = Camera2D.new()
+	var tile_size: int = Grid.TILE_SIZE if has_node("/root/Grid") else 32
+	_camera.position = Vector2(
+		start_flesh_rect.size.x * tile_size * 0.5,
+		start_flesh_rect.size.y * tile_size * 0.5
+	)
+	_camera.zoom = Vector2.ONE
+	add_child(_camera)
+	_camera.make_current()
+
 ## Refresh the preview each frame
 func _process(_delta: float) -> void:
 	_update_preview()
@@ -303,8 +322,33 @@ func _debug_undo_last_command() -> void:
 	if has_method("_recalc_biomass"):
 		_recalc_biomass()
 
-## Handle mouse input for painting and erasing
+## Handle mouse input for painting, erasing, and camera panning
 func _unhandled_input(event: InputEvent) -> void:
+	# Middle mouse PAN ----------------------------------------------------------
+	# Press: record where the drag started (both in screen and camera space).
+	# Motion while panning: shift the camera by the opposite of the mouse delta
+	#   so the canvas appears to follow the cursor (standard "hand tool" feel).
+	# Release: end pan.
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_MIDDLE:
+		if event.pressed:
+			_is_panning = true
+			_pan_mouse_origin = event.position
+			_pan_cam_origin = _camera.position if _camera != null else Vector2.ZERO
+		else:
+			_is_panning = false
+		get_viewport().set_input_as_handled()
+		return
+
+	if event is InputEventMouseMotion and _is_panning:
+		if _camera != null:
+			# Subtract the mouse delta from the stored origin: dragging right
+			# moves the mouse_delta positive-X, so the camera shifts left (negative-X),
+			# which makes the canvas content appear to slide right with the cursor.
+			var delta: Vector2 = event.position - _pan_mouse_origin
+			_camera.position = _pan_cam_origin - delta
+		get_viewport().set_input_as_handled()
+		return
+
 	# Mouse BUTTONS ------------------------------------------------------------
 	if event is InputEventMouseButton:
 		# Toggle state flags on press/release (no coords needed for releases).
