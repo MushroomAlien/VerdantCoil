@@ -77,3 +77,60 @@ is unavailable.
 - Update default coil grid dimensions to match new viewport (32×18 tiles)
 
 ---
+
+## Session 3 — 2026-03-28 (continued)
+
+### What We Did
+
+**Upgrade shop (Heartroot):**
+- Identified that `upgrades_btn` was declared but never connected in `_ready()`.
+- Built a minimal programmatic upgrade shop `Window` entirely in GDScript (no .tscn).
+  - `UPGRADE_DEFS` constant defines each upgrade (key, display, description, cost, locked flag).
+  - Window is single-instance guarded via `_upgrades_window` ref.
+  - Shows Nutrient balance, Buy button (disabled if insufficient funds), Slot/Remove toggle.
+  - Ghost Trail always shows as "Locked".
+  - Costs: Hardened Skin 3N, Acid Sac 5N.
+
+**Equipped vs Active upgrade split (design decision + implementation):**
+- User identified that "equip in shop" and "activate mid-run" are two separate concepts
+  that were conflated. Resolved with a clear two-phase system:
+  - **Slotted** (shop): bring up to 3 upgrades into a run. Set via "Slot"/"Remove" buttons.
+  - **Active** (mid-run): press 1/2/3 to switch ON. Costs one turn. Starts inactive.
+- `upgrade_controller.gd`: added `_equipped` dict + `set_equipped()` + `is_equipped()`.
+  `toggle_upgrade()` now silently returns if not equipped (no signal, no turn consumed).
+- `upgrade_state.gd`: added `_equipped` dict. `load_active_loadout()` populates equipped
+  from ProfileManager (owned ∩ desired_loadout). All `_active` booleans always start false.
+  Added `is_equipped(key)` public method.
+- `explore_mode.gd`: `_apply_upgrade_state_to_crawler()` now pushes equipped state to
+  UpgradeController instead of syncing active booleans.
+- `crawler.gd`: `_apply_pending_toggle()` checks `is_equipped()` before consuming a turn;
+  pressing an unslotted key does nothing and costs nothing.
+- `upgrade_row.gd`: three visual states — active (bright), equipped-inactive (medium grey),
+  not-slotted (dim). Added `equipped_modulate` export. All refresh paths updated.
+- `heartroot.gd`: button text changed from "Equip"/"Unequip" to "Slot"/"Remove".
+
+### Files Changed
+- `Scenes/Heartroot/heartroot.gd`
+- `System/upgrade_controller.gd`
+- `System/autoload/upgrade_state.gd`
+- `Scenes/World/explore_mode.gd`
+- `Scenes/Actors/crawler.gd`
+- `Scenes/UI/upgrade_row.gd`
+
+### Decisions Made
+- Upgrade slot limit is implicitly 3 (one per hotkey). Explicit limit enforcement deferred
+  until there are enough upgrades to make the choice interesting (Phase 7+).
+- Ghost Trail hard-excluded from the equipped set in code until Phase 4.
+- Pressing an unslotted upgrade key costs no turn — dead keys are silent.
+
+### Active Phase
+**Phase 3 — Resolution Shift (768×768 → 1024×576) + Scrollable Builder Camera**
+
+### Next Session Should
+- Change viewport in `project.godot` (768×768 → 1024×576)
+- Check whether existing UI anchor setups survive the new aspect ratio automatically
+- User will need to fix any UI scenes that break in the Godot editor
+- Add pan/scroll camera to BuilderMode (pure GDScript)
+- Update default new-coil grid size to 32×18 tiles
+
+---
