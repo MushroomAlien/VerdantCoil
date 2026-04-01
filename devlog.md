@@ -180,3 +180,125 @@ Three-panel layout (Profiles / Actions / Published Levels) renders correctly in-
 - Implement Ghost Trail upgrade behaviour: leave bioluminescent spores on walked tiles
 
 ---
+
+## Session 6 — 2026-04-01
+
+### What We Did
+
+Fixed two lighting bugs that made the game look broken at spawn and near wall tiles.
+
+**Bug 1 — Dark area follows player at startup (shadow init lag)**
+
+Root cause: Godot 4's shadow depth buffer for `PointLight2D` with `shadow_enabled=true` starts
+as "fully dark" for any tile the light hasn't swept through on frame 0.  This caused the entire
+map to appear near-black at spawn, only "burning in" to correct lighting as the player moved.
+
+Fix: In `_apply_crawler_lights()`, set `glow.shadow_enabled = false` immediately, then
+re-enable it after one `process_frame` via the new `_enable_glow_shadow_next_frame()` coroutine.
+This lets Godot rasterise the initial shadow map from a "fully lit" baseline, so frame 1 onward
+has a warm shadow buffer rather than a cold/black one.
+
+**Bug 2 — Oversized V-shaped shadow wedges from wall tiles**
+
+Root cause: Wall tiles `(8,10)` and `(8,22)` in `flesh_tile.tres` had full `32×32` square
+occluder polygons (`(-16,-16)…(16,16)`), producing enormous shadow wedges visible behind
+adjacent walls.
+
+Fix: Cannot edit `.tres` files (CLAUDE.md rule), so patched at runtime via the new
+`_patch_wall_occluders()` function.  Replaces both polygons with an `8×8` centre square
+using `TileData.set_occluder(layer, polygon)`.  Called once in `_ready()` after fog init.
+
+**Pre-existing fix (previous session)**
+
+`FogManager.init()` already sets `_fog_layer.light_mask = 0` to prevent GlowLight
+illuminating the dark-navy fog tiles — this fix remains in place and is working correctly.
+
+### Files Changed
+- `Scenes/World/explore_mode.gd`
+  - `_apply_crawler_lights()`: disable `shadow_enabled` on first frame, call deferred re-enable
+  - New `_enable_glow_shadow_next_frame(glow)` coroutine helper
+  - New `_patch_wall_occluders()` runtime TileData patch
+  - `_ready()`: call `_patch_wall_occluders()` after fog init
+
+### Known Outstanding
+- Wall shadow behaviour with the new 8×8 occluder may feel too subtle.  If the art direction
+  wants more directional shadows, increase the polygon size or switch to a thin edge strip
+  (e.g. top-edge only) — one-line change in `_patch_wall_occluders()`.
+- `seen-but-dim` third FOW state still deferred until semi-transparent fog tile art is available.
+- Ghost Trail upgrade behaviour (bioluminescent spores on walked tiles) not yet implemented.
+
+### Active Phase
+**Phase 4 — Fog of War (LightMaskLayer) + Ghost Trail**
+
+### Next Session Should
+- Test the lighting fixes in-game and tune occluder size / shadow energy if needed.
+- Implement Ghost Trail: leave bioluminescent spore tiles on every cell the crawler walks.
+- Add the `seen-but-dim` FOW state once semi-transparent fog art is available.
+
+---
+
+## Session — 2026-04-01
+
+### What We Did
+
+Completely replaced the dynamic lighting system.  The previous design (PointLight2D +
+CanvasModulate + TileMapLayer square fog erase) was producing a hard-edged rectangular
+cutout around the crawler rather than smooth radial falloff.  Root cause: the two
+sub-systems (fog tile erase in Chebyshev square, and PointLight2D radial gradient)
+were fighting each other and could never produce a smooth result.
+
+**New approach — DarknessOverlay Sprite2D:**
+
+A large `Sprite2D` is created at runtime in `explore_mode.gd` and attached as a child
+of the crawler, so it follows the player automatically.  Its texture is a
+`GradientTexture2D` built entirely in code:
+
+- Radial fill, 512×512, scaled ×8 (= 4096 px = 128 tiles per axis)
+- Transparent centre (0–~4 tiles from crawler)
+- Smooth transition to fully opaque black (~4–13 tiles)
+- Fully opaque black beyond ~13 tiles
+
+The overlay sits at `z_index = 10` (absolute), above the FogLayer (z=6) and all world
+tiles, but below the HUD CanvasLayer (layer=99).  Because it is in the world canvas it
+also composites over the parallax BackgroundLayer, darkening the background beyond the
+light radius.
+
+`FOG_REVEAL_RADIUS` was increased from 3 to 15 so the fog tile boundary (permanent
+reveal memory) is always hidden behind the overlay's fully-dark region.  The seen-but-
+dark effect — previously deferred — now emerges naturally: revealed-but-distant tiles
+render under the dark portion of the gradient, brightening as the crawler approaches.
+
+### Decisions Made
+
+- **PointLight2D retired**: GlowLight and WallLight nodes in Crawler.tscn are zeroed
+  (`energy = 0.0`) at runtime.  They are not removed from the scene to avoid modifying
+  `.tscn` files (CLAUDE.md rule).
+- **CanvasModulate neutralised**: `WorldDarkness.color` set to `Color.WHITE`.  The
+  overlay is the sole source of scene darkness.
+- **Shadow / occluder code removed**: `_patch_wall_occluders()`, `_enable_glow_shadow_next_frame()`,
+  and all related export vars removed from `explore_mode.gd` — they were only needed
+  for GlowLight shadow casting.
+- **`fog_manager.gd` light_mask line removed**: `_fog_layer.light_mask = 0` was only
+  needed to prevent GlowLight illuminating fog tiles; with no active PointLight2D it
+  is no longer necessary.
+
+### Files Changed
+- `Scenes/World/explore_mode.gd` — full rewrite of lighting section; new `_setup_darkness_overlay()` and `_disable_legacy_lights()`; `FOG_REVEAL_RADIUS` raised to 15; CanvasModulate set to white
+- `System/fog_manager.gd` — removed `_fog_layer.light_mask = 0` from `init()`
+
+### Known Outstanding
+- Light radius and gradient falloff curve (`0.06` / `0.20` offsets) are first-pass
+  values; tune in-engine by adjusting the constants in `_setup_darkness_overlay()`.
+- Ghost Trail upgrade behaviour (bioluminescent spore tiles) still not implemented.
+- `seen-but-dim` third FOW state no longer needed as a separate art asset — the
+  gradient provides it naturally — but the `_seen_cells` dict in fog_manager is
+  still tracked for future use (e.g. line-of-sight enemies).
+
+### Active Phase
+**Phase 4 — Fog of War + Ghost Trail**
+
+### Next Session Should
+- Test in-game and tune the gradient offsets / scale for best feel.
+- Implement Ghost Trail: leave bioluminescent spore tiles on every cell the crawler walks.
+
+---

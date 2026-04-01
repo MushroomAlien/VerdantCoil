@@ -1,41 +1,30 @@
 ## explore_mode.gd
 extends Node2D
 
-const GridUtil := preload("res://System/grid.gd")
+const GridUtil    := preload("res://System/grid.gd")
+const FogManager  := preload("res://System/fog_manager.gd")
+
+# Tiles revealed in each cardinal direction from the crawler each turn.
+# Must exceed the DarknessOverlay's fully-dark radius (~13 tiles at default scale)
+# so the fog tile boundary is always hidden behind the overlay's black edge.
+const FOG_REVEAL_RADIUS := 15
 
 const CRAWLER_SCENE: PackedScene = preload("res://Scenes/Actors/Crawler.tscn")
 @export var base_layer: TileMapLayer
 @export var walls_layer: TileMapLayer
 @export var hazard_layer: TileMapLayer
 @export var marker_layer: TileMapLayer
+@export var fog_layer: TileMapLayer  # Phase 4: fog-of-war overlay; managed by FogManager
 
-# --- Lighting baseline (Step 1) ---
-# This is your single "ambient darkness" tuning value.
-# Lighter = less dark. Darker = more dark.
-#@export var ambient_darkness: Color = Color(0.1, 0.1, 0.2, 1.0)
+var _fog_manager: RefCounted  # FogManager instance; created in _ready() after map load
 
 @onready var world_darkness: CanvasModulate = $WorldDarkness
 @onready var coil_map: TileMap = $CoilMap
-# --- Step 4: Readability tuning (Phase 1) ---
-@export var ambient_darkness: Color = Color(0.08, 0.08, 0.12, 1.0)
-
-# World (shadowed) light: affects mask 1
-@export var glow_world_energy: float = 1.0
-@export var glow_world_texture_scale: float = 8.0
-@export var glow_world_colour: Color = Color(1.0, 0.9, 0.85, 1.0) # warm
-
-# Wall reveal (unshadowed) light: affects mask 2
-@export var wall_light_energy: float = 1.0
-@export var wall_light_texture_scale: float = 3.5
-@export var wall_light_colour: Color = Color(1.0, 0.95, 0.90, 1.0) # near-neutral
-
-#@onready var world_darkness: CanvasModulate = $WorldDarkness
 
 func _ready() -> void:
-	# --- Step 1: Apply global darkness baseline to the world canvas ---
-	# This will dim CoilMap + crawler sprite, but NOT HUD (CanvasLayer),
-	# and NOT the ParallaxBackground because we moved it under BackgroundLayer (CanvasLayer).
-	world_darkness.color = ambient_darkness
+	# DarknessOverlay handles all scene darkening; CanvasModulate must be neutral
+	# so it doesn't double-darken the world.
+	world_darkness.color = Color.WHITE
 
 	# TileSet on the TileMap (typical setup)
 	var ts: TileSet = coil_map.tile_set
@@ -86,7 +75,7 @@ func _ready() -> void:
 		if not data.is_empty():
 			_load_from_coil(data)  # fills base/walls/hazard/marker
 
-	# --- NEW: initialize global systems for this run ---
+	# --- NEW: initialise global systems for this run ---
 	if has_node("/root/UpgradeState"):
 		var us: Node = get_node("/root/UpgradeState")
 		if us.has_method("load_active_loadout"):
@@ -96,6 +85,12 @@ func _ready() -> void:
 		var hs: Node = get_node("/root/HealthSystem")
 		if hs.has_method("reset"):
 			hs.call("reset", 3)  # Track-1 baseline: 3 HP
+
+	# Phase 4: stamp fog over the coil footprint before the crawler appears.
+	# Fog covers only base_layer cells so the parallax background shows through
+	# beyond the map edges.  The parallax is atmosphere, not playable space.
+	_fog_manager = FogManager.new()
+	_fog_manager.init(fog_layer, base_layer)
 
 	# 2) Spawn the crawler at the Spawn marker (or fallback)
 	var crawler: Area2D = CRAWLER_SCENE.instantiate()
@@ -107,7 +102,21 @@ func _ready() -> void:
 	var spawn_tile: Vector2i = get_spawn_position()
 	crawler.position = GridUtil.to_world(spawn_tile)  # your util converts map→world
 	add_child(crawler)
-	_apply_crawler_lights(crawler)
+
+	# Disable the legacy PointLight2D nodes that shipped in Crawler.tscn.
+	# The DarknessOverlay below replaces them entirely.
+	_disable_legacy_lights(crawler)
+
+	# Add a large radial darkness overlay as a child of the crawler.
+	# It follows the crawler automatically and creates smooth circular light falloff.
+	_setup_darkness_overlay(crawler)
+
+	# Phase 4: connect fog reveal to crawler movement, then reveal the spawn tile immediately
+	# so the player can see where they start.
+	crawler.tile_changed.connect(func(tile: Vector2i) -> void:
+		_fog_manager.reveal_around(tile, FOG_REVEAL_RADIUS)
+	)
+	_fog_manager.reveal_around(spawn_tile, FOG_REVEAL_RADIUS)
 
 	var row_path: String = "HUD/SafeArea/BottomCenter/UpgradeRow"
 	var row: Node = get_node_or_null(row_path)
@@ -149,31 +158,61 @@ func _apply_upgrade_state_to_crawler(crawler: Area2D) -> void:
 
 	print("UpgradeState → Crawler equipped (H:", h_equipped, ", A:", a_equipped, ", G:", g_equipped, ")")
 
-# Configures crawler lights for Phase 1 readability.
-# Requires in Crawler.tscn:
-# - GlowLight (PointLight2D): shadowed world light, mask 1
-# - WallLight (PointLight2D): unshadowed wall reveal, mask 2
-func _apply_crawler_lights(crawler: Area2D) -> void:
-	if crawler == null:
-		return
 
+## Zero out legacy PointLight2D nodes that live in Crawler.tscn.
+## They are superseded by DarknessOverlay and must not interfere.
+func _disable_legacy_lights(crawler: Area2D) -> void:
 	var glow: PointLight2D = crawler.get_node_or_null("GlowLight")
 	if glow != null:
-		glow.energy = glow_world_energy
-		glow.texture_scale = glow_world_texture_scale
-		glow.color = glow_world_colour
-		# Safety: ensure it only affects world mask 1
-		#glow.item_cull_mask = 1
+		glow.energy = 0.0
 
 	var wall: PointLight2D = crawler.get_node_or_null("WallLight")
 	if wall != null:
-		wall.energy = wall_light_energy
-		wall.texture_scale = wall_light_texture_scale
-		wall.color = wall_light_colour
-		# Safety: walls only (mask 2)
-		#wall.item_cull_mask = 2
-		# Ensure wall reveal doesn't cast shadows
-		#wall.shadow_enabled = false
+		wall.energy = 0.0
+
+
+## Creates a large Sprite2D carrying a radial gradient texture and attaches it
+## to the crawler as a child.  It follows the crawler automatically.
+##
+## The texture is transparent at the centre (bright around the crawler) and
+## fades to fully opaque black at the edges (darkness beyond the light radius).
+## z_as_relative = false places the overlay at an absolute z of 10, above the
+## FogLayer (z=6) and all world tiles, but below the HUD CanvasLayer (layer=99).
+func _setup_darkness_overlay(crawler: Area2D) -> void:
+	# Build the radial gradient: transparent core → opaque black edges.
+	# Offsets are fractions of the texture radius (0 = centre, 1 = edge).
+	# With scale=8 on a 512×512 texture the radius is 256*8 = 2048 world px = 64 tiles.
+	#   offset 0.00 → 0 tiles   (fully transparent, bright core)
+	#   offset 0.06 → ~3.8 tiles (still fully transparent)
+	#   offset 0.20 → ~12.8 tiles (fully opaque, transition complete)
+	#   offset 1.00 → 64 tiles  (fully opaque, padded to cover entire screen)
+	var gradient := Gradient.new()
+	# Default Gradient has two points: black at 0 and white at 1.
+	# Reuse them rather than removing and re-adding.
+	gradient.set_color(0, Color(0.0, 0.0, 0.0, 0.0))   # transparent centre
+	gradient.set_offset(0, 0.0)
+	gradient.set_color(1, Color(0.0, 0.0, 0.0, 1.0))   # opaque black edge
+	gradient.set_offset(1, 1.0)
+	gradient.add_point(0.06, Color(0.0, 0.0, 0.0, 0.0)) # hold transparent to ~4 tiles
+	gradient.add_point(0.20, Color(0.0, 0.0, 0.0, 1.0)) # fully dark by ~13 tiles
+
+	var tex := GradientTexture2D.new()
+	tex.gradient  = gradient
+	tex.fill      = GradientTexture2D.FILL_RADIAL
+	tex.fill_from = Vector2(0.5, 0.5)   # centre of texture
+	tex.fill_to   = Vector2(1.0, 0.5)   # right edge (sets the radius)
+	tex.width     = 512
+	tex.height    = 512
+
+	var overlay := Sprite2D.new()
+	overlay.texture        = tex
+	overlay.z_as_relative  = false   # absolute z-index, not relative to crawler parent
+	overlay.z_index        = 10      # above FogLayer (z=6) and world tiles; below HUD CanvasLayer
+	overlay.scale          = Vector2(8.0, 8.0) # 512*8=4096 px per axis = 128 tiles radius
+
+	# Add to crawler so it moves with it automatically.
+	crawler.add_child(overlay)
+
 
 ## Returns the tile coordinates of the spawn tile marked with `is_spawn = true` in the Marker layer.
 ## Falls back to (12, 23) with a warning if none is found.
@@ -234,5 +273,6 @@ func _rebuild_layer_from_json(arr_v: Variant, layer: TileMapLayer) -> void:
 		if cell.has("atlas_x") and cell.has("atlas_y"):
 			ac = Vector2i(int(cell["atlas_x"]), int(cell["atlas_y"]))
 		layer.set_cell(coords, sid, ac)
+
 
 ## end explore_mode.gd
