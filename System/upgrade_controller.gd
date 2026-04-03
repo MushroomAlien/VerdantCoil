@@ -25,9 +25,9 @@ var _equipped: Dictionary = {
 }
 
 # --- Active set (all start false; player toggles mid-run) ---
+# Ghost Trail has no active boolean — it is a single-use action, not a toggle.
 var _hardened_skin: bool = false
 var _acid_sac: bool = false
-var _ghost_trail: bool = false
 
 func _ready() -> void:
 	add_to_group("upgrade_controller")
@@ -47,7 +47,7 @@ func has_upgrade(upgrade: Upgrade) -> bool:
 	match upgrade:
 		Upgrade.HARDENED_SKIN: return _hardened_skin
 		Upgrade.ACID_SAC:      return _acid_sac
-		Upgrade.GHOST_TRAIL:   return _ghost_trail
+		Upgrade.GHOST_TRAIL:   return false  ## action, not a toggle; never active
 		_: return false
 
 # --- Public: equipped queries ---
@@ -77,11 +77,7 @@ func toggle_upgrade(upgrade: Upgrade) -> void:
 			_acid_sac = !_acid_sac
 			emit_signal("upgrade_changed", upgrade, _acid_sac)
 			print("[UPGRADE] Acid Sac:", _acid_sac)
-		Upgrade.GHOST_TRAIL:
-			if not bool(_equipped.get("GHOST_TRAIL", false)):
-				return
-			_ghost_trail = !_ghost_trail
-			emit_signal("upgrade_changed", upgrade, _ghost_trail)
-			print("[UPGRADE] Ghost Trail:", _ghost_trail)
+		## Ghost Trail is handled in crawler.gd as a direct action; toggle_upgrade
+		## is never called for it. No case needed here.
 
 ## end upgrade_controller.gd

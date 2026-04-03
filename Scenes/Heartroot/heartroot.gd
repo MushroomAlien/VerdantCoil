@@ -32,11 +32,11 @@ extends Control
 @onready var play_selected_btn: Button = %PlaySelectedBtn
 
 # --- Upgrade shop definitions ---
-# Cost is in Nutrient. Ghost Trail is locked until Phase 4.
+# Cost is in Nutrient.
 const UPGRADE_DEFS: Array = [
 	{ "key": "HARDENED_SKIN", "display": "Hardened Skin", "desc": "Reduces acid damage by 1 per step.", "cost": 3 },
 	{ "key": "ACID_SAC",      "display": "Acid Sac",      "desc": "Digest and pass through digestible walls.", "cost": 5 },
-	{ "key": "GHOST_TRAIL",   "display": "Ghost Trail",   "desc": "Bioluminescent trail. Coming in Phase 4.", "cost": 8, "locked": true },
+	{ "key": "GHOST_TRAIL",   "display": "Ghost Trail",   "desc": "Leave bioluminescent spores on every tile you walk off.", "cost": 8 },
 ]
 
 # --- Local state (typed) ---

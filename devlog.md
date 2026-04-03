@@ -302,3 +302,334 @@ render under the dark portion of the gradient, brightening as the crawler approa
 - Implement Ghost Trail: leave bioluminescent spore tiles on every cell the crawler walks.
 
 ---
+
+## Session 7 — 2026-04-03
+
+### What We Did
+
+**Phase 4 completion (most of it): Lighting Rebuild + Ghost Trail implementation.**
+
+The DarknessOverlay Sprite2D approach (previous session) could not support multiple independent
+light emitters, so the entire lighting system was rebuilt from the correct primitives.
+
+**Stage 1 — DarknessOverlay demolished:**
+- Removed `_setup_darkness_overlay()`, `_disable_legacy_lights()`, and all references from
+  `explore_mode.gd`.
+- Removed the GlowLight/WallLight disable calls — those nodes are back to their authored
+  energy values in `Crawler.tscn`.
+- `world_darkness.color` changed from `Color.WHITE` back to `Color(0.08, 0.06, 0.05, 1.0)`.
+- `FOG_REVEAL_RADIUS` wound down from 15 → 3 (matching GlowLight visual range).
+
+**Stage 2 — Shadow startup flash fixed:**
+- New `_enable_glow_shadow_next_frame(light)` coroutine in `explore_mode.gd`.
+  Sets `shadow_enabled = false` for one frame then restores it, so Godot rasterises the
+  initial shadow buffer from a lit baseline instead of a cold/black one.
+
+**FogManager retired:**
+- Opaque fog tiles cannot be made transparent to PointLight2D (light composites additive,
+  cannot punch through opaque pixels). Square reveal boundary was visible at radius 4.
+  Decision: retire FogManager entirely; CanvasModulate + GlowLight is the sole darkness source.
+- `System/fog_manager.gd` reduced to a stub comment.
+- FogLayer node deleted from ExploreMode scene tree (editor, not in code).
+
+**Stage 3 — LightRegistry autoload:**
+- New `System/autoload/light_registry.gd` — tracks all active light sources (world position,
+  energy) by integer ID. API: `register_light`, `update_light`, `deregister_light`, `clear`,
+  `get_all_lights`. Registered in project.godot autoloads.
+- Crawler's GlowLight registered on spawn; registry entry updated every `tile_changed`.
+
+**Stage 4 — Ghost Trail:**
+- New `System/ghost_trail_manager.gd` — RefCounted. `place_spore(tile)` paints a spore tile
+  onto GhostTrailLayer and spawns a dim `PointLight2D` (GLOW_TEXTURE, energy=0.7, scale=1.5)
+  at the tile's world position. `reset()` clears all tiles and queue_frees all lights.
+- `explore_mode.gd` wires it up: GhostTrailManager initialised on run start, `tile_changed`
+  lambda checks `has_upgrade(GHOST_TRAIL)` and calls `place_spore(_crawler_previous_tile)`.
+- Ghost Trail unlock unblocked in `heartroot.gd` (removed `"locked": true` flag).
+- `upgrade_row.gd` Ghost Trail icon updated to use `_set_icon_state` (was hard-coded to locked).
+- `upgrade_state.gd` Ghost Trail equipped flag unblocked.
+- `crawler.gd` Ghost Trail toggle guard removed from `_request_toggle()`.
+
+**project.godot fixes:**
+- `window/stretch/mode` changed from `"viewport"` to `"canvas_items"` — viewport mode was
+  causing PointLight2D world positions to not align with display coordinates.
+- `window_width_override=1024` and `window_height_override=576` added.
+- `limits/opengl/max_renderable_lights=2` line removed — this hidden setting was capping the
+  entire scene to 2 simultaneous PointLight2D nodes, causing spore lights to drop out.
+
+**Camera limits fix:**
+- `_apply_camera_limits(crawler)` call was misplaced inside the coil-loading block (where
+  `crawler` doesn't exist). Removed the misplaced call; the correct call after
+  `add_child(crawler)` was already present and now correctly applies.
+
+### Files Changed
+- `Scenes/World/explore_mode.gd` — complete rewrite of lighting/fog section
+- `System/fog_manager.gd` — retired to stub
+- `System/autoload/light_registry.gd` — new file
+- `System/ghost_trail_manager.gd` — new file
+- `Scenes/Heartroot/heartroot.gd` — Ghost Trail unlock
+- `Scenes/UI/upgrade_row.gd` — Ghost Trail icon state
+- `System/autoload/upgrade_state.gd` — Ghost Trail equipped flag
+- `Scenes/Actors/crawler.gd` — Ghost Trail toggle guard removed
+- `project.godot` — stretch mode, window overrides, max_renderable_lights removed
+
+### Known Outstanding
+- **Ghost Trail spore lights drop out after ~20 steps.** Root cause unconfirmed.
+  `max_renderable_lights` cap was the leading suspect and was removed, but dropout persists.
+  Next session must add a `print()` counter in `place_spore()` to confirm how many
+  PointLight2D nodes are actually being created vs how many render.
+- Spore light values (energy=0.7, texture_scale=1.5) are diagnostic-level overbright;
+  tune down once the dropout bug is fixed.
+- Win condition with Ghost Trail active not yet verified.
+
+### Active Phase
+**Phase 4 — Fog of War + Ghost Trail**
+
+### Next Session Should
+1. Add a print counter to `GhostTrailManager.place_spore()` to count created lights vs
+   visible ones. Determine whether nodes are being created but not rendering, or not
+   created at all.
+2. Check whether `GhostTrailManager.init()` is being called more than once per run
+   (init calls `reset()` which queue_frees all existing lights — a double-init would
+   explain periodic dropout).
+3. Fix the dropout, then tune spore light energy/scale for production values.
+
+---
+
+## Session 11 — 2026-04-03
+
+### What We Did
+
+**Ghost Trail redesign — consumable spore action.**
+
+Ghost Trail was changed from a passive toggle (trails every step, automatic) to a
+deliberate single-use action. Pressing key 3 now places one spore on the tile the
+crawler currently occupies, costs one turn, and can be used unlimited times. When more
+than MAX_SPORES (5) lights are active, the oldest light is disabled on each new placement
+so exactly 5 spores glow at any time. The tile sprite remains on all placed spores; only
+the PointLight2D emission is capped.
+
+**System/ghost_trail_manager.gd:**
+- Removed `MAX_ACTIVE_SPORE_LIGHTS` (nearest-N cull — no longer needed).
+- Removed charge system (`STARTING_CHARGES`, `_charges`, `get_charges()`) — placement
+  is always allowed; no hard per-run limit.
+- Added `MAX_SPORES = 5` — controls the rolling glow window.
+- Rolling cull: when `_spore_lights.size() > MAX_SPORES`, disables the element at
+  index `size - 1 - MAX_SPORES` so the correct oldest light darkens on every placement
+  (not always index 0, which was a bug fixed mid-session).
+- `place_spore()` now prints `[SPORE] placed at tile total_spores=N`.
+
+**Scenes/World/explore_mode.gd:**
+- Removed Ghost Trail block from `tile_changed` lambda (spores no longer placed on movement).
+- Assigned `crawler._explore_mode = self` after spawning so the crawler can call back.
+- Added `try_place_spore(tile)` method — delegates to GhostTrailManager, safe to call
+  if manager is uninitialised.
+
+**Scenes/Actors/crawler.gd:**
+- Added `var _explore_mode: Node = null` (assigned by ExploreMode after spawn).
+- In `_apply_pending_toggle()`, added a Ghost Trail special case before the generic
+  toggle path: checks equipped, calls `_explore_mode.try_place_spore(current_tile)`,
+  consumes one turn. HARDENED_SKIN and ACID_SAC paths unchanged.
+
+**System/upgrade_controller.gd:**
+- Removed `var _ghost_trail: bool = false` (no active boolean; GT is an action).
+- `has_upgrade(GHOST_TRAIL)` now returns `false` explicitly.
+- Removed GHOST_TRAIL case from `toggle_upgrade()` (dead code).
+
+**Also in this session (Session 10):**
+Camera tracking was fixed — `_apply_camera_limits()` now only applies limits on axes
+where the map exceeds the viewport size; smaller maps leave the defaults so the camera
+follows the crawler freely. Debugging principle added to CLAUDE.md.
+
+### Files Changed
+- `System/ghost_trail_manager.gd`
+- `Scenes/World/explore_mode.gd`
+- `Scenes/Actors/crawler.gd`
+- `System/upgrade_controller.gd`
+- `CLAUDE.md` (session 10 — debug principle)
+
+### Known Outstanding
+- Spore light energy (0.7) and texture_scale (1.5) are diagnostic-overbright; tune for production.
+- No HUD counter for active spores — deferred.
+- No charge replenishment or shop integration — deferred.
+
+### Active Phase
+**Phase 4 — Fog of War + Ghost Trail**
+
+### Next Session Should
+- Tune spore light energy/scale to production values.
+- Consider whether Ghost Trail is now feature-complete for Phase 4, or if any further
+  behaviour (e.g. spore interaction with future enemies) is needed before closing the phase.
+- Begin Phase 5 planning: Guard Nodule (static cyclic enemy).
+
+---
+
+## Session 10 — 2026-04-03
+
+### What We Did
+
+Fixed camera not tracking the crawler in ExploreMode.
+
+**Root cause:** `_apply_camera_limits()` set Camera2D limits based on the map's pixel
+extent unconditionally. Godot 4 Camera2D limits constrain the valid range for the camera
+centre to `[limit_left + vp_w/2, limit_right - vp_w/2]`. For any map smaller than or
+equal to the viewport (all current coils fit within 1024×576), this range collapses to
+min > max — the camera locks at an indeterminate position and stops following the crawler.
+
+The test coil was 384×384 px (12×12 tiles). With `limit_right = 384` and viewport width
+1024, the x constraint `[512, −128]` is invalid and the camera locked near the map's
+right edge, explaining the map appearing in the upper-right portion of the screen across
+all previous sessions.
+
+**Fix (`Scenes/World/explore_mode.gd`):**
+`_apply_camera_limits()` now reads the viewport size via `get_viewport_rect().size`.
+Limits are only applied on an axis if the map pixel size **exceeds** the viewport size
+on that axis. For smaller maps both axes are skipped, leaving Camera2D at its defaults
+(±10,000,000) so the camera follows the crawler freely and void is visible at the edges.
+
+Diagnostic prints added:
+- `[CAMERA] map=WxH  viewport=WxH` on every call
+- `[CAMERA] x/y limits applied — left= right=` when limits are set
+- `[CAMERA] x/y limits skipped (map narrower/shorter than viewport)` when not
+
+Debug output confirmed: `map=384x384px  viewport=1024x576px` → both axes skipped →
+camera tracks crawler. Player completed a full coil run and won cleanly.
+
+**Also:** Added debugging principle to `CLAUDE.md` — add `print()` statements liberally
+during diagnosis and read output via `get_debug_output` rather than relying on screenshots.
+
+### Files Changed
+- `Scenes/World/explore_mode.gd` — `_apply_camera_limits()` conditional limit logic + prints
+- `CLAUDE.md` — debugging principle added to MCP section
+
+### Known Outstanding
+- Diagnostic `[CAMERA]` prints can be removed once camera behaviour is confirmed stable
+  across multiple coil sizes (including future 32×18 default coils).
+- All previous sessions' screenshots showed the broken camera — worth re-testing with
+  a larger coil once 32×18 default coils exist, to verify the x/y limit logic triggers
+  correctly when the map does exceed the viewport.
+- Pre-existing UI anchor warning in debug output — unrelated.
+
+### Active Phase
+**Phase 4 — Fog of War + Ghost Trail**
+
+### Next Session Should
+- Test with a coil larger than 1024×576 to confirm limits apply correctly for big maps.
+- Tune spore light energy/texture_scale from diagnostic values (0.7/1.5) to production.
+- Decide on rolling-window vs distance-based cull for Ghost Trail lights.
+- Verify Ghost Trail win condition end-to-end (this session showed a win with GT active
+  and no errors, so this may already be confirmed).
+
+---
+
+## Session 9 — 2026-04-03
+
+### What We Did
+
+Fixed Ghost Trail spore lights dropping out after ~15–16 steps.
+
+**Root cause confirmed (Stage 1):**
+Diagnostic prints from Session 8 showed the count climbing past 16 with all nodes
+`is_inside_tree()=true` and correct world positions. This confirmed Godot 4 Forward+'s
+per-canvas-item PointLight2D limit (~16 lights per draw call). There is no project.godot
+setting to raise this limit for 2D canvas items — it is hardcoded in the GLSL shader.
+
+**Fix — Nearest-N light cull (`System/ghost_trail_manager.gd`):**
+Added `MAX_ACTIVE_SPORE_LIGHTS = 12` constant. After each `place_spore()` call, the
+entire `_spore_lights` array is iterated and `enabled` is set to `false` for all lights
+outside the most recent 12. Tile paint still happens for every step, so the spore sprite
+is always visible; only the light emission is capped. Older lights go dark predictably
+as the player walks rather than silently failing past an invisible threshold.
+
+**Spore position fix (`System/ghost_trail_manager.gd`):**
+Replaced `_layer.to_global(_layer.map_to_local(tile))` with `GridUtil.to_world(tile)`.
+`map_to_local()` returns the tile's top-left corner; `GridUtil.to_world()` returns the
+tile centre, matching the crawler's own positioning convention.
+Added `const GridUtil := preload("res://System/grid.gd")` to the consts block.
+
+**LightRegistry cleanup (`Scenes/World/explore_mode.gd`):**
+Added `LightRegistry.clear()` immediately before `GhostTrailManager.new()` in `_ready()`.
+Prevents stale registry entries accumulating if the run is restarted.
+
+**Diagnostic print removed** from `place_spore()`.
+
+### Observed Behaviour After Fix
+- Spore lights no longer drop out silently at step ~16.
+- The 12 most recent tiles glow; older tiles show spore sprite only (no halo).
+- The lit window rolls forward with the player continuously across 70+ steps with no errors.
+
+### Files Changed
+- `System/ghost_trail_manager.gd` — `GridUtil` const, `MAX_ACTIVE_SPORE_LIGHTS` const,
+  nearest-N cull loop, `GridUtil.to_world()` position fix, diagnostic print removed
+- `Scenes/World/explore_mode.gd` — `LightRegistry.clear()` before run init
+
+### Known Outstanding
+- The "rolling window" of 12 lit tiles is functional but may not be the ideal design.
+  An alternative (keep all spores lit, rotate out the dimmest/farthest) can be explored
+  once the art pass makes the spore energy/scale production-ready.
+- Spore light values (energy=0.7, texture_scale=1.5) remain at diagnostic-overbright levels.
+  Tune down once the light design is settled.
+- Pre-existing UI anchor warning in debug output — unrelated to this work.
+
+### Active Phase
+**Phase 4 — Fog of War + Ghost Trail**
+
+### Next Session Should
+- Tune spore light energy and texture_scale to production values.
+- Decide whether the rolling-window cull is the final design or whether a distance-based
+  cull (disable farthest light instead of oldest) would feel better to play.
+- Verify Ghost Trail + win condition works end-to-end (complete a coil with GT active).
+
+---
+
+## Session 8 — 2026-04-03
+
+### What We Did
+
+Diagnostic session only. Added a `print()` counter inside `GhostTrailManager.place_spore()`
+that logs the current spore count, tile, `is_inside_tree()`, and `global_position` every
+time a spore light is spawned.  No fix applied yet — diagnosis first.
+
+### Leading Hypothesis — Per-canvas-item PointLight2D limit
+
+Root cause is likely Godot 4's 2D canvas shader compile-time limit on how many
+`PointLight2D` nodes can illuminate a single canvas item per draw call.
+
+In Forward+, this limit is believed to be **16 lights per canvas item**.  With 1 GlowLight
+on the crawler plus spore lights accumulating as the player walks, the budget fills at
+roughly step 15 (1 + 15 = 16).  Any new `PointLight2D` past that point is successfully
+created and added to the scene tree (`is_inside_tree()` = true), but it silently fails to
+illuminate floor tiles because the per-item light budget is exhausted.
+
+This explains:
+- Why removing `max_renderable_lights = 2` (a global cap) improved the scene but did not
+  fix the dropout — the per-canvas-item limit is a separate shader-level constraint.
+- Why existing lights do not disappear — old lights remain; it's only *new* ones that have
+  no effect.
+- Why the threshold is ~20 steps (close to 16, with some map-layout variance from tile
+  culling radii).
+
+### Files Changed
+- `System/ghost_trail_manager.gd` — diagnostic print added to `place_spore()`
+  (to be removed once root cause confirmed)
+
+### Known Outstanding
+- Diagnostic prints need to be verified by running the game and inspecting the output past
+  step 20.  If `place_spore()` is still being called (count climbs past 15) but no new
+  halos appear, the per-item limit hypothesis is confirmed.
+- If `place_spore()` stops being called, the bug is upstream — probably in the
+  `tile_changed` lambda in `explore_mode.gd`.
+- Fix not yet applied.
+
+### Active Phase
+**Phase 4 — Fog of War + Ghost Trail**
+
+### Next Session Should
+1. Run the game, activate Ghost Trail, walk 25+ steps, copy the debug output.
+2. Check the SPORE print lines: does count keep climbing past 16?  Is `in_tree` always true?
+3. If confirmed per-item limit: add `rendering/2d/lights/max_renderable_lights` or the
+   per-item equivalent to `project.godot`, or redesign to cull distant spore lights
+   (only keep the N nearest spores active at any time).
+4. Remove diagnostic prints after fix is confirmed.
+5. Tune spore light energy/scale from diagnostic values (0.7/1.5) to production values.
+
+---

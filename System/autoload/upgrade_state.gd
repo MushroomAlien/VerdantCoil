@@ -65,11 +65,10 @@ func load_active_loadout() -> void:
 	var owned: Dictionary  = owned_v as Dictionary
 	var desired: Dictionary = desired_v as Dictionary
 
-	# Equipped = owned AND desired. Ghost Trail excluded until Phase 4 — even if
-	# somehow present in desired_loadout it will never be equipped here.
+	# Equipped = owned AND desired for all upgrades.
 	_equipped["HARDENED_SKIN"] = bool(owned.get("HARDENED_SKIN", false)) and bool(desired.get("HARDENED_SKIN", false))
 	_equipped["ACID_SAC"]      = bool(owned.get("ACID_SAC",      false)) and bool(desired.get("ACID_SAC",      false))
-	_equipped["GHOST_TRAIL"]   = false  # locked until Phase 4
+	_equipped["GHOST_TRAIL"]   = bool(owned.get("GHOST_TRAIL",   false)) and bool(desired.get("GHOST_TRAIL",   false))
 
 	emit_signal("loadout_changed")
 

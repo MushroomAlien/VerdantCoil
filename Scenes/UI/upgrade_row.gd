@@ -52,7 +52,7 @@ func _on_controller_upgrade_changed(upgrade: int, value: bool) -> void:
 	elif upgrade == _controller.Upgrade.ACID_SAC:
 		_set_icon_state(_acid_icon, value, equipped)
 	elif upgrade == _controller.Upgrade.GHOST_TRAIL:
-		_set_icon_locked(_ghost_icon)  # always locked until Phase 4
+		_set_icon_state(_ghost_icon, value, equipped)
 
 # --- Read from UpgradeController if we have it ---
 func _refresh_from_controller() -> void:
@@ -62,20 +62,24 @@ func _refresh_from_controller() -> void:
 	# Read both active and equipped states from the controller.
 	var h_active: bool = false
 	var a_active: bool = false
+	var g_active: bool = false
 	var h_equipped: bool = false
 	var a_equipped: bool = false
+	var g_equipped: bool = false
 
 	if _controller.has_method("has_upgrade"):
 		h_active = bool(_controller.call("has_upgrade", _controller.Upgrade.HARDENED_SKIN))
 		a_active = bool(_controller.call("has_upgrade", _controller.Upgrade.ACID_SAC))
+		g_active = bool(_controller.call("has_upgrade", _controller.Upgrade.GHOST_TRAIL))
 
 	if _controller.has_method("is_equipped"):
 		h_equipped = bool(_controller.call("is_equipped", _controller.Upgrade.HARDENED_SKIN))
 		a_equipped = bool(_controller.call("is_equipped", _controller.Upgrade.ACID_SAC))
+		g_equipped = bool(_controller.call("is_equipped", _controller.Upgrade.GHOST_TRAIL))
 
 	_set_icon_state(_hardened_icon, h_active, h_equipped)
 	_set_icon_state(_acid_icon,     a_active, a_equipped)
-	_set_icon_locked(_ghost_icon)  # always locked until Phase 4
+	_set_icon_state(_ghost_icon,    g_active, g_equipped)
 
 # --- Fallback: read equipped set from UpgradeState (called at run start before controller exists) ---
 # At this point no upgrade is active yet, so we only show equipped vs not-equipped.
@@ -83,16 +87,19 @@ func _refresh_from_state() -> void:
 	var h_equipped: bool = false
 	var a_equipped: bool = false
 
+	var g_equipped: bool = false
+
 	if has_node("/root/UpgradeState"):
 		var us: Node = get_node("/root/UpgradeState")
 		if us.has_method("is_equipped"):
 			h_equipped = bool(us.call("is_equipped", "HARDENED_SKIN"))
 			a_equipped = bool(us.call("is_equipped", "ACID_SAC"))
+			g_equipped = bool(us.call("is_equipped", "GHOST_TRAIL"))
 
 	# Nothing is active yet — show equipped state only (active = false).
 	_set_icon_state(_hardened_icon, false, h_equipped)
 	_set_icon_state(_acid_icon,     false, a_equipped)
-	_set_icon_locked(_ghost_icon)  # always locked until Phase 4
+	_set_icon_state(_ghost_icon,    false, g_equipped)
 
 # --- Tint helpers ---
 

@@ -18,6 +18,11 @@ Project root: `verdant-coil/`. Open that folder as the Godot project.
 Godot MCP active. Executable: `G:/Game Dev/Godot/4.4.1/Godot_v4.4.1-stable_win64.exe/Godot_v4.4.1-stable_win64.exe`
 Use `run_project` and `get_debug_output` to verify behaviour before claiming something works.
 
+**Debugging principle:** Add `print()` statements liberally during diagnosis. Printed output
+is readable directly via `get_debug_output` — far faster than asking the user to describe
+what they see. Always print: key values at function entry, branching decisions, and
+unexpected-but-silent failures. Remove prints once the fix is confirmed.
+
 ---
 
 ## Session Start — REQUIRED

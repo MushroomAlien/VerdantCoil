@@ -24,6 +24,9 @@ var _move_direction: Vector2 = Vector2.ZERO
 
 # Simple input-skip slow (Sticky uses this to "eat" N inputs after entry)
 var _skip_inputs: int = 0
+## Back-reference to ExploreMode, assigned after the crawler is spawned.
+## Used to call try_place_spore() when the player activates Ghost Trail.
+var _explore_mode: Node = null
 
 func _ready() -> void:
 	if base_layer == null: push_error("Crawler.base_layer not set")
@@ -324,11 +327,6 @@ var _pending_toggle: int = -1
 
 # Queue a toggle to run on the next idle frame. Avoids re-entrancy inside input callbacks.
 func _request_toggle(index: int) -> void:
-	# Ghost Trail (index 2) is not yet implemented — block the toggle until Phase 4.
-	if index == 2:
-		print("[TOGGLE] Ghost Trail is not yet available.")
-		return
-
 	# Ignore if we are already moving or a toggle is already queued.
 	if _is_moving:
 		print("[TOGGLE] Ignored; currently moving.")
@@ -363,6 +361,20 @@ func _apply_pending_toggle() -> void:
 		upgrade_enum = uc.Upgrade.GHOST_TRAIL
 	else:
 		print("[TOGGLE] Unknown index:", index)
+		return
+
+	## Ghost Trail is an action, not a toggle — place one spore on the current
+	## tile and consume one charge. Does not flip any active boolean.
+	if upgrade_enum == uc.Upgrade.GHOST_TRAIL:
+		if uc.has_method("is_equipped") and not bool(uc.call("is_equipped", upgrade_enum)):
+			print("[TOGGLE] Upgrade not slotted for this run — no turn consumed.")
+			return
+		var current_tile: Vector2i = GridUtil.to_tile_coords(position)
+		if _explore_mode != null and _explore_mode.has_method("try_place_spore"):
+			_explore_mode.call("try_place_spore", current_tile)
+		else:
+			push_error("Crawler: _explore_mode not set; cannot place Ghost Trail spore.")
+		_consume_turn_no_move()
 		return
 
 	# Only consume a turn if the upgrade is actually slotted for this run.

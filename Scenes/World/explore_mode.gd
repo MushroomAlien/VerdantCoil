@@ -1,30 +1,34 @@
 ## explore_mode.gd
 extends Node2D
 
-const GridUtil    := preload("res://System/grid.gd")
-const FogManager  := preload("res://System/fog_manager.gd")
-
-# Tiles revealed in each cardinal direction from the crawler each turn.
-# Must exceed the DarknessOverlay's fully-dark radius (~13 tiles at default scale)
-# so the fog tile boundary is always hidden behind the overlay's black edge.
-const FOG_REVEAL_RADIUS := 15
+const GridUtil           := preload("res://System/grid.gd")
+const GhostTrailManager  := preload("res://System/ghost_trail_manager.gd")
 
 const CRAWLER_SCENE: PackedScene = preload("res://Scenes/Actors/Crawler.tscn")
 @export var base_layer: TileMapLayer
 @export var walls_layer: TileMapLayer
 @export var hazard_layer: TileMapLayer
 @export var marker_layer: TileMapLayer
-@export var fog_layer: TileMapLayer  # Phase 4: fog-of-war overlay; managed by FogManager
+## Assigned in the Inspector after adding GhostTrailLayer to ExploreMode.tscn.
+@export var ghost_trail_layer: TileMapLayer
 
-var _fog_manager: RefCounted  # FogManager instance; created in _ready() after map load
+## LightRegistry ID for the crawler's GlowLight.
+## Used to update position each turn and deregister on scene exit.
+var _crawler_light_id: int = -1
+## Ghost Trail manager; created at run start, reset on run reset.
+var _ghost_trail_manager: RefCounted
+## The tile the crawler occupied on the previous step.
+## Ghost Trail spores are placed here (the tile just walked OFF).
+var _crawler_previous_tile: Vector2i
 
 @onready var world_darkness: CanvasModulate = $WorldDarkness
 @onready var coil_map: TileMap = $CoilMap
 
 func _ready() -> void:
-	# DarknessOverlay handles all scene darkening; CanvasModulate must be neutral
-	# so it doesn't double-darken the world.
-	world_darkness.color = Color.WHITE
+	# CanvasModulate sets the scene to near-darkness.
+	# PointLight2D nodes (GlowLight on the crawler, spore lights from Ghost Trail)
+	# punch holes in this darkness — Godot composites them automatically.
+	world_darkness.color = Color(0.08, 0.06, 0.05, 1.0)
 
 	# TileSet on the TileMap (typical setup)
 	var ts: TileSet = coil_map.tile_set
@@ -86,12 +90,6 @@ func _ready() -> void:
 		if hs.has_method("reset"):
 			hs.call("reset", 3)  # Track-1 baseline: 3 HP
 
-	# Phase 4: stamp fog over the coil footprint before the crawler appears.
-	# Fog covers only base_layer cells so the parallax background shows through
-	# beyond the map edges.  The parallax is atmosphere, not playable space.
-	_fog_manager = FogManager.new()
-	_fog_manager.init(fog_layer, base_layer)
-
 	# 2) Spawn the crawler at the Spawn marker (or fallback)
 	var crawler: Area2D = CRAWLER_SCENE.instantiate()
 	crawler.base_layer   = base_layer
@@ -102,21 +100,42 @@ func _ready() -> void:
 	var spawn_tile: Vector2i = get_spawn_position()
 	crawler.position = GridUtil.to_world(spawn_tile)  # your util converts map→world
 	add_child(crawler)
+	_apply_camera_limits(crawler)
+	## Give the crawler a back-reference so it can call try_place_spore() when
+	## the player activates Ghost Trail. Assigned here rather than via export
+	## to avoid a scene-file dependency on ExploreMode.
+	crawler._explore_mode = self
 
-	# Disable the legacy PointLight2D nodes that shipped in Crawler.tscn.
-	# The DarknessOverlay below replaces them entirely.
-	_disable_legacy_lights(crawler)
+	## Initialise the Ghost Trail manager with the dedicated TileMapLayer.
+	## Source ID 0, atlas (35,9) is the yellow blob placeholder spore tile.
+	## ghost_trail_layer is assigned in the Inspector by the user.
+	LightRegistry.clear()
+	_ghost_trail_manager = GhostTrailManager.new()
+	_ghost_trail_manager.init(ghost_trail_layer, self, 0, Vector2i(35, 9))
+	_crawler_previous_tile = spawn_tile
 
-	# Add a large radial darkness overlay as a child of the crawler.
-	# It follows the crawler automatically and creates smooth circular light falloff.
-	_setup_darkness_overlay(crawler)
+	# Godot initialises the PointLight2D shadow depth buffer as fully dark on frame 0,
+	# causing a black flash at spawn that corrects itself only as the player moves.
+	# Disabling shadow for one frame then re-enabling it lets Godot rasterise the
+	# initial shadow map from a lit baseline, so frame 1 onward looks correct.
+	var glow: PointLight2D = crawler.get_node_or_null("GlowLight")
+	if glow != null:
+		_enable_glow_shadow_next_frame(glow)
 
-	# Phase 4: connect fog reveal to crawler movement, then reveal the spawn tile immediately
-	# so the player can see where they start.
+	## Register the crawler's GlowLight with LightRegistry so future systems
+	## (e.g. parasite AI) can query active light positions without scene-tree lookups.
+	## glow_energy is captured by the tile_changed closure below.
+	var glow_energy: float = 0.8  ## matches GlowLight.energy in Crawler.tscn
+	if glow != null:
+		glow_energy = glow.energy
+	_crawler_light_id = LightRegistry.register_light(crawler.position, glow_energy)
+
+	## Update the crawler's registry entry each time it moves to a new tile.
+	## Ghost Trail spores are placed explicitly by the player (key 3), not here.
 	crawler.tile_changed.connect(func(tile: Vector2i) -> void:
-		_fog_manager.reveal_around(tile, FOG_REVEAL_RADIUS)
+		LightRegistry.update_light(_crawler_light_id, GridUtil.to_world(tile), glow_energy)
+		_crawler_previous_tile = tile
 	)
-	_fog_manager.reveal_around(spawn_tile, FOG_REVEAL_RADIUS)
 
 	var row_path: String = "HUD/SafeArea/BottomCenter/UpgradeRow"
 	var row: Node = get_node_or_null(row_path)
@@ -157,61 +176,6 @@ func _apply_upgrade_state_to_crawler(crawler: Area2D) -> void:
 		uc.call("set_equipped", uc.Upgrade.GHOST_TRAIL,   g_equipped)
 
 	print("UpgradeState → Crawler equipped (H:", h_equipped, ", A:", a_equipped, ", G:", g_equipped, ")")
-
-
-## Zero out legacy PointLight2D nodes that live in Crawler.tscn.
-## They are superseded by DarknessOverlay and must not interfere.
-func _disable_legacy_lights(crawler: Area2D) -> void:
-	var glow: PointLight2D = crawler.get_node_or_null("GlowLight")
-	if glow != null:
-		glow.energy = 0.0
-
-	var wall: PointLight2D = crawler.get_node_or_null("WallLight")
-	if wall != null:
-		wall.energy = 0.0
-
-
-## Creates a large Sprite2D carrying a radial gradient texture and attaches it
-## to the crawler as a child.  It follows the crawler automatically.
-##
-## The texture is transparent at the centre (bright around the crawler) and
-## fades to fully opaque black at the edges (darkness beyond the light radius).
-## z_as_relative = false places the overlay at an absolute z of 10, above the
-## FogLayer (z=6) and all world tiles, but below the HUD CanvasLayer (layer=99).
-func _setup_darkness_overlay(crawler: Area2D) -> void:
-	# Build the radial gradient: transparent core → opaque black edges.
-	# Offsets are fractions of the texture radius (0 = centre, 1 = edge).
-	# With scale=8 on a 512×512 texture the radius is 256*8 = 2048 world px = 64 tiles.
-	#   offset 0.00 → 0 tiles   (fully transparent, bright core)
-	#   offset 0.06 → ~3.8 tiles (still fully transparent)
-	#   offset 0.20 → ~12.8 tiles (fully opaque, transition complete)
-	#   offset 1.00 → 64 tiles  (fully opaque, padded to cover entire screen)
-	var gradient := Gradient.new()
-	# Default Gradient has two points: black at 0 and white at 1.
-	# Reuse them rather than removing and re-adding.
-	gradient.set_color(0, Color(0.0, 0.0, 0.0, 0.0))   # transparent centre
-	gradient.set_offset(0, 0.0)
-	gradient.set_color(1, Color(0.0, 0.0, 0.0, 1.0))   # opaque black edge
-	gradient.set_offset(1, 1.0)
-	gradient.add_point(0.06, Color(0.0, 0.0, 0.0, 0.0)) # hold transparent to ~4 tiles
-	gradient.add_point(0.20, Color(0.0, 0.0, 0.0, 1.0)) # fully dark by ~13 tiles
-
-	var tex := GradientTexture2D.new()
-	tex.gradient  = gradient
-	tex.fill      = GradientTexture2D.FILL_RADIAL
-	tex.fill_from = Vector2(0.5, 0.5)   # centre of texture
-	tex.fill_to   = Vector2(1.0, 0.5)   # right edge (sets the radius)
-	tex.width     = 512
-	tex.height    = 512
-
-	var overlay := Sprite2D.new()
-	overlay.texture        = tex
-	overlay.z_as_relative  = false   # absolute z-index, not relative to crawler parent
-	overlay.z_index        = 10      # above FogLayer (z=6) and world tiles; below HUD CanvasLayer
-	overlay.scale          = Vector2(8.0, 8.0) # 512*8=4096 px per axis = 128 tiles radius
-
-	# Add to crawler so it moves with it automatically.
-	crawler.add_child(overlay)
 
 
 ## Returns the tile coordinates of the spawn tile marked with `is_spawn = true` in the Marker layer.
@@ -274,5 +238,60 @@ func _rebuild_layer_from_json(arr_v: Variant, layer: TileMapLayer) -> void:
 			ac = Vector2i(int(cell["atlas_x"]), int(cell["atlas_y"]))
 		layer.set_cell(coords, sid, ac)
 
+
+## Disables GlowLight shadow for one frame then re-enables it.
+## Godot initialises the shadow depth buffer as fully dark on frame 0,
+## causing a near-black startup flash. Toggling shadow_enabled off for one
+## process_frame lets Godot rasterise from a fully-lit baseline instead.
+func _enable_glow_shadow_next_frame(light: PointLight2D) -> void:
+	light.shadow_enabled = false
+	await get_tree().process_frame
+	light.shadow_enabled = true
+
+## Sets the Camera2D limits to the playable map bounds so the camera
+## never scrolls beyond the edge of the coil. Only applies a limit on
+## a given axis if the map is larger than the viewport on that axis.
+## For smaller maps the Camera2D default limits (-10,000,000 / 10,000,000)
+## are left in place so the camera follows the crawler freely.
+func _apply_camera_limits(crawler: Area2D) -> void:
+	var camera: Camera2D = crawler.get_node_or_null("Camera2D")
+	if camera == null:
+		push_error("_apply_camera_limits: Camera2D not found on crawler")
+		return
+	## get_used_rect() returns tile coordinates; multiply by TILE_SIZE
+	## to get world pixel coordinates for the camera limits.
+	var map_rect: Rect2i = base_layer.get_used_rect()
+	var ts: int = Grid.TILE_SIZE
+	var map_px_w: int = map_rect.size.x * ts
+	var map_px_h: int = map_rect.size.y * ts
+	var vp_size: Vector2 = get_viewport_rect().size
+	print("[CAMERA] map=", map_px_w, "x", map_px_h, "px  viewport=",
+		int(vp_size.x), "x", int(vp_size.y), "px")
+	## X axis: only lock if the map is wider than the viewport.
+	## If narrower, leave defaults so the camera can freely follow the crawler.
+	if map_px_w > int(vp_size.x):
+		camera.limit_left  = map_rect.position.x * ts
+		camera.limit_right = (map_rect.position.x + map_rect.size.x) * ts
+		print("[CAMERA] x limits applied — left=", camera.limit_left,
+			" right=", camera.limit_right)
+	else:
+		print("[CAMERA] x limits skipped (map narrower than viewport)")
+	## Y axis: only lock if the map is taller than the viewport.
+	if map_px_h > int(vp_size.y):
+		camera.limit_top    = map_rect.position.y * ts
+		camera.limit_bottom = (map_rect.position.y + map_rect.size.y) * ts
+		print("[CAMERA] y limits applied — top=", camera.limit_top,
+			" bottom=", camera.limit_bottom)
+	else:
+		print("[CAMERA] y limits skipped (map shorter than viewport)")
+
+## Called by the crawler when the player presses the Ghost Trail key.
+## Delegates to GhostTrailManager.place_spore(); safe to call if the manager
+## is not yet initialised (e.g. during scene setup).
+func try_place_spore(tile: Vector2i) -> void:
+	if _ghost_trail_manager == null:
+		push_error("try_place_spore: GhostTrailManager not initialised")
+		return
+	_ghost_trail_manager.place_spore(tile)
 
 ## end explore_mode.gd

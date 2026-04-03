@@ -25,13 +25,15 @@ ProfileManager="*res://System/profile_manager.gd"
 BuildInfo="*res://System/build_info.gd"
 HealthSystem="*res://System/autoload/health_system.gd"
 UpgradeState="*res://System/autoload/upgrade_state.gd"
+LightRegistry="*res://System/autoload/light_registry.gd"
 
 [display]
 
 window/size/viewport_width=1024
 window/size/viewport_height=576
-window/stretch/mode="viewport"
-window/stretch/aspect="expand"
+window/size/window_width_override=1024
+window/size/window_height_override=576
+window/stretch/mode="canvas_items"
 
 [input]
 
