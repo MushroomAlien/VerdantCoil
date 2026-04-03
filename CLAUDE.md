@@ -19,6 +19,35 @@ The project root is `verdant-coil/` inside this repository. Open that folder as 
 
 There is no external build system — this is a pure Godot project.
 
+---
+
+## Before Starting Any Work Session
+
+**Always do these steps before writing any code:**
+
+1. Read `devlog.md` in full — understand what was last completed, what is known-broken, and what the next session should do.
+2. Read the relevant progress log for the current phase (e.g. `1_4_progress_log.txt`) if the devlog references it.
+3. State back to the user: current phase, last completed stage, and what you intend to do this session.
+4. **Do not write any code until the user confirms the plan.**
+
+---
+
+## After Completing Any Work Session
+
+**Always do these steps after finishing work:**
+
+1. Append a new session entry to `devlog.md` covering: what was done, which files were changed, and any known outstanding issues.
+2. State clearly what the next session should start with.
+
+### Devlog Rules — STRICT
+
+- **ONLY EVER APPEND to `devlog.md`.** New entries go at the bottom.
+- **NEVER alter, rewrite, or delete any existing section** of `devlog.md`.
+- **NEVER modify entries from previous sessions** — even to fix a typo.
+- The devlog is a permanent, append-only record of project history. Treat it like a git log.
+
+---
+
 ## Architecture Overview
 
 ### Scene Flow
@@ -135,10 +164,12 @@ All code in this repository follows these principles. They are not aspirational 
 ## Claude Code Rules
 
 - **Only edit `.gd` script files** unless explicitly told otherwise
+- **Exception: new `TileMapLayer` nodes may be added to `ExploreMode.tscn`** when explicitly instructed as part of a planned phase (e.g. adding a fog layer in Phase 4)
 - **Do NOT move, rename, or delete any files**
-- **Do NOT modify `.tscn` or `.tres` files**
+- **Do NOT modify `.tscn` or `.tres` files** except as noted in the exception above
 - **Do NOT refactor `builder_mode.gd` or `profile_manager.gd`** — too large, too risky
 - **Do NOT change the coil JSON schema** — any change requires updates to `CoilIO`, `CoilValidator`, and every saved coil
+- **Do NOT implement features not explicitly requested in the current session** — if scope is unclear, ask before proceeding
 - Always add inline comments explaining logic; write for a beginner reader
 - Godot version is **4.4.1** — confirm any API before using it
 - Follow all coding standards in `Design docs/VERDANT_COIL_CLAUDE_CODE_BRIEF_1.md` (Variant safety, `.call()` pattern, UK English, `push_error` not `assert`, signal disconnect in `_exit_tree()`, etc.)

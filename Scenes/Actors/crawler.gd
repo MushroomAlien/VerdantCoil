@@ -6,6 +6,10 @@ extends Area2D
 
 const GridUtil := preload("res://System/grid.gd")
 
+# Emitted each time the crawler completes a move and arrives at a new tile.
+# Listeners (e.g. FogManager) use this to update per-turn state.
+signal tile_changed(tile: Vector2i)
+
 @export var base_layer:   TileMapLayer
 @export var wall_layer:   TileMapLayer
 @export var hazard_layer: TileMapLayer
@@ -208,6 +212,9 @@ func _on_arrived_at(tile: Vector2i) -> void:
 	# If we win during effects, _win_and_return() will set _is_moving = true again.
 	_is_moving = false
 	print("[ARRIVE] At tile:", tile)
+
+	# Notify listeners (FogManager, Ghost Trail, etc.) that we reached a new tile.
+	tile_changed.emit(tile)
 
 	# Apply end-of-action effects (acid, sticky, dissolve, goal).
 	_apply_tile_effects(tile)
