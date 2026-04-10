@@ -15,7 +15,7 @@ Project root: `verdant-coil/`. Open that folder as the Godot project.
 
 ## MCP
 
-Godot MCP active. Executable: `G:/Game Dev/Godot/4.4.1/Godot_v4.4.1-stable_win64.exe/Godot_v4.4.1-stable_win64.exe`
+Godot MCP active. Executable: `E:/Game Dev/Godot/4.4.1/Godot_v4.4.1-stable_win64.exe/Godot_v4.4.1-stable_win64.exe`
 Use `run_project` and `get_debug_output` to verify behaviour before claiming something works.
 
 **Debugging principle:** Add `print()` statements liberally during diagnosis. Printed output
