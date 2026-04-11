@@ -217,6 +217,10 @@ func _ready() -> void:
 	add_child(_camera)
 	_camera.make_current()
 
+	## Phase 5.1: inject Guard Nodule brush at runtime.
+	## Full palette integration (icon, hotkey) comes in Phase 5.4.
+	_add_nodule_brush()
+
 ## Refresh the preview each frame
 func _process(_delta: float) -> void:
 	_update_preview()
@@ -495,6 +499,63 @@ func _find_eraser_index() -> int:
 
 	# If we reached this point, there is no ERASER brush configured.
 	return -1
+
+## Add the Guard Nodule brush at runtime so Phase 5.1 testing works without
+## a full builder palette pass (Phase 5.4 will make this a first-class entry).
+## Appends a new BrushEntry to the registry and a matching TextureButton to
+## PaletteRow, then wires it into the existing ButtonGroup so selection is
+## mutually exclusive with all other palette buttons.
+func _add_nodule_brush() -> void:
+	if brush_registry == null:
+		push_error("_add_nodule_brush: brush_registry not assigned")
+		return
+
+	## Icon: same PNG used by all existing brush icons (roguelikeSheet).
+	## Nodule large sprite is at atlas column 44, row 23.
+	## Pitch = 34 px per tile (32 tile + 2 px separation).
+	var icon := AtlasTexture.new()
+	icon.atlas  = preload("res://Assets/roguelikeSheet_transparent_32x32.png")
+	icon.region = Rect2(44 * 34, 23 * 34, 32, 32)
+
+	## BrushEntry: MARKER rule so placement legality is checked the same way
+	## as Spawn and Heartroot. target_layer 3 = Markers TileMapLayer.
+	var be := BrushEntry.new()
+	be.display_name = "Guard Nodule"
+	be.rule_profile  = "MARKER"
+	be.target_layer  = 3
+	be.source_id     = 0
+	be.atlas_coords  = Vector2i(44, 23)
+	be.hazard_kind   = ""
+	be.icon          = icon
+	brush_registry.brushes.append(be)
+	var new_index: int = brush_registry.brushes.size() - 1
+
+	## Steal the ButtonGroup from the first existing palette button so all
+	## buttons remain mutually exclusive.
+	var group: ButtonGroup = null
+	if _palette_buttons.size() > 0:
+		group = _palette_buttons[0].button_group
+
+	## Mirror the setup from _ready()'s palette loop exactly.
+	var btn := TextureButton.new()
+	btn.texture_normal        = icon
+	btn.toggle_mode           = true
+	btn.button_group          = group
+	btn.focus_mode            = Control.FOCUS_NONE
+	btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	btn.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
+	btn.stretch_mode          = TextureButton.STRETCH_KEEP_ASPECT_CENTERED
+	btn.self_modulate         = Color(0.65, 0.65, 0.65, 0.85)
+	btn.scale                 = Vector2.ONE
+	btn.tooltip_text          = be.display_name
+	## Capture new_index in the closure so pressing this button selects
+	## the correct brush even if the registry grows later.
+	btn.pressed.connect(func(): _select_brush(new_index))
+
+	palette_row.add_child(btn)
+	_palette_buttons.append(btn)
+	print("[BUILDER] Guard Nodule brush injected at index ", new_index)
+
 
 ## Toggle between the eraser brush and the last non-eraser brush.
 func _toggle_eraser() -> void:

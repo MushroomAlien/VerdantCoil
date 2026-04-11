@@ -3,6 +3,7 @@ extends Node2D
 
 const GridUtil           := preload("res://System/grid.gd")
 const GhostTrailManager  := preload("res://System/ghost_trail_manager.gd")
+const GuardNodule        := preload("res://Scenes/Actors/guard_nodule.gd")
 
 const CRAWLER_SCENE: PackedScene = preload("res://Scenes/Actors/Crawler.tscn")
 @export var base_layer: TileMapLayer
@@ -20,6 +21,8 @@ var _ghost_trail_manager: RefCounted
 ## The tile the crawler occupied on the previous step.
 ## Ghost Trail spores are placed here (the tile just walked OFF).
 var _crawler_previous_tile: Vector2i
+## All Guard Nodule Node2Ds active for this run. Populated by _spawn_guard_nodules().
+var _guard_nodules: Array[Node2D] = []
 
 @onready var world_darkness: CanvasModulate = $WorldDarkness
 @onready var coil_map: TileMap = $CoilMap
@@ -110,6 +113,7 @@ func _ready() -> void:
 	## Source ID 0, atlas (35,9) is the yellow blob placeholder spore tile.
 	## ghost_trail_layer is assigned in the Inspector by the user.
 	LightRegistry.clear()
+	_spawn_guard_nodules()  ## Phase 5.1: place nodule lights from is_nodule marker flags
 	_ghost_trail_manager = GhostTrailManager.new()
 	_ghost_trail_manager.init(ghost_trail_layer, self, 0, Vector2i(35, 9))
 	_crawler_previous_tile = spawn_tile
@@ -180,6 +184,37 @@ func _apply_upgrade_state_to_crawler(crawler: Area2D) -> void:
 		uc.call("set_equipped", uc.Upgrade.GHOST_TRAIL,   g_equipped)
 
 	print("UpgradeState → Crawler equipped (H:", h_equipped, ", A:", a_equipped, ", G:", g_equipped, ")")
+
+
+## Scan the marker layer for tiles with is_nodule == true and spawn a GuardNodule
+## Node2D at each one. Called once from _ready() after the coil loads.
+## Phase 5.1: placement and light only — no movement, no damage yet.
+func _spawn_guard_nodules() -> void:
+	if marker_layer == null:
+		push_error("_spawn_guard_nodules: marker_layer not assigned")
+		return
+
+	var cells: Array[Vector2i] = marker_layer.get_used_cells()
+	for coords in cells:
+		var td: TileData = marker_layer.get_cell_tile_data(coords)
+		if td == null:
+			continue
+		## get_custom_data returns null if the custom data layer doesn't exist on
+		## this tile; casting null as bool yields false, so old coils are safe.
+		var is_nodule := td.get_custom_data("is_nodule") as bool
+		if not is_nodule:
+			continue
+
+		## Create the Node2D, attach the GuardNodule script, position it at the
+		## tile centre, then add to tree so _ready() fires with correct global_position.
+		var nodule: Node2D = Node2D.new()
+		nodule.set_script(GuardNodule)
+		nodule.position = GridUtil.to_world(coords)
+		add_child(nodule)
+		_guard_nodules.append(nodule)
+		print("[NODULE] placed at tile ", coords)
+
+	print("[NODULE] total spawned: ", _guard_nodules.size())
 
 
 ## Returns the tile coordinates of the spawn tile marked with `is_spawn = true` in the Marker layer.

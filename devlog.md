@@ -717,3 +717,79 @@ final production values. Changes from the tuning pass:
 - Read devlog and CLAUDE.md before any code.
 
 ---
+
+## Session — 2026-04-11 (Phase 5.1)
+
+### What We Did
+
+**Phase 5 sub-phase split confirmed.** Phase 5 broken into four focused sessions:
+- 5.1 Placement + dim light (this session)
+- 5.2 3-tile patrol loop
+- 5.3 Contact damage + adjacency warning
+- 5.4 Builder palette (first-class entry)
+
+**Guard Nodule placement (Phase 5.1).**
+
+User added `is_nodule` boolean custom data layer to `flesh_tile.tres` in the Godot editor
+and marked 8 nodule variant tiles (`is_nodule = true`). The coil JSON schema is unchanged —
+the flag lives in the tileset, not the JSON.
+
+**`Scenes/Actors/guard_nodule.gd` (new file):**
+- Node2D spawned at runtime by `explore_mode._spawn_guard_nodules()`
+- White `PointLight2D` (energy 0.4, scale 1.5) for neutral room illumination
+- Small additive bloom `Sprite2D` (`BLEND_MODE_ADD`, green `Color(0.2, 0.65, 0.28)`,
+  scale 0.5) for coloured self-glow on the emitter without tinting floor tiles
+- Registers/deregisters with `LightRegistry` in `_ready()` / `_exit_tree()`
+- No movement, no damage — Phase 5.1 scope only
+
+**`Scenes/World/explore_mode.gd`:**
+- Added `const GuardNodule` preload
+- Added `var _guard_nodules: Array[Node2D]`
+- Added `_spawn_guard_nodules()` — scans marker layer for `is_nodule == true` tiles,
+  spawns one `GuardNodule` Node2D per match at the tile's world centre
+- Call inserted after `LightRegistry.clear()`, before `GhostTrailManager.new()`
+
+**`Scenes/BuilderMode/builder_mode.gd`:**
+- Added `_add_nodule_brush()` — injects a Guard Nodule palette button at runtime
+  (appends `BrushEntry` to registry, creates `TextureButton` in `PaletteRow`,
+  wires into existing `ButtonGroup`)
+- Called at end of `_ready()`. Provisional Phase 5.1 workaround — full palette
+  integration deferred to Phase 5.4.
+
+**Lighting polish — additive bloom technique (both nodule and spores).**
+
+Root issue: coloured `PointLight2D` multiplies its colour against tile pixel values,
+tinting the floor (reads as paint). Fix: separate illumination from emission.
+
+- `PointLight2D` → white `Color(1, 1, 1)` on both nodule and spores — neutral illumination
+- Additive `Sprite2D` (`CanvasItemMaterial.BLEND_MODE_ADD`) centred on the emitter —
+  coloured self-glow that only brightens the emitter itself
+
+**`System/ghost_trail_manager.gd`:**
+- `light.color` changed `Color("#ffccaa")` → `Color(1, 1, 1)` (white PointLight2D)
+- Added `_spore_blooms: Array[Sprite2D]` instance variable
+- `place_spore()` creates a bloom Sprite2D per spore (amber `Color(0.65, 0.48, 0.25)`,
+  scale 0.4), added as `_parent` child alongside the PointLight2D
+- `reset()` also queue_frees `_spore_blooms` and clears the array
+
+Observed behaviour: multiple light sources near each other produce additive bloom
+overlap (brighter together) — expected behaviour the user liked; no action needed.
+
+### Files Changed
+- `Scenes/Actors/guard_nodule.gd` — **new file**
+- `Scenes/World/explore_mode.gd` — nodule preload, var, `_spawn_guard_nodules()`, call site
+- `Scenes/BuilderMode/builder_mode.gd` — `_add_nodule_brush()`, call at end of `_ready()`
+- `System/ghost_trail_manager.gd` — white PointLight2D, `_spore_blooms` tracking, bloom per spore
+
+### Active Phase
+**Phase 5 — Guard Nodule (5.1 complete)**
+
+### Next Session Should
+- Begin Phase 5.2: 3-tile patrol loop.
+- GuardNodule receives patrol waypoints (3 × Vector2i), advances one tile per
+  `tile_changed` signal from the crawler.
+- Phase 5.2 will also need to: add a `Sprite2D` to `GuardNodule` and erase the marker
+  tile from the layer so the nodule can move independently of the tilemap.
+- Read devlog and CLAUDE.md before any code.
+
+---

@@ -17,6 +17,9 @@ var _spore_atlas: Vector2i
 var _parent: Node2D
 ## All active spore PointLight2D nodes, kept for cleanup on reset.
 var _spore_lights: Array[PointLight2D] = []
+## Additive bloom Sprite2D for each spore, one-to-one with _spore_lights.
+## Gives each spore a coloured self-glow without tinting the surrounding floor.
+var _spore_blooms: Array[Sprite2D] = []
 ## LightRegistry IDs for each spore light, kept for deregistration on reset.
 var _spore_light_ids: Array[int] = []
 
@@ -47,8 +50,10 @@ func init(layer: TileMapLayer, parent: Node2D,
 
 
 ## Place a bioluminescent spore at the given tile coordinates.
-## Paints the spore tile and spawns a dim PointLight2D at world position.
-## Called by ExploreMode when the crawler steps OFF a tile with Ghost Trail on.
+## Paints the spore tile, spawns a white PointLight2D for room illumination,
+## and spawns a small additive bloom Sprite2D for coloured self-glow on the
+## spore tile itself. The two-layer approach prevents the amber colour from
+## tinting distant floor tiles (which reads as paint rather than emission).
 func place_spore(tile: Vector2i) -> void:
 	if _layer == null or _parent == null:
 		push_error("GhostTrailManager.place_spore: not initialised")
@@ -57,18 +62,36 @@ func place_spore(tile: Vector2i) -> void:
 	## Paint the spore tile onto the ghost trail layer.
 	_layer.set_cell(tile, _source_id, _spore_atlas)
 
-	## Spawn a dim PointLight2D at the tile's world centre.
-	var light := PointLight2D.new()
-	light.texture = GLOW_TEXTURE
-	light.color = Color("#ffccaa")
-	light.energy = 0.7
-	light.texture_scale = 2.5
 	## GridUtil.to_world() returns the tile centre in world space.
 	## map_to_local() returns the top-left corner, not the centre.
 	var world_pos: Vector2 = GridUtil.to_world(tile)
-	light.position = _parent.to_local(world_pos)
+	var local_pos: Vector2 = _parent.to_local(world_pos)
+
+	## White PointLight2D — illuminates surrounding tiles neutrally.
+	## Coloured lights in Godot 2D multiply against tile colours, so using
+	## white here prevents amber tinting the floor around each spore.
+	var light := PointLight2D.new()
+	light.texture       = GLOW_TEXTURE
+	light.color         = Color(1, 1, 1)
+	light.energy        = 0.7
+	light.texture_scale = 2.5
+	light.position      = local_pos
 	_parent.add_child(light)
 	_spore_lights.append(light)
+
+	## Additive bloom Sprite2D — amber coloured self-glow on the spore tile.
+	## BLEND_MODE_ADD brightens only the pixels it covers, giving the spore
+	## an amber halo without tinting distant floor tiles.
+	var bloom_mat := CanvasItemMaterial.new()
+	bloom_mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	var bloom := Sprite2D.new()
+	bloom.texture  = GLOW_TEXTURE
+	bloom.material = bloom_mat
+	bloom.modulate = Color(0.65, 0.48, 0.25)  ## warm amber bloom, toned down
+	bloom.scale    = Vector2(0.4, 0.4)       ## tight halo, ~1 tile
+	bloom.position = local_pos
+	_parent.add_child(bloom)
+	_spore_blooms.append(bloom)
 
 	## If we have exceeded the max active spores, disable the oldest still-lit
 	## light. The index advances with each new spore so a different light is
@@ -84,7 +107,7 @@ func place_spore(tile: Vector2i) -> void:
 	_spore_light_ids.append(id)
 
 
-## Remove all spore tiles and lights. Call on run reset.
+## Remove all spore tiles, lights, and bloom sprites. Call on run reset.
 func reset() -> void:
 	## Clear all painted spore tiles from the ghost trail layer.
 	if _layer != null:
@@ -95,6 +118,12 @@ func reset() -> void:
 		if is_instance_valid(light):
 			light.queue_free()
 	_spore_lights.clear()
+
+	## Remove all spore bloom Sprite2D nodes from the scene tree.
+	for bloom: Sprite2D in _spore_blooms:
+		if is_instance_valid(bloom):
+			bloom.queue_free()
+	_spore_blooms.clear()
 
 	## Deregister all spore lights from LightRegistry.
 	for id: int in _spore_light_ids:
