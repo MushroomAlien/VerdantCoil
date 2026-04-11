@@ -60,8 +60,9 @@ func place_spore(tile: Vector2i) -> void:
 	## Spawn a dim PointLight2D at the tile's world centre.
 	var light := PointLight2D.new()
 	light.texture = GLOW_TEXTURE
+	light.color = Color("#ffccaa")
 	light.energy = 0.7
-	light.texture_scale = 1.5
+	light.texture_scale = 2.5
 	## GridUtil.to_world() returns the tile centre in world space.
 	## map_to_local() returns the top-left corner, not the centre.
 	var world_pos: Vector2 = GridUtil.to_world(tile)

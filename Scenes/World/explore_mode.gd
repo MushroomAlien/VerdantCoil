@@ -28,7 +28,7 @@ func _ready() -> void:
 	# CanvasModulate sets the scene to near-darkness.
 	# PointLight2D nodes (GlowLight on the crawler, spore lights from Ghost Trail)
 	# punch holes in this darkness — Godot composites them automatically.
-	world_darkness.color = Color(0.08, 0.06, 0.05, 1.0)
+	world_darkness.color = Color(0, 0, 0, 1.0)
 
 	# TileSet on the TileMap (typical setup)
 	var ts: TileSet = coil_map.tile_set
@@ -128,6 +128,10 @@ func _ready() -> void:
 	var glow_energy: float = 0.8  ## matches GlowLight.energy in Crawler.tscn
 	if glow != null:
 		glow_energy = glow.energy
+		## Override texture_scale at runtime to tighten the light radius.
+		## Crawler.tscn bakes texture_scale = 6.0 (24-tile radius, covers full map).
+		## 2.0 gives an 8-tile radius — well-lit within ~6 tiles, dark beyond.
+		glow.texture_scale = 3.0
 	_crawler_light_id = LightRegistry.register_light(crawler.position, glow_energy)
 
 	## Update the crawler's registry entry each time it moves to a new tile.

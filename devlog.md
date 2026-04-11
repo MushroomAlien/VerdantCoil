@@ -633,3 +633,87 @@ This explains:
 5. Tune spore light energy/scale from diagnostic values (0.7/1.5) to production values.
 
 ---
+
+## Session — 2026-04-11
+
+### What We Did
+
+**Phase 4 polish: darkness tuning + spore light brightness.**
+
+**Issue 1 — GlowLight radius too wide / ambient visibility at range**
+
+Root cause: two compounding problems.
+- `GlowLight.texture_scale = 6.0` in `Crawler.tscn` gives a 24-tile illumination radius,
+  enough to softly illuminate every tile on current maps from spawn.
+- `world_darkness.color = Color(0.08, 0.06, 0.05, 1.0)` in `explore_mode.gd` provides 8%
+  ambient brightness so even tiles receiving zero light contribution are faintly visible.
+
+Fix (`Scenes/World/explore_mode.gd`):
+- `world_darkness.color` changed to `Color(0, 0, 0, 1.0)` — fully black, zero ambient.
+- `glow.texture_scale` overridden to `2.0` at runtime (after reading `glow.energy`).
+  128 px × 2.0 = 8-tile radius; well-lit 0–6 tiles, cubic fade 6–8 tiles, fully dark beyond.
+  Runtime override used (cannot edit `.tscn` per CLAUDE.md).
+
+**Issue 2 — Spore lights overbright**
+
+Fix (`System/ghost_trail_manager.gd`):
+- `light.energy` reduced from `0.7` → `0.4` (modest ~43% reduction).
+- `light.texture_scale` reduced from `1.5` → `1.2` (slightly tighter halo).
+  Values were flagged as diagnostic-overbright in Sessions 7–11; now at production level.
+
+### Files Changed
+- `Scenes/World/explore_mode.gd` — `world_darkness.color` fully black; `glow.texture_scale = 2.0` at runtime
+- `System/ghost_trail_manager.gd` — spore light `energy = 0.4`, `texture_scale = 1.2`
+
+### Active Phase
+**Phase 4 — Fog of War + Ghost Trail**
+
+### Next Session Should
+- Visual QA: play through a coil, confirm darkness feels correct at range and the spore
+  glow is visible but not blinding. Adjust `glow.texture_scale` and/or spore values further
+  if needed (single-line changes in the two files above).
+- If darkness tuning is satisfactory, close Phase 4 and begin Phase 5 planning:
+  Guard Nodule (static cyclic enemy).
+
+---
+
+## Session — 2026-04-11 (close)
+
+### What We Did
+
+**Phase 4 closed. Visual QA and final tuning pass.**
+
+User played through the lighting after the earlier darkness/spore fixes and dialled in
+final production values. Changes from the tuning pass:
+
+**`Crawler.tscn` (user-edited directly in Godot editor):**
+- `GlowLight.energy` raised from `0.8` → `1.2` (brighter immediate surroundings)
+- `GlowLight.color` changed to `Color(1, 0.8, 0.667, 1)` (~#ffccaa warm amber)
+- `WallLight.energy` reduced from `0.9` → `0.8`
+
+**`Scenes/World/explore_mode.gd`:**
+- `glow.texture_scale` runtime override settled at `3.0` (was proposed 2.0; user preferred
+  slightly wider reveal — ~12-tile radius, full dark beyond)
+
+**`System/ghost_trail_manager.gd`:**
+- Spore light `energy` settled at `0.7`, `texture_scale` at `2.5`
+- Spore light `color = Color("#ffccaa")` added — warm peach/amber hue matching GlowLight
+
+**`world_darkness.color = Color(0, 0, 0, 1.0)`** — remains fully black (zero ambient).
+
+### Files Changed
+- `Scenes/Actors/crawler.tscn` — GlowLight energy/colour, WallLight energy (user edit)
+- `Scenes/World/explore_mode.gd` — `glow.texture_scale = 3.0` runtime override
+- `System/ghost_trail_manager.gd` — spore `color`, final `energy`/`texture_scale` values
+- `CLAUDE.md` — phase updated to Phase 5
+
+### Active Phase
+**Phase 5 — Guard Nodule** ← NEXT
+
+### Next Session Should
+- Design Guard Nodule: static enemy on a fixed patrol cycle (e.g. rotates between 2–3
+  tiles, damages crawler on contact or adjacency). Determine detection pattern and
+  whether it interacts with Ghost Trail spores.
+- Read devlog and CLAUDE.md before any code.
+
+---
